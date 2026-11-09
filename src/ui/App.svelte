@@ -1,11 +1,20 @@
 <script lang="ts">
   import { createRenderer } from '../render';
+  import PlayPauseButton from './PlayPauseButton.svelte';
+  import { SimulationClient } from './simulation.svelte';
 
   let canvas: HTMLCanvasElement;
+  let sim = $state<SimulationClient | null>(null);
 
   $effect(() => {
     const renderer = createRenderer(canvas);
-    return () => renderer.dispose();
+    const client = new SimulationClient((frame) => renderer.setNextFrameToDisplay(frame));
+    sim = client;
+    return () => {
+      sim = null;
+      client.dispose();
+      renderer.dispose();
+    };
   });
 </script>
 
@@ -13,7 +22,26 @@
   <canvas bind:this={canvas}></canvas>
   <aside>
     <h1>Boltzmann 4D</h1>
-    <p>Controls will go here.</p>
+    <div class="transport" role="group" aria-label="Simulation controls">
+      <PlayPauseButton
+        paused={sim?.paused ?? false}
+        disabled={!sim}
+        onToggle={(paused) => sim?.setPaused(paused)}
+      />
+      <!-- btnFrameStep in MainGuiFullView: enabled only while paused. -->
+      <button
+        type="button"
+        class="icon-button"
+        disabled={!sim?.paused}
+        aria-label="Step one frame"
+        title="Step one frame"
+        onclick={() => sim?.advanceOneFrame()}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 4.5v15l11-7.5zM16.5 4.5h3v15h-3z" />
+        </svg>
+      </button>
+    </div>
   </aside>
 </main>
 
@@ -36,7 +64,11 @@
   }
   h1 {
     font-size: 1.25rem;
-    margin: 0 0 0.5rem;
+    margin: 0 0 0.75rem;
+  }
+  .transport {
+    display: flex;
+    gap: 0.5rem;
   }
   @media (max-width: 700px) {
     main {

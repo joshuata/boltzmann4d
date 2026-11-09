@@ -3,11 +3,17 @@
   font-family: system-ui, sans-serif;
   --panel-bg: #f4f4f5;
   --panel-border: #d4d4d8;
+  --button-bg: #ffffff;
+  --button-hover-bg: #e4e4e7;
+  --focus-ring: #2563eb;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --panel-bg: #18181b;
     --panel-border: #3f3f46;
+    --button-bg: #27272a;
+    --button-hover-bg: #3f3f46;
+    --focus-ring: #60a5fa;
   }
 }
 html,
@@ -15,4 +21,32 @@ body,
 #app {
   margin: 0;
   height: 100%;
+}
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.375rem;
+  background: var(--button-bg);
+  color: inherit;
+  cursor: pointer;
+}
+.icon-button:hover:not(:disabled) {
+  background: var(--button-hover-bg);
+}
+.icon-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.icon-button svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: currentColor;
 }

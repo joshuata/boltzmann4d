@@ -1,12 +1,20 @@
 import * as THREE from 'three';
+import type { RenderFrame } from '../sim';
 
 export interface Renderer {
+  /** Queue a frame; it is drawn on the next animation tick (MainGuiView.setNextFrameToDisplay). */
+  setNextFrameToDisplay(frame: RenderFrame): void;
   dispose(): void;
 }
 
+const TYPE_COLORS = [0xff4040, 0x4080ff];
+/** Placeholder until RenderFrame carries per-type radii; matches the stub Physics. */
+const PARTICLE_RADIUS = 0.03;
+
 /**
- * Placeholder 2D view: orthographic camera over a unit arena with a few circles.
- * Will grow into the 1D/2D/3D renderer described in boltzmann3d docs/rendering-baseline.md.
+ * Placeholder 2D view: orthographic camera over a unit arena, drawing whatever frames the
+ * simulation worker sends. Will grow into the 1D/2D/3D renderer described in boltzmann3d
+ * docs/rendering-baseline.md. It keeps rendering while the simulation is paused.
  */
 export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -17,30 +25,43 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
   const camera = new THREE.OrthographicCamera(-0.55, 0.55, 0.55, -0.55, -1, 1);
 
-  const wall = new THREE.LineLoop(
-    new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-0.5, -0.5, 0),
-      new THREE.Vector3(0.5, -0.5, 0),
-      new THREE.Vector3(0.5, 0.5, 0),
-      new THREE.Vector3(-0.5, 0.5, 0),
-    ]),
-    new THREE.LineBasicMaterial({ color: 0xffffff }),
-  );
-  scene.add(wall);
+  const wallGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-0.5, -0.5, 0),
+    new THREE.Vector3(0.5, -0.5, 0),
+    new THREE.Vector3(0.5, 0.5, 0),
+    new THREE.Vector3(-0.5, 0.5, 0),
+  ]);
+  const wallMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+  scene.add(new THREE.LineLoop(wallGeometry, wallMaterial));
 
-  const circle = new THREE.CircleGeometry(0.03, 24);
-  const colors = [0xff4040, 0x4080ff];
-  const particles = Array.from({ length: 12 }, (_, i) => {
-    const mesh = new THREE.Mesh(circle, new THREE.MeshBasicMaterial({ color: colors[i % 2] }));
-    scene.add(mesh);
-    return {
-      mesh,
-      x: Math.random() - 0.5,
-      y: Math.random() - 0.5,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: (Math.random() - 0.5) * 0.4,
-    };
-  });
+  const circle = new THREE.CircleGeometry(PARTICLE_RADIUS, 24);
+  const particleMaterial = new THREE.MeshBasicMaterial();
+  let particles: THREE.InstancedMesh | null = null;
+  let nextFrame: RenderFrame | null = null;
+  const matrix = new THREE.Matrix4();
+  const color = new THREE.Color();
+
+  const displayFrame = (frame: RenderFrame) => {
+    const count = frame.types.length;
+    if (particles?.count !== count) {
+      if (particles) {
+        scene.remove(particles);
+        particles.dispose();
+      }
+      particles = new THREE.InstancedMesh(circle, particleMaterial, count);
+      scene.add(particles);
+    }
+    const d = frame.dimension;
+    for (let i = 0; i < count; i++) {
+      const x = frame.positions[i * d] ?? 0;
+      const y = d > 1 ? (frame.positions[i * d + 1] ?? 0) : 0;
+      particles.setMatrixAt(i, matrix.makeTranslation(x, y, 0));
+      const type = frame.types[i] ?? 0;
+      particles.setColorAt(i, color.setHex(TYPE_COLORS[type % TYPE_COLORS.length] ?? 0xffffff));
+    }
+    particles.instanceMatrix.needsUpdate = true;
+    if (particles.instanceColor) particles.instanceColor.needsUpdate = true;
+  };
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -57,27 +78,26 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   observer.observe(canvas);
   resize();
 
-  // Placeholder motion only (walls, no particle collisions); real physics lives in sim/.
-  const r = 0.03;
-  let last = performance.now();
-  renderer.setAnimationLoop((now) => {
-    const dt = (now - last) / 1000;
-    last = now;
-    for (const p of particles) {
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      if (Math.abs(p.x) > 0.5 - r) p.vx = -p.vx;
-      if (Math.abs(p.y) > 0.5 - r) p.vy = -p.vy;
-      p.mesh.position.set(p.x, p.y, 0);
+  renderer.setAnimationLoop(() => {
+    if (nextFrame) {
+      displayFrame(nextFrame);
+      nextFrame = null;
     }
     renderer.render(scene, camera);
   });
 
   return {
+    setNextFrameToDisplay(frame) {
+      nextFrame = frame;
+    },
     dispose() {
       renderer.setAnimationLoop(null);
       observer.disconnect();
+      particles?.dispose();
       circle.dispose();
+      particleMaterial.dispose();
+      wallGeometry.dispose();
+      wallMaterial.dispose();
       renderer.dispose();
     },
   };

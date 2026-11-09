@@ -12,3 +12,5 @@ export interface RenderFrame {
   /** Per-particle type index into the particle-type table. */
   types: Uint16Array;
 }
+
+export { Physics } from './Physics';

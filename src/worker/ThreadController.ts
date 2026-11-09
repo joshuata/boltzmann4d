@@ -1,0 +1,60 @@
+// Frame pacing for the simulation worker, ported from controller/ThreadController.java.
+// The Java version runs physics, display and statistics on separate threads guarded by
+// semaphores. Inside a Worker the physics side collapses to one timer: each tick advances
+// one physics frame unless paused, and the main thread's render loop does the displaying.
+import type { RenderFrame } from '../sim';
+
+/** Duration of a displayed frame in milliseconds. */
+export const FRAME_DURATION = 37;
+
+/** The part of Physics that ThreadController drives. */
+export interface FramePhysics {
+  advanceToNextFrame(): void;
+  getCurrentFrame(): RenderFrame;
+  stopProcessingCurrentFrame(): void;
+}
+
+export class ThreadController {
+  private readonly physics: FramePhysics;
+  private readonly giveFrameToViewForDisplaying: (frame: RenderFrame) => void;
+  private frameRateTimer: ReturnType<typeof setInterval> | null = null;
+  private paused = false;
+
+  constructor(physics: FramePhysics, giveFrameToView: (frame: RenderFrame) => void) {
+    this.physics = physics;
+    this.giveFrameToViewForDisplaying = giveFrameToView;
+  }
+
+  startSimulationThreads(): void {
+    if (this.frameRateTimer !== null) return;
+    this.frameRateTimer = setInterval(() => {
+      if (!this.paused) this.advancePhysicsToNextFrame();
+    }, FRAME_DURATION);
+  }
+
+  stopSimulationThreads(): void {
+    if (this.frameRateTimer === null) return;
+    clearInterval(this.frameRateTimer);
+    this.frameRateTimer = null;
+  }
+
+  /** Combines Controller.setPaused and ThreadController.setPaused. */
+  setPaused(paused: boolean): void {
+    if (paused) this.physics.stopProcessingCurrentFrame();
+    this.paused = paused;
+  }
+
+  isPaused(): boolean {
+    return this.paused;
+  }
+
+  /** Runs exactly one physics frame. Only meaningful while paused, as in the Java UI. */
+  advanceOneFrame(): void {
+    if (this.paused) this.advancePhysicsToNextFrame();
+  }
+
+  private advancePhysicsToNextFrame(): void {
+    this.physics.advanceToNextFrame();
+    this.giveFrameToViewForDisplaying(this.physics.getCurrentFrame());
+  }
+}
