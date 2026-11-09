@@ -37,7 +37,7 @@ description = "Run the Vitest benchmarks (*.bench.ts)"
 run = "pnpm exec vitest bench --run"
 
 [tasks.profile]
-description = "Profile the engine headless; writes a .cpuprofile to profiles/ (see scripts/profile.ts)"
+description = "Profile the engine headless: mise run profile [preset] [--events N] [--particles N --periodic]; writes profiles/*.cpuprofile"
 run = "node --import tsx --cpu-prof --cpu-prof-dir=profiles scripts/profile.ts"
 
 [tasks.lint]

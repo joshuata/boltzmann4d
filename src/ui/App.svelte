@@ -8,7 +8,10 @@
 
   $effect(() => {
     const renderer = createRenderer(canvas);
-    const client = new SimulationClient((frame) => renderer.setNextFrameToDisplay(frame));
+    const client = new SimulationClient({
+      onScene: (scene) => renderer.setScene(scene),
+      onFrame: (frame) => renderer.setNextFrameToDisplay(frame),
+    });
     sim = client;
     return () => {
       sim = null;
@@ -42,6 +45,11 @@
         </svg>
       </button>
     </div>
+    {#if sim?.error}
+      <p class="error" role="alert">Simulation failed to start: {sim.error}</p>
+    {:else if sim}
+      <p class="readout">Physics: {sim.physicsMs.toFixed(2)} ms/frame</p>
+    {/if}
   </aside>
 </main>
 
@@ -65,6 +73,14 @@
   h1 {
     font-size: 1.25rem;
     margin: 0 0 0.75rem;
+  }
+  .readout {
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+  }
+  .error {
+    color: #dc2626;
   }
   .transport {
     display: flex;

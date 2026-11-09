@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { Physics } from '../sim';
 import { ArenaType } from '../sim/simulation-info';
 import { avgKineticEnergy } from '../stats/formulas';
 import { calculateTotalKE, loadSettings } from './load';
@@ -157,8 +156,4 @@ describe('loadSettings', () => {
       walls3D: { left: 0x010203 },
     });
   });
-});
-
-it('keeps the stub physics importable alongside io', () => {
-  expect(Physics).toBeDefined();
 });
