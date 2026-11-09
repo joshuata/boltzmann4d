@@ -25,7 +25,7 @@ Web engine (writes `results/web-node.json`):
 mise run bench:scaling
 ```
 
-Java app (writes `results/java.json`). Needs the `boltzmann4d-parity-tools` branch of boltzmann3d checked out at `../boltzmann3d`, or `BOLTZMANN3D_DIR` pointing at it:
+Java app (writes `results/java.json`). Needs the `boltzmann4d-parity-tools` branch of boltzmann3d ([joshuata/boltzmann3d](https://github.com/joshuata/boltzmann3d/tree/boltzmann4d-parity-tools), a fork of byu-chem/boltzmann3d) checked out at `../boltzmann3d`, or `BOLTZMANN3D_DIR` pointing at it:
 
 ```bash
 mise run bench:java
@@ -108,7 +108,7 @@ Run them one at a time on an otherwise idle machine; the results below come from
 - **Same work on both sides.** Both engines perform the same number of events per frame on the same scene (about 7.56 at 100 particles), so the numbers compare like for like. The parity tests (`src/sim/parity.test.ts`) confirm the two engines produce bit-identical events on the shipped presets.
 - **Small scenes are close.** Up to a few hundred particles, which covers every shipped preset (the largest has 200), the web engine is about 1.3× faster than the Java app.
 - **The gap widens with size, mostly because of memory.** Both engines keep one event slot per particle pair. Java stores each as an object, about 150 bytes per pair as measured (657 MB for 4.5 million pairs at 3,000 particles); the web engine uses flat typed arrays, about 11 bytes per pair. At 3,000 particles that's 657 MB against 51 MB, and the web engine is 5.7× faster. At 10,000, Java's 7.3 GB heap leaves the JVM mostly collecting garbage and it falls to 13 events/s (the web engine is 125× faster). At 20,000 Java runs out of its 12 GB heap; the web engine runs in 2.4 GB.
-- **Real-time limit.** The app advances about 27 frames per second. Java keeps up to roughly 1,000 particles (88 frames/s physics-only) but not 3,000 (6); the web engine keeps up to roughly 3,000 (34) but not 10,000 (2.6).
+- **Real-time limit.** The app advances about 27 frames per second. Java keeps up to roughly 1,000 particles (88 frames/s physics-only) but not 3,000 (6); the web engine keeps up to roughly 3,000 (34) but not 10,000 (2.6). At 60 frames per second, with the physics using a whole core, the web engine manages about 2,300 particles (measured: 63 frames/s at 2,250, 51 at 2,500); fitting Java's numbers to the N² frame cost puts it at roughly 950–1,200.
 - **Statistics cost Java 1–16%,** depending on particle count. The web engine has no statistics yet; expect a similar overhead once they land.
 - **Both engines are quadratic.** Setup, memory and per-frame cost all grow with N², from predicting every pair. Going much past 10,000 particles needs a different neighbour structure (cell lists), which would change the order in which ties are broken, so it would need its own parity approach.
 - **Not measured yet:** the web engine in a browser worker (the report accepts a `web-browser` variant), 1D and 3D scenes, and the arenas not ported yet.

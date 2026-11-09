@@ -53,7 +53,7 @@ Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`
 - `pnpm test`: run Vitest; tests sit next to the code as `*.test.ts`
 - `mise run bench`: run the benchmarks (`*.bench.ts`, using Vitest's `bench` test fixture); not part of `pnpm test` or CI
 - `mise run bench:scaling` / `mise run bench:java` / `mise run bench:report`: scaling benchmarks of the web engine and the Java app, and the tables in `benchmarks/README.md`
-- `mise run parity:fixtures`: regenerate the Java parity fixtures in `src/sim/parity/` (needs boltzmann3d's `boltzmann4d-parity-tools` branch)
+- `mise run parity:fixtures`: regenerate the Java parity fixtures in `src/sim/parity/` (needs the `boltzmann4d-parity-tools` branch of [joshuata/boltzmann3d](https://github.com/joshuata/boltzmann3d/tree/boltzmann4d-parity-tools))
 - `mise run profile [preset] [--events N] [--particles N [--periodic]]`: run the engine headless under the V8 profiler (`scripts/profile.ts`) and write a `.cpuprofile` to `profiles/`
 - `pnpm lint` / `mise run lint`: run every hk check on all files: ESLint (TS + Svelte rules), svelte-check (types), Prettier, markdownlint-cli2
 - `pnpm format` / `mise run fix`: apply every hk fixer on all files

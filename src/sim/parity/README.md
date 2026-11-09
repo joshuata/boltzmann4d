@@ -1,6 +1,6 @@
 # Parity fixtures
 
-Each `*.json` here was written by the Java app's physics, through `ParityDump` on the `boltzmann4d-parity-tools` branch of boltzmann3d. `src/sim/parity.test.ts` replays them through the TypeScript engine and requires bit-identical results.
+Each `*.json` here was written by the Java app's physics, through `ParityDump` on the `boltzmann4d-parity-tools` branch of boltzmann3d ([joshuata/boltzmann3d](https://github.com/joshuata/boltzmann3d/tree/boltzmann4d-parity-tools), a fork of byu-chem/boltzmann3d). `src/sim/parity.test.ts` replays them through the TypeScript engine and requires bit-identical results.
 
 A fixture holds:
 
