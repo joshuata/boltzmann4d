@@ -77,7 +77,7 @@ src/
 
 ## Migration order
 
-1. Scaffold the project: Vite + Svelte + TS, with Vitest, lint and CI.
+1. Scaffold the project: Vite + Svelte + TS, with Vitest, lint and CI. _Done; CI runs from `.github/workflows/ci.yml`._
 2. Port `sim/`, starting with 2D, then 1D and 3D. Use the Java structure as a starting point, but refactor where and when it makes sense; parity tests, not matching code layout, show the port is correct.
 3. Write a `.set` parser and load all 27 presets from `boltzmann3d/src/edu/byu/chem/boltzmann/resources/simsettingsfiles/presets/`.
 4. Build a headless parity harness:
@@ -88,7 +88,7 @@ src/
 6. Build the Worker and the Three.js renderer, following `docs/rendering-baseline.md` from boltzmann3d.
 7. Port the Svelte UI: main panel controls, then the settings dialogs, then charts.
 8. Port the remaining modes: piston, Maxwell demon, reactions, thermostat and trace.
-9. Deploy to GitHub Pages: set Vite's `base`, add a GitHub Actions workflow that builds, tests, lints and publishes `dist/`, and enable Pages for the repository. This can be set up early so every step above ships as it lands.
+9. Deploy to GitHub Pages: set Vite's `base`, add a GitHub Actions workflow that builds, tests, lints and publishes `dist/`, and enable Pages for the repository. This can be set up early so every step above ships as it lands. _Workflow and `base` are in place (`.github/workflows/ci.yml`); enabling Pages, with GitHub Actions as its source, is still a manual repository setting._
 
 ## Verification
 

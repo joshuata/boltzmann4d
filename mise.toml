@@ -28,6 +28,10 @@ run = "pnpm build"
 sources = ["src/**/*", "index.html", "package.json", "pnpm-lock.yaml", "tsconfig.json", "vite.config.ts", "svelte.config.js"]
 outputs = ["dist/**/*"]
 
+[tasks.test]
+description = "Run the Vitest suite once"
+run = "pnpm test"
+
 [tasks.lint]
 description = "Run all hk checks on every file"
 run = "hk check --all"

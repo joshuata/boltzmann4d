@@ -58,6 +58,12 @@ Linters are configured in `hk.pkl`, plus `eslint.config.js`, `.prettierrc` and `
 
 Run `pnpm build && pnpm test && pnpm lint` before calling work done.
 
+## CI and deployment
+
+`.github/workflows/ci.yml` runs `mise run lint`, `mise run test` and `mise run build` on every pull request and on pushes to `main`. On `main` it then deploys `dist/` to GitHub Pages at `https://joshuata.github.io/boltzmann4d/`.
+
+Production builds use the base path `/boltzmann4d/` (see `vite.config.ts`); the dev server stays at `/`. Load assets through Vite (imports, `?worker`, `?raw`, `import.meta.glob`) or `import.meta.env.BASE_URL` so URLs keep working under that path. To check a production build locally, run `pnpm build && pnpm preview` and open `http://localhost:4173/boltzmann4d/`.
+
 ## Porting rules
 
 - The Java code is a reference, not a template. Restructure, rename, merge or split classes, and drop dead code, Swing leftovers and quirks whenever that makes the TypeScript clearer. Keeping a Java name is fine when it helps someone find the original, but it isn't required.
