@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Physics } from '../sim';
 import type { RenderFrame } from '../sim';
-import { FRAME_DURATION, ThreadController } from './ThreadController';
+import { FRAME_DURATION, ThreadController } from './thread-controller';
 
 describe('ThreadController', () => {
   let frames: RenderFrame[];

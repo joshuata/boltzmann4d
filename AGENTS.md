@@ -13,7 +13,7 @@ The heart of it is a **custom event-driven hard-sphere simulation**. There is no
 
 It supports 1D, 2D and 3D arenas, pistons, thermostats, dividers and holes (effusion, Maxwell demon), energy wells, red↔blue reactions, and time reversal. Scenes typically have 25–200 particles.
 
-**Goal: a faithful port. The simulation equations must not change.**
+**Goal: the same physics, not the same code.** The simulation equations and results must not change, but the code does not need to mirror the Java version. Refactor where and when it makes sense.
 
 ## Stack and why
 
@@ -34,7 +34,8 @@ TypeScript is pinned to 6.0.x because typescript-eslint and svelte-check don't s
 src/
   sim/      pure TS physics (no DOM / Three.js imports) — port of model/physics
   stats/    statistics + Formulas — port of model/statistics
-  io/       .set file load/save — port of model/io
+  io/       .set file parsing (Ohm grammar) and loading, plus the bundled presets — from model/io
+  utils/    shared pure helpers (unit conversions) — from utils
   worker/   simulation Web Worker + message protocol
   render/   Three.js scene (1D/2D/3D views, color modes, periodic ghosts, trace)
   ui/       Svelte components (App.svelte = root)
@@ -59,8 +60,10 @@ Run `pnpm build && pnpm test && pnpm lint` before calling work done.
 
 ## Porting rules
 
-- Port file by file. Keep the Java class, method and field names, adapted to TS conventions, so the code can be compared with the original side by side.
-- `src/sim` and `src/stats` must stay pure: no DOM, no Three.js. They run in a Worker and in Node tests.
+- The Java code is a reference, not a template. Restructure, rename, merge or split classes, and drop dead code, Swing leftovers and quirks whenever that makes the TypeScript clearer. Keeping a Java name is fine when it helps someone find the original, but it isn't required.
+- When a refactor touches physics, prove the results are unchanged with parity tests (below).
+- Name `.ts` files in kebab-case (`thread-controller.ts`) and Svelte components in PascalCase (`PlayPauseButton.svelte`). ESLint enforces this.
+- `src/sim`, `src/stats`, `src/io` and `src/utils` must stay pure: no DOM, no Three.js. They run in a Worker and in Node tests.
 - Physics changes need parity tests against reference dumps from the Java app (same preset and seed, N events, positions and velocities within a set tolerance).
 
 ## Plans

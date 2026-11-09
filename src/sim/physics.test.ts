@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Physics } from './Physics';
+import { Physics } from './physics';
 
 describe('Physics (stub)', () => {
   it('throws before the first frame exists', () => {

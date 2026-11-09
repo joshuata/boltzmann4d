@@ -15,6 +15,7 @@
     "format": "hk fix --all"
   },
   "dependencies": {
+    "ohm-js": "^17.5.0",
     "three": "^0.187.0"
   },
   "devDependencies": {
@@ -24,6 +25,7 @@
     "@types/three": "^0.187.0",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-check-file": "^3.3.2",
     "eslint-plugin-svelte": "^3.24.1",
     "globals": "^17.14.0",
     "prettier": "^3.9.10",

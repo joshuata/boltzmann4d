@@ -1,7 +1,7 @@
 // Simulation Web Worker entry: owns Physics and paces it with ThreadController.
 import { Physics } from '../sim';
 import type { FromWorker, ToWorker } from './index';
-import { ThreadController } from './ThreadController';
+import { ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 

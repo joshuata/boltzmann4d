@@ -25,7 +25,7 @@ The original app's core is a custom event-driven hard-sphere simulation:
 - `Physics.java` runs the main event loop.
 - `Particle{1D,2D,3D}.java` handle collision prediction per dimension.
 
-The simulation covers pistons, thermostats, dividers and holes, energy wells, reactions and time reversal. Scenes come in 1D, 2D and 3D, with typically 25–200 particles. The goal is a faithful port in which the simulation equations are unchanged.
+The simulation covers pistons, thermostats, dividers and holes, energy wells, reactions and time reversal. Scenes come in 1D, 2D and 3D, with typically 25–200 particles. The goal is to keep the simulation equations and results unchanged. The code itself does not need to hold closely to the Java version: refactor where and when it makes sense.
 
 ## Decisions
 
@@ -59,7 +59,7 @@ src/
   - The chosen stack and the reasons behind each choice (the Decisions above).
   - The directory layout.
   - Commands: `pnpm dev`, `pnpm test`, `pnpm lint`.
-  - The rule to port with Java names kept, and the parity-test requirement.
+  - The rule that the physics must match while the code may be refactored freely, and the parity-test requirement.
   - The plan conventions listed below.
 - **`CLAUDE.md`** contains only a pointer to `AGENTS.md` (an `@AGENTS.md` import), plus a note that this file is for Claude-specific context only and everything else belongs in `AGENTS.md`.
 - **Plans:**
@@ -71,7 +71,7 @@ src/
 ## Migration order
 
 1. Scaffold the project: Vite + Svelte + TS, with Vitest, lint and CI.
-2. Port `sim/`, starting with 2D, then 1D and 3D. Port it file by file, keeping the Java names and structure so the two codebases can be compared side by side.
+2. Port `sim/`, starting with 2D, then 1D and 3D. Use the Java structure as a starting point, but refactor where and when it makes sense; parity tests, not matching code layout, show the port is correct.
 3. Write a `.set` parser and load all 27 presets from `boltzmann3d/src/edu/byu/chem/boltzmann/resources/simsettingsfiles/presets/`.
 4. Build a headless parity harness:
    - Add a small Java runner to boltzmann3d that runs a fixed seed and preset for N events and writes positions and velocities.

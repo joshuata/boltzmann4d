@@ -13,4 +13,4 @@ export interface RenderFrame {
   types: Uint16Array;
 }
 
-export { Physics } from './Physics';
+export { Physics } from './physics';
