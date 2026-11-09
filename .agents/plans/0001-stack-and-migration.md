@@ -88,7 +88,7 @@ src/
 6. Build the Worker and the Three.js renderer, following `docs/rendering-baseline.md` from boltzmann3d.
 7. Port the Svelte UI: main panel controls, then the settings dialogs, then charts.
 8. Port the remaining modes: piston, Maxwell demon, reactions, thermostat and trace.
-9. Deploy to GitHub Pages: set Vite's `base`, add a GitHub Actions workflow that builds, tests, lints and publishes `dist/`, and enable Pages for the repository. This can be set up early so every step above ships as it lands. _Workflow and `base` are in place (`.github/workflows/ci.yml`); enabling Pages, with GitHub Actions as its source, is still a manual repository setting._
+9. Deploy to GitHub Pages: set Vite's `base`, add a GitHub Actions workflow that builds, tests, lints and publishes `dist/`, and enable Pages for the repository. This can be set up early so every step above ships as it lands. _Done: the workflow and `base` are in place (`.github/workflows/ci.yml`), and Pages is enabled with GitHub Actions as its source._
 
 ## Verification
 
