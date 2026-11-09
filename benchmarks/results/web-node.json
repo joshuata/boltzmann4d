@@ -1,0 +1,91 @@
+{
+ "runner": "boltzmann4d scripts/bench-scaling.ts",
+ "runtime": "Node v24.22.2 (V8 13.6.233.17-node.63)",
+ "os": "darwin 27.0.0 arm64",
+ "cpus": 10,
+ "warmupSeconds": 2,
+ "measureSeconds": 5,
+ "frameDuration": 4.04706830433e-13,
+ "seed": 1,
+ "packing": 0.1,
+ "results": [
+  {
+   "variant": "web-node",
+   "particles": 100,
+   "setupMs": 1.6141659999999831,
+   "memoryMB": 7,
+   "status": "ok",
+   "frames": 122854,
+   "events": 930602,
+   "seconds": 5.000090290999999,
+   "eventsPerSecond": 186117.03906128524,
+   "framesPerSecond": 24570.3563035918,
+   "simSecondsPerSecond": 9.943791022283505e-9
+  },
+  {
+   "variant": "web-node",
+   "particles": 300,
+   "setupMs": 1.363083000000188,
+   "memoryMB": 8,
+   "status": "ok",
+   "frames": 14845,
+   "events": 304758,
+   "seconds": 5.000224209,
+   "eventsPerSecond": 60948.866943098314,
+   "framesPerSecond": 2968.866870665559,
+   "simSecondsPerSecond": 1.201520701204587e-9
+  },
+  {
+   "variant": "web-node",
+   "particles": 1000,
+   "setupMs": 13.103374999998778,
+   "memoryMB": 12,
+   "status": "ok",
+   "frames": 1453,
+   "events": 94072,
+   "seconds": 5.000710125000001,
+   "eventsPerSecond": 18811.72826429326,
+   "framesPerSecond": 290.55873339588936,
+   "simSecondsPerSecond": 1.1759110404728265e-10
+  },
+  {
+   "variant": "web-node",
+   "particles": 3000,
+   "setupMs": 129.23295900000085,
+   "memoryMB": 51,
+   "status": "ok",
+   "frames": 169,
+   "events": 31635,
+   "seconds": 5.028439875,
+   "eventsPerSecond": 6291.215722252222,
+   "framesPerSecond": 33.608833793602834,
+   "simSecondsPerSecond": 1.3601724599158574e-11
+  },
+  {
+   "variant": "web-node",
+   "particles": 10000,
+   "setupMs": 1291.9794589999983,
+   "memoryMB": 486,
+   "status": "ok",
+   "frames": 13,
+   "events": 8087,
+   "seconds": 5.093235042,
+   "eventsPerSecond": 1587.7924213810513,
+   "framesPerSecond": 2.5524052773529946,
+   "simSecondsPerSecond": 1.032975849777993e-12
+  },
+  {
+   "variant": "web-node",
+   "particles": 20000,
+   "setupMs": 5640.598125000004,
+   "memoryMB": 2396,
+   "status": "ok",
+   "frames": 2,
+   "events": 3272,
+   "seconds": 5.077393250000001,
+   "eventsPerSecond": 644.425168367646,
+   "framesPerSecond": 0.39390291465015037,
+   "simSecondsPerSecond": 1.5941520008638297e-13
+  }
+ ]
+}

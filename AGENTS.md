@@ -52,6 +52,8 @@ Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`
 - `pnpm build`: type-check (svelte-check), then build the production bundle
 - `pnpm test`: run Vitest; tests sit next to the code as `*.test.ts`
 - `mise run bench`: run the benchmarks (`*.bench.ts`, using Vitest's `bench` test fixture); not part of `pnpm test` or CI
+- `mise run bench:scaling` / `mise run bench:java` / `mise run bench:report`: scaling benchmarks of the web engine and the Java app, and the tables in `benchmarks/README.md`
+- `mise run parity:fixtures`: regenerate the Java parity fixtures in `src/sim/parity/` (needs boltzmann3d's `boltzmann4d-parity-tools` branch)
 - `mise run profile [preset] [--events N] [--particles N [--periodic]]`: run the engine headless under the V8 profiler (`scripts/profile.ts`) and write a `.cpuprofile` to `profiles/`
 - `pnpm lint` / `mise run lint`: run every hk check on all files: ESLint (TS + Svelte rules), svelte-check (types), Prettier, markdownlint-cli2
 - `pnpm format` / `mise run fix`: apply every hk fixer on all files
@@ -73,7 +75,7 @@ Production builds use the base path `/boltzmann4d/` (see `vite.config.ts`); the 
 - Keep the physics benchmarkable and profilable: synchronous, deterministic and headless (no timers, randomness, DOM or logging inside `src/sim`), with `*.bench.ts` benchmarks for hot paths. See plan 0002.
 - Name `.ts` files in kebab-case (`thread-controller.ts`) and Svelte components in PascalCase (`PlayPauseButton.svelte`). ESLint enforces this.
 - `src/sim`, `src/stats`, `src/io` and `src/utils` must stay pure: no DOM, no Three.js. They run in a Worker and in Node tests.
-- Physics changes need parity tests against reference dumps from the Java app (same preset and seed, N events, positions and velocities within a set tolerance).
+- Physics changes must keep `src/sim/parity.test.ts` green: the engine reproduces the Java app's events and final states bit for bit from the same initial state (fixtures in `src/sim/parity/`).
 
 ## Plans
 
