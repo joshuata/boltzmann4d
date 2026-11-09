@@ -27,3 +27,13 @@ export {
   type EventInfo,
 } from './event';
 export { EventCalendar } from './event-calendar';
+export { Particles, type Arena } from './particles';
+export {
+  boundaryCollide2D,
+  collide2D,
+  initPeriodicFlags2D,
+  moveToTime2D,
+  predCol2D,
+  predictBoundary2D,
+  predictPair2D,
+} from './particle-2d';
