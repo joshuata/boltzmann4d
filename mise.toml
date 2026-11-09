@@ -32,6 +32,14 @@ outputs = ["dist/**/*"]
 description = "Run the Vitest suite once"
 run = "pnpm test"
 
+[tasks.bench]
+description = "Run the Vitest benchmarks (*.bench.ts)"
+run = "pnpm exec vitest bench --run"
+
+[tasks.profile]
+description = "Profile the engine headless; writes a .cpuprofile to profiles/ (see scripts/profile.ts)"
+run = "node --import tsx --cpu-prof --cpu-prof-dir=profiles scripts/profile.ts"
+
 [tasks.lint]
 description = "Run all hk checks on every file"
 run = "hk check --all"

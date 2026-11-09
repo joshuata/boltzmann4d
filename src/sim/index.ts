@@ -14,3 +14,5 @@ export interface RenderFrame {
 }
 
 export { Physics } from './physics';
+
+export { createCounters, resetCounters, type Counters } from './counters';
