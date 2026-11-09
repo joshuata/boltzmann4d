@@ -36,6 +36,7 @@ The physics itself uses no randomness. Given an initial state, a run is fully de
 
 - Particle state as **structure-of-arrays typed arrays** (`x`, `y`, `vx`, `vy`, per-particle local time `t0`, `radius`, `mass`, `type`) instead of one object per particle. Faster to iterate, cheap to snapshot and transfer, and easy to inspect in a profiler. Per-dimension behaviour lives in functions (`predictPair2D`, `predictBoundary2D`, `collide2D`, ...) rather than subclasses.
 - The event calendar stores its matrix in flat typed arrays (time, type, side per pair) with the same row-minimum scheme and tie-breaking as `Calendar.java`.
+- Hot paths read imported constants through module-level local copies (`const { PARTICLE } = Collision`). Vitest's module runner turns imported bindings into getter calls, which made the calendar benchmark about 8× slower and would skew every benchmark.
 - Floating-point operations keep the Java order of evaluation in prediction and collision code, since parity depends on it. Elsewhere, refactor freely.
 
 ### Hooks instead of coupling
@@ -64,7 +65,7 @@ The physics itself uses no randomness. Given an initial state, a run is fully de
 ## Steps
 
 1. Benchmark and profile scaffolding against the existing stub (`mise run bench`, `mise run profile`), so the harness exists before the real engine. _Done._
-2. Port the calendar with unit tests (ordering, tie-breaking, dirty-row rescans) and micro-benchmarks.
+2. Port the calendar with unit tests (ordering, tie-breaking, dirty-row rescans) and micro-benchmarks. _Done: `src/sim/event-calendar.ts`. One event cycle (take the next event, re-predict two particles, find the new minimum) with random predictions: about 600k/s at 60 particles, 117k/s at 200, 23k/s at 1,000 (Apple Silicon, Node 24)._
 3. Port 2D motion, pair prediction and collision response, and reflecting-wall prediction and response.
 4. Port the event loop (`advanceToTime`, `step`, `CalUpdate`, last-collision tracking) and wire it into the worker in place of the stub; the app renders a loaded preset (default: `default.set`).
 5. Java parity runner and fixtures; parity tests green for reflecting presets.

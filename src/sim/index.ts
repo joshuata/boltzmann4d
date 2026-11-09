@@ -16,3 +16,14 @@ export interface RenderFrame {
 export { Physics } from './physics';
 
 export { createCounters, resetCounters, type Counters } from './counters';
+export {
+  CalendarUpdate,
+  Collision,
+  MAX_TIME,
+  MIN_TIME,
+  Wall,
+  copyEvent,
+  createEvent,
+  type EventInfo,
+} from './event';
+export { EventCalendar } from './event-calendar';
