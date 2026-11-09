@@ -52,7 +52,7 @@ Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`
 - `pnpm build`: type-check (svelte-check), then build the production bundle
 - `pnpm test`: run Vitest; tests sit next to the code as `*.test.ts`
 - `mise run bench`: run the benchmarks (`*.bench.ts`, using Vitest's `bench` test fixture); not part of `pnpm test` or CI
-- `mise run profile [preset] [--frames N] [--particles N]`: run the engine headless under the V8 profiler (`scripts/profile.ts`) and write a `.cpuprofile` to `profiles/`
+- `mise run profile [preset] [--events N] [--particles N [--periodic]]`: run the engine headless under the V8 profiler (`scripts/profile.ts`) and write a `.cpuprofile` to `profiles/`
 - `pnpm lint` / `mise run lint`: run every hk check on all files: ESLint (TS + Svelte rules), svelte-check (types), Prettier, markdownlint-cli2
 - `pnpm format` / `mise run fix`: apply every hk fixer on all files
 
