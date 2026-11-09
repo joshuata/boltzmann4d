@@ -1,0 +1,54 @@
+amends "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.pkl"
+// Using a coding agent? See https://hk.jdx.dev/agents
+// Node tools run via `pnpm exec` so versions come from package.json; others come from mise.toml.
+
+// Files no step should ever touch.
+exclude = List("LICENSE*")
+
+local linters = new Mapping<String, Step> {
+    // TypeScript + Svelte lint rules (typescript-eslint, eslint-plugin-svelte). See eslint.config.js.
+    ["eslint"] {
+        glob = List("**/*.ts", "**/*.js", "**/*.svelte")
+        check = "pnpm exec eslint {{ files }}"
+        fix = "pnpm exec eslint --fix {{ files }}"
+    }
+    // Type-check the whole project: .ts and .svelte files together (tsc can't read .svelte).
+    ["svelte-check"] {
+        glob = List("**/*.ts", "**/*.svelte", "tsconfig.json")
+        check = "pnpm exec svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+    }
+    // Formatting. Respects .prettierignore and .prettierrc.
+    ["prettier"] {
+        glob = List(
+            "**/*.ts", "**/*.js", "**/*.svelte", "**/*.css", "**/*.html",
+            "**/*.json", "**/*.jsonc", "**/*.yaml", "**/*.yml", "**/*.md"
+        )
+        check = "pnpm exec prettier --check --ignore-unknown {{ files }}"
+        fix = "pnpm exec prettier --write --ignore-unknown {{ files }}"
+        // Format before linting so markdownlint sees the final layout.
+        exclusive = true
+    }
+    // Markdown rules. See .markdownlint-cli2.jsonc.
+    ["markdownlint"] {
+        glob = List("**/*.md")
+        exclude = List("node_modules/**")
+        check = "markdownlint-cli2 {{ files }}"
+        fix = "markdownlint-cli2 --fix {{ files }}"
+        depends = List("prettier")
+    }
+}
+
+hooks {
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps = linters
+    }
+    ["check"] {
+        steps = linters
+    }
+    ["fix"] {
+        fix = true
+        steps = linters
+    }
+}

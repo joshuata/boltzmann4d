@@ -1,0 +1,18 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  --panel-bg: #f4f4f5;
+  --panel-border: #d4d4d8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --panel-bg: #18181b;
+    --panel-border: #3f3f46;
+  }
+}
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}

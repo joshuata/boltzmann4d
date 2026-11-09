@@ -1,0 +1,30 @@
+[tools]
+node = "24"
+pnpm = "12"
+hk = "2.11.1"
+pkl = "0.33"
+markdownlint-cli2 = "0.24"
+
+[hooks]
+postinstall = "pnpm install"
+
+[tasks.dev]
+description = "Start the Vite dev server"
+run = "pnpm dev"
+
+[tasks.build]
+description = "Type-check and build the production bundle into dist/"
+run = "pnpm build"
+sources = ["src/**/*", "index.html", "package.json", "pnpm-lock.yaml", "tsconfig.json", "vite.config.ts", "svelte.config.js"]
+outputs = ["dist/**/*"]
+
+[tasks.lint]
+description = "Run all hk checks on every file"
+run = "hk check --all"
+
+[tasks.fix]
+description = "Run all hk fixers on every file"
+run = "hk fix --all"
+
+[tasks.pre-commit]
+run = "hk run pre-commit"
