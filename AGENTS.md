@@ -46,7 +46,7 @@ Java sources referenced above live in `../boltzmann3d/src/edu/byu/chem/boltzmann
 
 ## Commands
 
-Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`. Run `mise install` once; it also runs `pnpm install`. Run `hk install` once to enable the git pre-commit hook.
+Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`. Run `mise install` once; it also installs `node_modules`. After that, `mise run <task>` reinstalls `node_modules` automatically whenever `package.json` or `pnpm-lock.yaml` changes (mise's `[deps.pnpm]` provider). Calling `pnpm` directly doesn't, so run `mise deps` after pulling if you skip `mise run`. Run `hk install` once to enable the git pre-commit hook.
 
 - `pnpm dev`: start the dev server
 - `pnpm build`: type-check (svelte-check), then build the production bundle
@@ -57,6 +57,12 @@ Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`
 Linters are configured in `hk.pkl`, plus `eslint.config.js`, `.prettierrc` and `.markdownlint-cli2.jsonc`. The pre-commit hook runs the same steps on staged files and auto-fixes them.
 
 Run `pnpm build && pnpm test && pnpm lint` before calling work done.
+
+## CI and deployment
+
+`.github/workflows/ci.yml` runs `mise run lint`, `mise run test` and `mise run build` on every pull request and on pushes to `main`. On `main` it then deploys `dist/` to GitHub Pages at `https://joshuata.github.io/boltzmann4d/`.
+
+Production builds use the base path `/boltzmann4d/` (see `vite.config.ts`); the dev server stays at `/`. Load assets through Vite (imports, `?worker`, `?raw`, `import.meta.glob`) or `import.meta.env.BASE_URL` so URLs keep working under that path. To check a production build locally, run `pnpm build && pnpm preview` and open `http://localhost:4173/boltzmann4d/`.
 
 ## Porting rules
 

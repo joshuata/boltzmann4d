@@ -27,6 +27,13 @@ The original app's core is a custom event-driven hard-sphere simulation:
 
 The simulation covers pistons, thermostats, dividers and holes, energy wells, reactions and time reversal. Scenes come in 1D, 2D and 3D, with typically 25–200 particles. The goal is to keep the simulation equations and results unchanged. The code itself does not need to hold closely to the Java version: refactor where and when it makes sense.
 
+## Deliverable
+
+The finished product is the app deployed as a static site on GitHub Pages, served from this repository (`https://joshuata.github.io/boltzmann4d/`). Everything runs in the browser: no server, no backend, and presets, the worker and assets are all bundled by Vite. Choices made along the way should keep that working:
+
+- Vite's `base` must match the Pages path (`/boltzmann4d/`), and asset, worker and preset URLs must resolve under it.
+- Deploy from CI with GitHub Actions (build, test, lint, then publish `dist/`) on every push to `main`.
+
 ## Decisions
 
 - **Physics: no engine.** Port the event-driven simulation to TypeScript as it is. A general engine (Matter.js, Planck, Rapier) uses fixed time steps and soft contacts, so it would change the results and drop wells, reactions and time reversal.
@@ -37,7 +44,7 @@ The simulation covers pistons, thermostats, dividers and holes, energy wells, re
 - **UI: Svelte 5 + Vite + TypeScript.** Svelte suits the dialogs and form-heavy settings.
 - **Charts:** custom Canvas2D components that port `StatPanel`, `HistogramBins` and `History`. uPlot is a fallback for the history plots.
 - **Threading:** run physics in a Web Worker and send `RenderFrame`-style snapshots to the main thread as transferable `Float64Array`s. This mirrors `ThreadController`.
-- **Tooling:** pnpm, Vitest, ESLint and Prettier, with GitHub Pages or another static host for deployment. The licence stays GPL-3.0, since this is a derivative work.
+- **Tooling:** pnpm, Vitest, ESLint and Prettier. Deployment is a static build on GitHub Pages (see Deliverable). The licence stays GPL-3.0, since this is a derivative work.
 
 ## Proposed layout
 
@@ -70,7 +77,7 @@ src/
 
 ## Migration order
 
-1. Scaffold the project: Vite + Svelte + TS, with Vitest, lint and CI.
+1. Scaffold the project: Vite + Svelte + TS, with Vitest, lint and CI. _Done; CI runs from `.github/workflows/ci.yml`._
 2. Port `sim/`, starting with 2D, then 1D and 3D. Use the Java structure as a starting point, but refactor where and when it makes sense; parity tests, not matching code layout, show the port is correct.
 3. Write a `.set` parser and load all 27 presets from `boltzmann3d/src/edu/byu/chem/boltzmann/resources/simsettingsfiles/presets/`.
 4. Build a headless parity harness:
@@ -81,10 +88,12 @@ src/
 6. Build the Worker and the Three.js renderer, following `docs/rendering-baseline.md` from boltzmann3d.
 7. Port the Svelte UI: main panel controls, then the settings dialogs, then charts.
 8. Port the remaining modes: piston, Maxwell demon, reactions, thermostat and trace.
+9. Deploy to GitHub Pages: set Vite's `base`, add a GitHub Actions workflow that builds, tests, lints and publishes `dist/`, and enable Pages for the repository. This can be set up early so every step above ships as it lands. _Workflow and `base` are in place (`.github/workflows/ci.yml`); enabling Pages, with GitHub Actions as its source, is still a manual repository setting._
 
 ## Verification
 
 - **Unit tests:** Vitest on the pure `sim/` code (event prediction, conservation of energy and momentum).
 - **Parity tests:** TypeScript against the Java reference dumps for several presets across 1D, 2D and 3D.
 - **Statistics check:** the speed histogram should match the theoretical curve within tolerance.
+- **Deployed check:** the GitHub Pages site loads, runs the simulation and opens every preset, with no failed requests in the browser console.
 - **Manual check:** run `pnpm dev`, load each preset, and compare visually with the Java app against the rendering-baseline checklist.
