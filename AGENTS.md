@@ -46,7 +46,7 @@ Java sources referenced above live in `../boltzmann3d/src/edu/byu/chem/boltzmann
 
 ## Commands
 
-Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`. Run `mise install` once; it also runs `pnpm install`. Run `hk install` once to enable the git pre-commit hook.
+Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`. Run `mise install` once; it also installs `node_modules`. After that, `mise run <task>` reinstalls `node_modules` automatically whenever `package.json` or `pnpm-lock.yaml` changes (mise's `[deps.pnpm]` provider). Calling `pnpm` directly doesn't, so run `mise deps` after pulling if you skip `mise run`. Run `hk install` once to enable the git pre-commit hook.
 
 - `pnpm dev`: start the dev server
 - `pnpm build`: type-check (svelte-check), then build the production bundle

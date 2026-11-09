@@ -1,3 +1,7 @@
+[settings]
+# `[deps]` is still experimental in mise.
+experimental = true
+
 [tools]
 node = "24"
 pnpm = "12"
@@ -5,8 +9,14 @@ hk = "2.11.1"
 pkl = "0.33"
 markdownlint-cli2 = "0.24"
 
+# Install node_modules whenever package.json or pnpm-lock.yaml changed. `auto` runs this
+# before every `mise run` / `mise exec`; it is skipped when node_modules is up to date.
+[deps.pnpm]
+auto = true
+
 [hooks]
-postinstall = "pnpm install"
+# `mise install` doesn't run deps providers itself, so trigger them once tools are in place.
+postinstall = "mise deps"
 
 [tasks.dev]
 description = "Start the Vite dev server"
