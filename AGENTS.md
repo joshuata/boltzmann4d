@@ -51,6 +51,8 @@ Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`
 - `pnpm dev`: start the dev server
 - `pnpm build`: type-check (svelte-check), then build the production bundle
 - `pnpm test`: run Vitest; tests sit next to the code as `*.test.ts`
+- `mise run bench`: run the benchmarks (`*.bench.ts`, using Vitest's `bench` test fixture); not part of `pnpm test` or CI
+- `mise run profile [preset] [--frames N] [--particles N]`: run the engine headless under the V8 profiler (`scripts/profile.ts`) and write a `.cpuprofile` to `profiles/`
 - `pnpm lint` / `mise run lint`: run every hk check on all files: ESLint (TS + Svelte rules), svelte-check (types), Prettier, markdownlint-cli2
 - `pnpm format` / `mise run fix`: apply every hk fixer on all files
 
@@ -68,6 +70,7 @@ Production builds use the base path `/boltzmann4d/` (see `vite.config.ts`); the 
 
 - The Java code is a reference, not a template. Restructure, rename, merge or split classes, and drop dead code, Swing leftovers and quirks whenever that makes the TypeScript clearer. Keeping a Java name is fine when it helps someone find the original, but it isn't required.
 - When a refactor touches physics, prove the results are unchanged with parity tests (below).
+- Keep the physics benchmarkable and profilable: synchronous, deterministic and headless (no timers, randomness, DOM or logging inside `src/sim`), with `*.bench.ts` benchmarks for hot paths. See plan 0002.
 - Name `.ts` files in kebab-case (`thread-controller.ts`) and Svelte components in PascalCase (`PlayPauseButton.svelte`). ESLint enforces this.
 - `src/sim`, `src/stats`, `src/io` and `src/utils` must stay pure: no DOM, no Three.js. They run in a Worker and in Node tests.
 - Physics changes need parity tests against reference dumps from the Java app (same preset and seed, N events, positions and velocities within a set tolerance).

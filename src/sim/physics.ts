@@ -1,3 +1,4 @@
+import { createCounters } from './counters';
 import type { Dimension, RenderFrame } from './index';
 
 export interface StubPhysicsOptions {
@@ -38,6 +39,9 @@ export class Physics {
   private currSimTime = 0;
   private firstRun = true;
   private currentFrame: RenderFrame | null = null;
+
+  /** Work done so far; see counters.ts. */
+  readonly counters = createCounters('frames', 'moves', 'wallReflections');
 
   constructor({ particleCount = 24, seed = 1 }: StubPhysicsOptions = {}) {
     const random = mulberry32(seed);
@@ -84,14 +88,18 @@ export class Physics {
     return this.frameDuration;
   }
 
-  private advanceToTime(time: number): void {
+  /** Moves every particle to `time`, reflecting off the walls. */
+  advanceToTime(time: number): void {
     const dt = time - this.currSimTime;
+    this.counters.frames++;
+    this.counters.moves += this.positions.length / this.dimension;
     const limit = 0.5 - Physics.PARTICLE_RADIUS;
     for (let i = 0; i < this.positions.length; i++) {
       let x = (this.positions[i] ?? 0) + (this.velocities[i] ?? 0) * dt;
       while (Math.abs(x) > limit) {
         x = Math.sign(x) * 2 * limit - x;
         this.velocities[i] = -(this.velocities[i] ?? 0);
+        this.counters.wallReflections++;
       }
       this.positions[i] = x;
     }
