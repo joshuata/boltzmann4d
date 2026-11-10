@@ -62,8 +62,5 @@ console.log(
     `${Math.round(performed / seconds).toLocaleString('en-US')} events/s`,
 );
 console.log(`relative kinetic-energy drift: ${drift.toExponential(2)}`);
-console.table({ ...simulation.counters, ...prefix('calendar.', simulation.calendar.counters) });
-
-function prefix(p: string, counters: Record<string, number>): Record<string, number> {
-  return Object.fromEntries(Object.entries(counters).map(([k, v]) => [p + k, v]));
-}
+console.table(simulation.counters);
+console.log(`grid: ${simulation.grid.nx} × ${simulation.grid.ny} cells`);

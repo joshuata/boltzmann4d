@@ -48,7 +48,8 @@ export {
   createEvent,
   type EventInfo,
 } from './event';
-export { EventCalendar } from './event-calendar';
+export { CellGrid } from './cell-grid';
+export { EventHeap } from './event-heap';
 export { Particles, type Arena } from './particles';
 export {
   boundaryCollide2D,

@@ -2,8 +2,8 @@
 // Mirrors boltzmann3d's PhysicsBenchmark (ant benchmark): same synthetic gas, same frame
 // duration, same warm-up and measurement method. See benchmarks/README.md.
 //
-//   mise run bench:scaling                       # writes benchmarks/results/web-node.json
-//   mise run bench:scaling --counts 100,1000 --measure 2 --out /tmp/x.json
+//   mise run web:bench                           # writes benchmarks/results/web-node.json
+//   node --expose-gc --import tsx scripts/bench-scaling.ts --counts 100,1000 --measure 2 --out /tmp/x.json
 import { writeFileSync } from 'node:fs';
 import { cpus, platform, release, arch } from 'node:os';
 import { parseArgs } from 'node:util';
@@ -16,7 +16,7 @@ const { values } = parseArgs({
     warmup: { type: 'string', default: '2' },
     measure: { type: 'string', default: '5' },
     'max-frame': { type: 'string', default: '30' },
-    counts: { type: 'string', default: '100,300,1000,3000,10000,20000' },
+    counts: { type: 'string', default: '100,300,1000,3000,10000,20000,50000,100000' },
   },
 });
 
