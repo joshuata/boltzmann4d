@@ -17,6 +17,11 @@ export interface ArenaOptions {
    * of the contact distance, and each species' depth in kJ/mol. null turns them off.
    */
   wells?: { radiusMultiplier: number; depths: number[] } | null;
+  /**
+   * Red↔blue reactions (one-species 2D presets): activation energies in kJ/mol. null turns
+   * them off; absent follows the preset's reaction_mode.
+   */
+  reactions?: { forward: number; reverse: number; suppressReverse: boolean } | null;
   /** A square well along the bottom wall: width in m, depth in kJ/mol. null turns it off. */
   attractiveWall?: { width: number; depth: number } | null;
 }
@@ -35,6 +40,8 @@ export interface ArenaInfo {
   canConduct: boolean;
   /** Square wells work in every arena but periodic ones (as in Java). */
   canHaveWells: boolean;
+  /** Reactions need a single species (a reacted copy is added), as Java's dialog does. */
+  canReact: boolean;
   /** Species names, for per-species settings. */
   typeNames: string[];
   options: ArenaOptions;

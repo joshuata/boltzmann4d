@@ -3,6 +3,7 @@
 import { loadDefaultSettingsText, loadPresetText, loadSettings } from '../io';
 import type { RenderStream } from '../render/protocol';
 import { Simulation, type SceneInfo } from '../sim';
+import { DefaultParticleInfo, ParticleType } from '../sim/particle-type';
 import { Statistics, statsContext } from '../stats';
 import {
   ArenaType,
@@ -17,6 +18,9 @@ const scope = self as unknown as DedicatedWorkerGlobalScope;
 const post = (message: FromWorker) => scope.postMessage(message);
 /** Statistics are summarised about this often (real milliseconds), like the Java app. */
 const SUMMARY_INTERVAL_MS = 1000;
+
+/** The Reactions tab's defaults: forward and reverse activation energies, kJ/mol. */
+const DEFAULT_REACTIONS = { forward: 8.0, reverse: 4.0, suppressReverse: false };
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -102,6 +106,35 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
         ? DividerThermalMode.CONDUCTING
         : DividerThermalMode.INSULATING;
     }
+    // Reactions (as Java's Reactions tab): one species plus a "Reacted" copy of it that
+    // particles turn into. Presets with reaction_mode TRUE get them by default, with the
+    // tab's default activation energies (Java ignored the key).
+    const canReact = settings.dimension === 2 && settings.species.length === 1;
+    const reactions = canReact
+      ? arena.reactions !== undefined
+        ? arena.reactions
+        : settings.reactionMode
+          ? { ...DEFAULT_REACTIONS }
+          : null
+      : null;
+    if (reactions) {
+      const red = settings.species[0]!;
+      const empty = new Float64Array(0);
+      settings.species = [
+        red,
+        {
+          ...red,
+          type: new ParticleType(
+            red.type.particleMass,
+            red.type.particleRadius,
+            DefaultParticleInfo.BLUE,
+            'Reacted',
+          ),
+          positions: empty,
+          velocities: empty,
+        },
+      ];
+    }
     const canHaveWells = settings.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
     const wells = canHaveWells && arena.wells ? arena.wells : null;
     const attractiveWall = canHaveWells && arena.attractiveWall ? arena.attractiveWall : null;
@@ -109,17 +142,20 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
       ...settings,
       ...(wells ? { wells } : {}),
       ...(attractiveWall ? { attractiveWall } : {}),
+      ...(reactions ? { reactions } : {}),
     };
     arenaInfo = {
       canHavePiston,
       canConduct,
       canHaveWells,
+      canReact,
       typeNames: settings.species.map((s) => s.type.displayName),
       options: {
         piston: settings.arenaType === ArenaType.MOVABLE_PISTON,
         conductingDivider: settings.dividerThermalMode === DividerThermalMode.CONDUCTING,
         wells,
         attractiveWall,
+        reactions,
       },
     };
     speed = parseSimulationSpeed(settings.simulationSpeed);

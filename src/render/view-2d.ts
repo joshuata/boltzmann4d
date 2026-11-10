@@ -55,6 +55,9 @@ export function createView2D(info: SceneInfo): View {
     (_, i) => new THREE.Color(info.typeColors[info.types[i] ?? 0] ?? 0xffffff),
   );
   for (let i = 0; i < count; i++) particles.setColorAt(i, colors[i]!);
+  // Frames say which colour each particle shows (reactions recolour particles).
+  const palette = info.typeColors.map((c) => new THREE.Color(c));
+  const shown = Uint16Array.from(info.types);
   root.add(particles);
 
   const images = new Float64Array(8);
@@ -80,7 +83,15 @@ export function createView2D(info: SceneInfo): View {
       const d = frame.dimension;
       const n = Math.min(frame.types.length, count);
       let drawn = 0;
+      let recoloured = false;
       for (let i = 0; i < n; i++) {
+        const shows = frame.types[i]!;
+        if (shows !== shown[i] && palette[shows]) {
+          shown[i] = shows;
+          colors[i] = palette[shows];
+          recoloured = true;
+          if (!periodic) particles.setColorAt(i, colors[i]!);
+        }
         const x = (frame.positions[i * d] ?? 0) * NM;
         const y = d > 1 ? (frame.positions[i * d + 1] ?? 0) * NM : 0;
         const r = (radii[i] ?? 0) * NM;
@@ -98,7 +109,9 @@ export function createView2D(info: SceneInfo): View {
       }
       particles.count = drawn;
       particles.instanceMatrix.needsUpdate = true;
-      if (periodic && particles.instanceColor) particles.instanceColor.needsUpdate = true;
+      if ((periodic || recoloured) && particles.instanceColor) {
+        particles.instanceColor.needsUpdate = true;
+      }
     },
     rotate() {},
     dispose() {
