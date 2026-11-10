@@ -105,6 +105,11 @@ Production builds use the base path `/boltzmann4d/` (`paths.base` in `apps/web/v
 
 - `docs/specs/` lists what the app must do, extracted from the original Boltzmann 3D manual and worksheets, with requirement IDs (`SIM-3`, `STAT-12`, …) and classroom scenarios to check against. Read the relevant spec before building a feature, and cite its IDs in plans.
 
+## Skills
+
+- Agent skills live in `.agents/skills/<name>/SKILL.md`; `.claude/skills/<name>` is a symlink to each one so Claude Code finds it.
+- `feature-plan`: investigate a feature idea and, once approved, file a GitHub issue with an implementation plan attached. Read-only: it never changes code.
+
 ## Plans
 
 - Active plans go in `.agents/plans/` as `NNNN-short-slug.md`.
