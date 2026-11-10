@@ -2,6 +2,8 @@
   import ArenaOptions from './ArenaOptions.svelte';
   import PistonPanel from './PistonPanel.svelte';
   import PlayPauseButton from './PlayPauseButton.svelte';
+  import ScaleBar from './ScaleBar.svelte';
+  import ViewOptions from './ViewOptions.svelte';
   import PresetPicker from './PresetPicker.svelte';
   import RateSlider from './RateSlider.svelte';
   import { rotateView } from './rotate-view';
@@ -24,15 +26,20 @@
 </script>
 
 <main>
-  <canvas
-    bind:this={canvas}
-    class:rotatable={sim?.dimension === 3}
-    use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
-    tabindex={sim?.dimension === 3 ? 0 : -1}
-    aria-label={sim?.dimension === 3
-      ? 'Simulation arena; drag or use the arrow keys to turn it'
-      : 'Simulation arena'}
-  ></canvas>
+  <div class="stage">
+    <canvas
+      bind:this={canvas}
+      class:rotatable={sim?.dimension === 3}
+      use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
+      tabindex={sim?.dimension === 3 ? 0 : -1}
+      aria-label={sim?.dimension === 3
+        ? 'Simulation arena; drag or use the arrow keys to turn it'
+        : 'Simulation arena'}
+    ></canvas>
+    {#if sim && sim.dimension !== 3}
+      <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
+    {/if}
+  </div>
   <aside>
     <h1>Boltzmann 4D</h1>
     <PresetPicker
@@ -40,6 +47,15 @@
       disabled={!sim || sim.loading}
       onChange={(name) => sim?.loadPreset(name)}
     />
+    {#if sim}
+      <ViewOptions
+        colorMode={sim.colorMode}
+        trace={sim.trace.enabled}
+        canTrace={sim.dimension !== 3}
+        onColorMode={(mode) => sim?.setColorMode(mode)}
+        onTrace={(enabled) => sim?.setTrace(enabled)}
+      />
+    {/if}
     {#if sim?.arena}
       <ArenaOptions
         arena={sim.arena}
@@ -110,6 +126,11 @@
     grid-template-columns: 1fr 320px;
     height: 100dvh;
     overflow: hidden;
+  }
+  .stage {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
   }
   canvas {
     width: 100%;

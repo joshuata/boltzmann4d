@@ -1,7 +1,7 @@
 // Messages for the render worker. The physics worker streams frames to the renderer over
 // a MessagePort, so they never pass through the main thread; the main thread only sets
 // up the canvas and reports size changes.
-import type { RenderFrame, SceneInfo } from '../sim';
+import type { ColorMode, RenderFrame, SceneInfo } from '../sim';
 import type { ViewSize } from './index';
 
 /** Main thread -> render worker. */
@@ -15,7 +15,10 @@ export type ToRenderWorker =
     }
   | { type: 'resize'; size: ViewSize }
   /** 3D: turn the view by these angles, in degrees. */
-  | { type: 'rotate'; aboutX: number; aboutY: number };
+  | { type: 'rotate'; aboutX: number; aboutY: number }
+  /** Colour mode and trace (the View menu). */
+  | { type: 'colorMode'; mode: ColorMode }
+  | { type: 'trace'; enabled: boolean; pointSize: number };
 
 /** Physics worker -> renderer, over the MessagePort. */
 export type RenderStream =

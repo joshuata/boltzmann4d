@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { RenderFrame, SceneInfo } from '../sim';
+import type { ColorMode, RenderFrame, SceneInfo } from '../sim';
 import type { View } from './view';
 import { createView2D } from './view-2d';
 import { createView3D } from './view-3d';
@@ -20,6 +20,10 @@ export interface Renderer {
   setNextFrameToDisplay(frame: RenderFrame): void;
   /** 3D: turns the view about the x and y axes by these angles in degrees. */
   rotate(aboutX: number, aboutY: number): void;
+  /** How particles are coloured (View menu: Normal, Speed, Kinetic energy). */
+  setColorMode(mode: ColorMode): void;
+  /** Trace mode: accumulate particle marks of `pointSize` pixels (2D). */
+  setTrace(enabled: boolean, pointSize: number): void;
   /** Simulation frames drawn so far (frames replaced before a refresh aren't counted). */
   framesDrawn(): number;
   dispose(): void;
@@ -34,7 +38,7 @@ const requestDraw: (draw: () => void) => void =
 
 /**
  * Draws the simulation: a 1D/2D view (view-2d.ts) or a 3D one (view-3d.ts), following
- * boltzmann3d docs/rendering-baseline.md (colour modes and trace are still to come).
+ * boltzmann3d docs/rendering-baseline.md.
  *
  * Uses no DOM APIs, so it runs on an OffscreenCanvas in the render worker as well as on
  * the main thread. It only draws when something changed (a frame, the scene, the size or
@@ -50,6 +54,8 @@ export function createRenderer(
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
   let view: View | null = null;
+  let colorMode: ColorMode | null = null;
+  let trace: { enabled: boolean; pointSize: number } | null = null;
   let nextFrame: RenderFrame | null = null;
   let size = initialSize;
   let drawScheduled = false;
@@ -71,6 +77,7 @@ export function createRenderer(
       nextFrame = null;
       drawnCount++;
     }
+    view.beforeRender?.(renderer);
     renderer.render(scene, view.camera);
   };
   const scheduleDraw = () => {
@@ -88,6 +95,9 @@ export function createRenderer(
         view.dispose();
       }
       view = info.dimension === 3 ? createView3D(info) : createView2D(info);
+      // The user's choices outlast a reload; until they make one, the settings file's.
+      if (colorMode) view.setColorMode(colorMode);
+      if (trace) view.setTrace(trace.enabled, trace.pointSize);
       scene.add(view.root);
       nextFrame = null;
       fit();
@@ -104,6 +114,16 @@ export function createRenderer(
     },
     rotate(aboutX, aboutY) {
       view?.rotate(aboutX, aboutY);
+      scheduleDraw();
+    },
+    setColorMode(mode) {
+      colorMode = mode;
+      view?.setColorMode(mode);
+      scheduleDraw();
+    },
+    setTrace(enabled, pointSize) {
+      trace = { enabled, pointSize };
+      view?.setTrace(enabled, pointSize);
       scheduleDraw();
     },
     framesDrawn: () => drawnCount,

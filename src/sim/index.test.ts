@@ -8,6 +8,7 @@ describe('sim skeleton', () => {
       time: 0,
       positions: new Float64Array([0, 0, 1, 1]),
       types: new Uint16Array([0, 0]),
+      speeds: new Float32Array([0, 0]),
     };
     expect(frame.positions.length / frame.dimension).toBe(frame.types.length);
   });

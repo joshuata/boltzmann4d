@@ -37,6 +37,12 @@ scope.onmessage = (event: MessageEvent<ToRenderWorker>) => {
       case 'rotate':
         renderer?.rotate(message.aboutX, message.aboutY);
         break;
+      case 'colorMode':
+        renderer?.setColorMode(message.mode);
+        break;
+      case 'trace':
+        renderer?.setTrace(message.enabled, message.pointSize);
+        break;
     }
   } catch (error) {
     fail(error);

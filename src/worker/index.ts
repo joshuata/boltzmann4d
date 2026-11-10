@@ -2,7 +2,7 @@
 // Frames don't come back here: they stream to the renderer over the `frames` port
 // (render/protocol.ts), so the main thread only handles controls and readouts.
 import type { PistonMode } from '../sim/piston';
-import type { Dimension } from '../sim';
+import type { ColorMode, Dimension } from '../sim';
 import type { StatisticsSummary } from '../stats/summary';
 
 /**
@@ -84,6 +84,13 @@ export type FromWorker =
       dimension: Dimension;
       arena: ArenaInfo;
       piston?: PistonInfo;
+      /** The settings file's view (colour mode, trace) and the arena's size, m. */
+      view: {
+        colorMode: ColorMode;
+        trace: { enabled: boolean; pointSize: number };
+        arenaWidth: number;
+        arenaHeight: number;
+      };
     }
   /** About once a second (every SUMMARY_INTERVAL_MS), and after each step. */
   | { type: 'statistics'; summary: StatisticsSummary }
