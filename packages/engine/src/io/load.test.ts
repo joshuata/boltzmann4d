@@ -127,7 +127,7 @@ describe('loadSettings', () => {
     it.each([
       ['boundary REFLECTING', 'boundary BOUNCY', /Unknown boundary mode: BOUNCY/],
       ['dimensions 2', 'dimensions 4', /dimensions must be 1, 2 or 3/],
-      ['color Red', 'color Green', /must be Red or Blue/],
+      ['color Red', 'color Green', /must be RED or BLUE, not GREEN/],
       ['color Red', 'color Red\n  temperature 2000', /temperature must be between 0 and 1500/],
       ['  boundary REFLECTING\n', '', /GlobalSettings.boundary is missing/],
     ])('replacing %j with %j fails', async (from, to, message) => {

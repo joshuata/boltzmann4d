@@ -39,6 +39,7 @@ packages/
     src/sim/           physics — port of model/physics (parity fixtures in sim/parity/)
     src/stats/         statistics + Formulas — port of model/statistics
     src/io/            .set file parsing (Ohm grammar) and loading, plus the bundled presets — from model/io
+    src/settings/      the web app's JSON settings format: Zod schema and validation, .set ⇄ JSON, resolving into the starting state
     src/utils/         shared pure helpers (unit conversions) — from utils
   simulator/           @boltzmann4d/simulator: the viewer, exported as <Simulator>
     src/Simulator.svelte  arena canvas + sidebar

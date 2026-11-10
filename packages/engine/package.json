@@ -9,6 +9,7 @@
     "./sim": "./src/sim/index.ts",
     "./stats": "./src/stats/index.ts",
     "./io": "./src/io/index.ts",
+    "./settings": "./src/settings/index.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
@@ -16,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "ohm-js": "^17.5.0"
+    "ohm-js": "^17.5.0",
+    "zod": "^4.6.7"
   }
 }
