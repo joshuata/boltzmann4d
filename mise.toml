@@ -1,6 +1,9 @@
 [settings]
 # `[deps]` is still experimental in mise.
 experimental = true
+# Decide whether a task's outputs are stale by hashing its sources, not by timestamps,
+# so branch switches don't rerun slow tasks.
+task.source_freshness_hash_contents = true
 
 [tools]
 node = "24"
@@ -40,21 +43,60 @@ run = "pnpm exec vitest bench --run"
 description = "Profile the engine headless: mise run profile [preset] [--events N] [--particles N --periodic]; writes profiles/*.cpuprofile"
 run = "node --import tsx --cpu-prof --cpu-prof-dir=profiles scripts/profile.ts"
 
-[tasks."bench:scaling"]
-description = "Web engine scaling benchmark (writes benchmarks/results/web-node.json)"
-run = "node --expose-gc --import tsx scripts/bench-scaling.ts"
+# Tasks below are split by the program that runs them, with their inputs and outputs, so
+# they're skipped while nothing they depend on has changed. The Java program is the
+# boltzmann3d fork in vendor/boltzmann3d (git submodule: `git submodule update --init`).
+# The java:* tasks store a hash of their Java inputs next to their outputs (committed), so
+# Java only reruns when the Java program changes, even on a fresh clone or in CI.
+# Set FORCE=1 to rerun anyway.
 
-[tasks."bench:java"]
-description = "Java app scaling benchmark via boltzmann3d's `ant benchmark` (writes benchmarks/results/java.json)"
-run = 'cd "${BOLTZMANN3D_DIR:-../boltzmann3d}" && mise exec java@temurin-25 ant@1.10.18 -- ant benchmark -Dbenchmark.out="{{config_root}}/benchmarks/results/java.json"'
+[tasks."java:parity"]
+description = "Java app: write parity fixtures (src/sim/parity/*.json) with boltzmann3d's ParityDump"
+run = """
+set -eu
+inputs="src tests/edu/byu/chem/boltzmann/tools/ParityDump.java tests/edu/byu/chem/boltzmann/tools/JsonWriter.java build.xml"
+stamp=src/sim/parity/java-inputs.txt
+hash=$(scripts/java-inputs-hash.sh $inputs)
+if [ -z "${FORCE:-}" ] && [ "$hash" = "$(cat $stamp 2>/dev/null)" ]; then
+  echo "java:parity: Java program unchanged since the fixtures were written; skipping"
+  exit 0
+fi
+(cd vendor/boltzmann3d && mise exec java@temurin-25 ant@1.10.18 -- ant -q parity-dump -Dparity.out="{{config_root}}/src/sim/parity")
+echo "$hash" > $stamp
+"""
+
+[tasks."java:bench"]
+description = "Java app: physics scaling benchmark (benchmarks/results/java.json); takes several minutes"
+run = """
+set -eu
+inputs="src tests/edu/byu/chem/boltzmann/tools/PhysicsBenchmark.java tests/edu/byu/chem/boltzmann/tools/JsonWriter.java build.xml"
+stamp=benchmarks/results/java-inputs.txt
+hash=$(scripts/java-inputs-hash.sh $inputs)
+if [ -z "${FORCE:-}" ] && [ "$hash" = "$(cat $stamp 2>/dev/null)" ]; then
+  echo "java:bench: Java program unchanged since the results were written; skipping"
+  exit 0
+fi
+(cd vendor/boltzmann3d && mise exec java@temurin-25 ant@1.10.18 -- ant -q benchmark -Dbenchmark.out="{{config_root}}/benchmarks/results/java.json")
+echo "$hash" > $stamp
+"""
+
+[tasks."web:bench"]
+description = "Web engine: physics scaling benchmark under Node (benchmarks/results/web-node.json)"
+run = "node --expose-gc --import tsx scripts/bench-scaling.ts"
+sources = ["src/sim/**/*.ts", "scripts/bench-scaling.ts", "package.json", "pnpm-lock.yaml"]
+outputs = ["benchmarks/results/web-node.json"]
+
+[tasks."test:parity"]
+description = "Web engine: check it reproduces the Java app's events bit for bit (refreshes fixtures first if the Java app changed)"
+depends = ["java:parity"]
+run = "pnpm exec vitest run src/sim/parity.test.ts"
 
 [tasks."bench:report"]
-description = "Rebuild the tables in benchmarks/README.md from benchmarks/results/*.json"
+description = "Rebuild the tables in benchmarks/README.md (reruns either benchmark first if its program changed)"
+depends = ["java:bench", "web:bench"]
 run = "node --import tsx scripts/bench-report.ts"
-
-[tasks."parity:fixtures"]
-description = "Regenerate src/sim/parity/*.json via boltzmann3d's `ant parity-dump`"
-run = 'cd "${BOLTZMANN3D_DIR:-../boltzmann3d}" && mise exec java@temurin-25 ant@1.10.18 -- ant parity-dump -Dparity.out="{{config_root}}/src/sim/parity"'
+sources = ["benchmarks/results/*.json", "scripts/bench-report.ts"]
+outputs = ["benchmarks/README.md"]
 
 [tasks.lint]
 description = "Run all hk checks on every file"

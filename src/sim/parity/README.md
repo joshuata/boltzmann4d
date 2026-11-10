@@ -1,6 +1,6 @@
 # Parity fixtures
 
-Each `*.json` here was written by the Java app's physics, through `ParityDump` on the `boltzmann4d-parity-tools` branch of boltzmann3d ([joshuata/boltzmann3d](https://github.com/joshuata/boltzmann3d/tree/boltzmann4d-parity-tools), a fork of byu-chem/boltzmann3d). `src/sim/parity.test.ts` replays them through the TypeScript engine and requires bit-identical results.
+Each `*.json` here was written by the Java app's physics, through `ParityDump` in the boltzmann3d fork vendored at `vendor/boltzmann3d` ([joshuata/boltzmann3d](https://github.com/joshuata/boltzmann3d/tree/boltzmann4d-parity-tools), branch `boltzmann4d-parity-tools`). Java's random particle placement is seeded, so the same Java program always writes the same fixtures. `src/sim/parity.test.ts` replays them through the TypeScript engine and requires bit-identical results.
 
 A fixture holds:
 
@@ -10,8 +10,10 @@ A fixture holds:
 
 Presets whose arena type isn't ported yet (dividers and holes) are skipped by the test, not deleted, so they start checking as soon as the port lands.
 
-To regenerate, with boltzmann3d's `boltzmann4d-parity-tools` branch at `../boltzmann3d` (or `BOLTZMANN3D_DIR` pointing at it):
+Run the parity test with:
 
 ```bash
-mise run parity:fixtures
+mise run test:parity
 ```
+
+It regenerates the fixtures first (`mise run java:parity`) only if the Java program in `vendor/boltzmann3d` changed.

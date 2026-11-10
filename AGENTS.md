@@ -4,7 +4,7 @@ Project context for any coding agent working in this repo. This is the single so
 
 ## What this is
 
-boltzmann4d is a TypeScript web port of [`../boltzmann3d`](../boltzmann3d). That project is a Java 25/Swing/LWJGL kinetic-theory teaching app (BYU Chemistry, 2013, GPL-3.0) for exploring the Maxwell–Boltzmann distribution, pressure, effusion and related ideas.
+boltzmann4d is a TypeScript web port of [boltzmann3d](https://github.com/byu-chem/boltzmann3d), checked out as a git submodule at `vendor/boltzmann3d` (our fork, [joshuata/boltzmann3d](https://github.com/joshuata/boltzmann3d), branch `boltzmann4d-parity-tools`, which adds the parity and benchmark tools). Run `git submodule update --init` after cloning. That project is a Java 25/Swing/LWJGL kinetic-theory teaching app (BYU Chemistry, 2013, GPL-3.0) for exploring the Maxwell–Boltzmann distribution, pressure, effusion and related ideas.
 
 The heart of it is a **custom event-driven hard-sphere simulation**. There is no fixed timestep:
 
@@ -42,7 +42,7 @@ src/
   charts/   Canvas2D histogram / history plots
 ```
 
-Java sources referenced above live in `../boltzmann3d/src/edu/byu/chem/boltzmann/`. Presets (`*.set`) are in `resources/simsettingsfiles/presets/`. The rendering behaviours to preserve are listed in `../boltzmann3d/docs/rendering-baseline.md`.
+Java sources referenced above live in `vendor/boltzmann3d/src/edu/byu/chem/boltzmann/`. Presets (`*.set`) are in `resources/simsettingsfiles/presets/`. The rendering behaviours to preserve are listed in `vendor/boltzmann3d/docs/rendering-baseline.md`.
 
 ## Commands
 
@@ -52,8 +52,9 @@ Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`
 - `pnpm build`: type-check (svelte-check), then build the production bundle
 - `pnpm test`: run Vitest; tests sit next to the code as `*.test.ts`
 - `mise run bench`: run the benchmarks (`*.bench.ts`, using Vitest's `bench` test fixture); not part of `pnpm test` or CI
-- `mise run bench:scaling` / `mise run bench:java` / `mise run bench:report`: scaling benchmarks of the web engine and the Java app, and the tables in `benchmarks/README.md`
-- `mise run parity:fixtures`: regenerate the Java parity fixtures in `src/sim/parity/` (needs the `boltzmann4d-parity-tools` branch of [joshuata/boltzmann3d](https://github.com/joshuata/boltzmann3d/tree/boltzmann4d-parity-tools))
+- `mise run test:parity`: check the engine against the Java app's parity fixtures, regenerating them first (`java:parity`) only if the Java program changed
+- `mise run bench:report`: rebuild the benchmark tables in `benchmarks/README.md`, first rerunning `java:bench` (Java app) or `web:bench` (web engine) only if that program changed
+- Tasks that run a program declare its inputs and outputs (`sources`/`outputs` in `mise.toml`, compared by content), so the slow Java runs are skipped unless `vendor/boltzmann3d` changes
 - `mise run profile [preset] [--events N] [--particles N [--periodic]]`: run the engine headless under the V8 profiler (`scripts/profile.ts`) and write a `.cpuprofile` to `profiles/`
 - `pnpm lint` / `mise run lint`: run every hk check on all files: ESLint (TS + Svelte rules), svelte-check (types), Prettier, markdownlint-cli2
 - `pnpm format` / `mise run fix`: apply every hk fixer on all files

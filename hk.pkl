@@ -3,7 +3,7 @@ amends "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.
 // Node tools run via `pnpm exec` so versions come from package.json; others come from mise.toml.
 
 // Files no step should ever touch.
-exclude = List("LICENSE*")
+exclude = List("LICENSE*", "vendor/**")
 
 local linters = new Mapping<String, Step> {
     // TypeScript + Svelte lint rules (typescript-eslint, eslint-plugin-svelte). See eslint.config.js.

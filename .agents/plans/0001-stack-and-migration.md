@@ -17,7 +17,7 @@ Later sessions cover migration steps 2–8 below.
 
 ## Context
 
-boltzmann4d is a TypeScript web migration of `../boltzmann3d`. That app is a Java 25 + Swing + LWJGL kinetic-theory teaching app with about 38.8k lines across 176 files.
+boltzmann4d is a TypeScript web migration of boltzmann3d (now vendored at `vendor/boltzmann3d`). That app is a Java 25 + Swing + LWJGL kinetic-theory teaching app with about 38.8k lines across 176 files.
 
 The original app's core is a custom event-driven hard-sphere simulation:
 
@@ -62,7 +62,7 @@ src/
 ## Agent-agnostic repo conventions (do first)
 
 - **`AGENTS.md`** at the repo root is the single source of project context for any coding agent. It covers:
-  - Purpose and origin (`../boltzmann3d`).
+  - Purpose and origin (boltzmann3d).
   - The chosen stack and the reasons behind each choice (the Decisions above).
   - The directory layout.
   - Commands: `pnpm dev`, `pnpm test`, `pnpm lint`.
