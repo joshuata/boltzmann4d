@@ -74,6 +74,23 @@ describe('Statistics', () => {
     expect(all.binsByType).toHaveLength(10);
     const counted = all.binsByType.flat().reduce((x, y) => x + y, 0);
     expect(counted).toBeGreaterThan(0.95 * sim.particles.count); // a few may be off the axis
+
+    // Any subset on request (KIND-4), composed from the all-kinds data.
+    const composed = stats.summary(sim.time, [[2, 0], [3]]).statistics;
+    expect(composed).toHaveLength(12); // [3] is tracked already
+    const pair = composed.at(-1)!;
+    expect(pair.types).toEqual([0, 2]);
+    const allKinds = composed[10]!;
+    expect(pair.cumulative.binsByType).toEqual([
+      allKinds.cumulative.binsByType[0],
+      allKinds.cumulative.binsByType[2],
+    ]);
+    // Its average is the two kinds' averages weighted by their data.
+    const [k0, k2] = [stats.speed[0]!.cumulativeValues, stats.speed[2]!.cumulativeValues];
+    const expected =
+      (k0.average() * k0.weight + k2.average() * k2.weight) / (k0.weight + k2.weight);
+    expect(pair.cumulative.average).toBeCloseTo(expected, 6);
+    expect(pair.cumulative.prediction.temperatures).toHaveLength(2);
   });
 
   it('records every non-empty set of types, bins aligned across them', () => {

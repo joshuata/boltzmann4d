@@ -173,8 +173,11 @@
         colorMode={sim.colorMode}
         trace={sim.trace.enabled}
         canTrace={sim.dimension !== 3}
+        markers={sim.markers}
+        canMark={sim.dimension !== 3}
         onColorMode={(mode) => sim?.setColorMode(mode)}
         onTrace={(enabled) => sim?.setTrace(enabled)}
+        onMarkers={(enabled) => sim?.setMarkers(enabled)}
       />
     {/if}
     {#if sim?.arena}
@@ -237,7 +240,13 @@
     {/if}
     {#if sim?.statistics}
       {#await statisticsPanel then { default: StatisticsPanel }}
-        <StatisticsPanel summary={sim.statistics} />
+        <StatisticsPanel
+          summary={sim.statistics}
+          kinds={sim.kinds}
+          selected={sim.statKinds}
+          showMarkers={sim.markers && sim.dimension !== 3}
+          onKinds={(types) => sim?.setStatKinds(types)}
+        />
       {/await}
     {/if}
     <!-- Diagnostics last: particle count, frame rates and where drawing happens. -->

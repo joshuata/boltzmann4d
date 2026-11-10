@@ -1,4 +1,5 @@
-<!-- The View menu: colour particles by type, speed or kinetic energy, and trace mode. -->
+<!-- The View menu: colour particles by type, speed or kinetic energy, kinds' markers and
+     trace mode. -->
 <script lang="ts">
   import type { ColorMode } from '@boltzmann4d/engine/sim';
 
@@ -7,11 +8,16 @@
     trace: boolean;
     /** Trace mode is 2D-only so far. */
     canTrace: boolean;
+    /** Kinds' markers on particles (KIND-9; 2D). */
+    markers: boolean;
+    canMark: boolean;
     onColorMode: (mode: ColorMode) => void;
     onTrace: (enabled: boolean) => void;
+    onMarkers: (enabled: boolean) => void;
   }
 
-  let { colorMode, trace, canTrace, onColorMode, onTrace }: Props = $props();
+  let { colorMode, trace, canTrace, markers, canMark, onColorMode, onTrace, onMarkers }: Props =
+    $props();
 
   const MODES: { value: ColorMode; label: string }[] = [
     { value: 'NORMAL', label: 'By type' },
@@ -35,6 +41,16 @@
   </label>
   {#if colorMode !== 'NORMAL'}
     <p class="hint">Violet is slow, red is fast (2.5 × the predicted average or more).</p>
+  {/if}
+  {#if canMark}
+    <label class="check">
+      <input
+        type="checkbox"
+        checked={markers}
+        onchange={(e) => onMarkers(e.currentTarget.checked)}
+      />
+      Kind markers
+    </label>
   {/if}
   {#if canTrace}
     <label class="check">

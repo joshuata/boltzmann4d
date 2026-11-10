@@ -22,7 +22,8 @@ import type { DividerThermalMode } from '../sim/simulation-info';
 import { avgKineticEnergy, speed as speedFromEnergy } from '../stats/formulas';
 import { convert, Energy } from '../utils/units';
 import { ScenarioError, type Boundary } from './format';
-import { paletteColor } from './palettes';
+import { MARKERS, paletteColor, type Marker } from './palettes';
+import { wallStyle, type ResolvedWallStyle, type WallKindType } from './wall-styles';
 import type { Kind, Population, Scenario } from './schema';
 
 /** `#RRGGBB` as a number. */
@@ -36,6 +37,8 @@ export type StatKinds = 'all' | number[];
 export interface ParticleSpecies {
   /** The scenario kind's id. */
   kindId: string;
+  /** Drawn on the kind's particles in 2D, in legends and charts (KIND-9). */
+  marker: Marker;
   type: ParticleType;
   /** Initial temperature in K requested by the file, or NaN to infer it from the velocities. */
   initialTemperature: number;
@@ -71,8 +74,8 @@ export interface ResolvedScenario {
   /** Diameter of the hole in the divider, in meters. */
   holeDiameter: number;
   maxwellDemonMode: boolean;
-  /** Drawn walls (reflecting), points in meters. */
-  walls: WallShape[];
+  /** Drawn walls, points in meters. */
+  walls: ResolvedWall[];
   /** The enabled reaction rules, with kinds as species indices (KIND-13). */
   reactions: ReactionRule[];
   /**
@@ -104,8 +107,17 @@ export interface ResolvedScenario {
   /** 3D camera angles as written in the file. */
   viewingAngles: [number, number];
   coloringMode: string;
+  /** Whether kinds' markers are drawn (KIND-9). */
+  markers: boolean;
   traceMode: boolean;
   tracePointSize: number;
+}
+
+/** A drawn wall: its shape for the simulation, plus its kind and style for display. */
+export interface ResolvedWall extends WallShape {
+  id: string;
+  kind: WallKindType;
+  style: ResolvedWallStyle;
 }
 
 export interface ResolveOptions {
@@ -165,8 +177,11 @@ export function resolveScenario(
     })),
     species,
     walls: scenario.walls.map((w) => ({
+      id: w.id,
       points: w.points.map(([x, y]) => [nmToM(x), nmToM(y)] as const),
       closed: w.closed,
+      kind: w.kind.type,
+      style: wallStyle(w.kind.type, w.style),
     })),
 
     paused: run.paused,
@@ -205,6 +220,7 @@ export function resolveScenario(
     lighting: display.lighting,
     viewingAngles: display.viewingAngles,
     coloringMode: display.coloringMode,
+    markers: display.markers,
     traceMode: display.traceMode,
     tracePointSize: display.tracePointSize,
   };
@@ -265,6 +281,7 @@ function resolveSpecies(
     .filter(([id, s]) => s.positions.length > 0 || reacting.has(id))
     .map(([kindId, s]) => ({
       kindId,
+      marker: MARKERS[kindIndex.get(kindId)!]!,
       type: s.type,
       initialTemperature: s.initialTemperature,
       positions: Float64Array.from(s.positions.flat()),

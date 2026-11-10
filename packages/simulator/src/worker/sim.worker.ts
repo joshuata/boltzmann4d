@@ -2,6 +2,7 @@
 // the page supplies), paces it with ThreadController, and streams frames to the renderer over the port it is given.
 import {
   loadPresetScenario,
+  MARKERS,
   parseScenario,
   resolveScenario,
   type ResolvedScenario,
@@ -52,6 +53,15 @@ let paused = false;
 let rateScale = 1;
 /** Bumped per load request, so a slow load can't replace a newer one. */
 let loadGeneration = 0;
+/** The running simulation's statistics. */
+let runningStatistics: Statistics | null = null;
+/** Kinds the user picked for the statistics (KIND-4), if not a tracked set. */
+let statKinds: number[] | null = null;
+
+/** Sends the statistics, including the picked set of kinds. */
+function postSummary(statistics: Statistics, time: number): void {
+  post({ type: 'statistics', summary: statistics.summary(time, statKinds ? [statKinds] : []) });
+}
 
 scope.onmessage = (event: MessageEvent<ToWorker>) => {
   const message = event.data;
@@ -96,6 +106,10 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
     case 'rate':
       rateScale = message.scale;
       threadController?.setRateScale(rateScale);
+      break;
+    case 'statKinds':
+      statKinds = message.types;
+      if (running && runningStatistics) postSummary(runningStatistics, running.time);
       break;
   }
 };
@@ -170,6 +184,7 @@ async function load(
         {
           ...red,
           kindId: 'reacted',
+          marker: MARKERS[1]!,
           type: new ParticleType(
             red.type.particleMass,
             red.type.particleRadius,
@@ -259,6 +274,7 @@ function build(prepared: Prepared): Built {
     forgetMultiplier: prepared.scenario.forgetMultiplier,
     typeNames: prepared.scenario.species.map((s) => s.type.displayName),
     typeColors: prepared.typeColors,
+    typeMarkers: prepared.scenario.species.map((s) => s.marker),
   }));
   return { simulation, statistics };
 }
@@ -289,7 +305,7 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
   send(
     {
       type: 'scene',
-      scene: sceneOf(simulation, prepared.typeColors, prepared.viewingAngles, prepared.view),
+      scene: sceneOf(simulation, prepared),
     },
     [],
   );
@@ -317,13 +333,15 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
         lastSummary = now;
         statistics.sampleCurrent();
-        post({ type: 'statistics', summary: statistics.summary(simulation.time) });
+        postSummary(statistics, simulation.time);
       }
     },
     { speed: prepared.speed, rateScale },
   );
   threadController = controller;
   running = simulation;
+  runningStatistics = statistics;
+  statKinds = null; // a new scenario has its own kinds
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
   threadController.showCurrentFrame();
@@ -336,7 +354,13 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
       ? { maxLevel: simulation.maxPistonLevel(), arenaHeight: simulation.arena.ySize }
       : undefined,
     dimension: simulation.dimension,
+    kinds: prepared.scenario.species.map((s, t) => ({
+      name: s.type.displayName,
+      color: prepared.typeColors[t]!,
+      marker: s.marker,
+    })),
     view: {
+      markers: prepared.scenario.markers,
       colorMode: prepared.view.colorMode,
       trace: prepared.view.trace,
       arenaWidth: simulation.arena.xSize,
@@ -345,12 +369,8 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
   });
 }
 
-function sceneOf(
-  simulation: Simulation,
-  typeColors: number[],
-  viewingAngles: [number, number],
-  view: ViewSettings,
-): SceneInfo {
+function sceneOf(simulation: Simulation, prepared: Prepared): SceneInfo {
+  const { typeColors, viewingAngles, view, scenario } = prepared;
   const p = simulation.particles;
   const arena = simulation.arena;
   const divided =
@@ -365,6 +385,15 @@ function sceneOf(
     radii: p.radius.slice(),
     types: p.type.slice(),
     typeColors,
+    // Always sent, so the View menu can turn them on; the scenario says whether they start on.
+    typeMarkers: scenario.species.map((s) => s.marker),
+    walls: scenario.walls.map((w) => ({
+      points: Float64Array.from(w.points.flat()),
+      closed: w.closed ?? false,
+      color: w.style.color,
+      lineWidth: w.style.lineWidth,
+      dash: w.style.dash,
+    })),
     viewingAngles,
     divider: divided
       ? {

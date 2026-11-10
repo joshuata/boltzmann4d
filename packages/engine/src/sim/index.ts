@@ -18,6 +18,21 @@ export interface SceneInfo {
   types: Uint16Array;
   /** Per particle type, 0xRRGGBB. */
   typeColors: number[];
+  /**
+   * Per particle type, the marker drawn on its discs in 2D (KIND-9: `disk`, `ring`, `dot`,
+   * …; see scenario/palettes.ts). Absent when markers are turned off.
+   */
+  typeMarkers?: string[];
+  /** Drawn walls (2D): x, y pairs in meters, and how to draw them (WALL-5). */
+  walls?: {
+    points: Float64Array;
+    closed: boolean;
+    /** 0xRRGGBB. */
+    color: number;
+    /** Screen pixels. */
+    lineWidth: number;
+    dash: 'solid' | 'dashed';
+  }[];
   /** Divided arenas: the divider's faces, and the hole's edge particles if it has one. */
   divider?: {
     leftX: number;

@@ -15,6 +15,7 @@ import type {
   ArenaInfo,
   ArenaOptions,
   FromWorker,
+  KindInfo,
   PistonInfo,
   ScenarioSource,
   ToWorker,
@@ -42,6 +43,13 @@ export class SimulationClient {
   /** How particles are coloured, and trace mode (the scenario's until changed). */
   colorMode = $state<ColorMode>('NORMAL');
   trace = $state({ enabled: false, pointSize: 2 });
+  /** Whether kinds' markers are drawn (KIND-9; the scenario's until changed). */
+  markers = $state(true);
+  #markersChosen = false;
+  /** The running simulation's particle kinds, in type order (empty until loaded). */
+  kinds = $state.raw<KindInfo[]>([]);
+  /** Kinds the statistics show (KIND-4): null for all of them. */
+  statKinds = $state.raw<number[] | null>(null);
   /** The arena's size in m, and the canvas's in CSS pixels (for the scale bar). */
   arenaSize = $state.raw({ width: 0, height: 0 });
   canvasSize = $state.raw({ width: 0, height: 0 });
@@ -178,6 +186,12 @@ export class SimulationClient {
           this.arena = message.arena;
           this.piston = message.piston ? { ...message.piston, level: 0, moving: false } : null;
           this.dimension = message.dimension;
+          this.kinds = message.kinds;
+          this.statKinds = null; // the worker forgets the picked kinds on each load
+          if (!this.#markersChosen) {
+            this.markers = message.view.markers;
+            this.#toRenderer({ type: 'markers', enabled: this.markers });
+          }
           this.arenaSize = { width: message.view.arenaWidth, height: message.view.arenaHeight };
           if (!this.#viewChosen) {
             this.colorMode = message.view.colorMode;
@@ -250,11 +264,26 @@ export class SimulationClient {
     this.#toRenderer({ type: 'trace', enabled, pointSize: this.trace.pointSize });
   }
 
-  #toRenderer(message: Extract<ToRenderWorker, { type: 'colorMode' | 'trace' }>): void {
+  /** Kinds' markers on or off (kept across scenarios). */
+  setMarkers(enabled: boolean): void {
+    this.#markersChosen = true;
+    this.markers = enabled;
+    this.#toRenderer({ type: 'markers', enabled });
+  }
+
+  /** Which kinds the statistics show (KIND-4): type indices, or null for all. */
+  setStatKinds(types: number[] | null): void {
+    this.statKinds = types;
+    this.#send({ type: 'statKinds', types });
+  }
+
+  #toRenderer(message: Extract<ToRenderWorker, { type: 'colorMode' | 'trace' | 'markers' }>): void {
     if (this.#renderWorker) {
       this.#renderWorker.postMessage(message);
     } else if (message.type === 'colorMode') {
       this.#mainRenderer?.setColorMode(message.mode);
+    } else if (message.type === 'markers') {
+      this.#mainRenderer?.setMarkers(message.enabled);
     } else {
       this.#mainRenderer?.setTrace(message.enabled, message.pointSize);
     }

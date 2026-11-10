@@ -19,6 +19,8 @@ export interface View {
   setColorMode(mode: ColorMode): void;
   /** Trace mode (2D): accumulate particle marks of `pointSize` pixels; off clears them. */
   setTrace(enabled: boolean, pointSize: number): void;
+  /** Whether kinds' markers are drawn over their particles (KIND-9; 2D only). */
+  setMarkers?(enabled: boolean): void;
   /** Called before each draw, with the renderer (the trace draws into its own target). */
   beforeRender?(renderer: THREE.WebGLRenderer): void;
   dispose(): void;

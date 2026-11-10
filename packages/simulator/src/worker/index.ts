@@ -83,7 +83,21 @@ export type ToWorker =
   | { type: 'pause' }
   | { type: 'step' }
   /** Multiply the scenario's simulation speed (kept across loads). */
-  | { type: 'rate'; scale: number };
+  | { type: 'rate'; scale: number }
+  /**
+   * The kinds (species indices) the statistics should also cover (KIND-4), when they
+   * aren't a set tracked anyway; null for none. Reset by each load.
+   */
+  | { type: 'statKinds'; types: number[] | null };
+
+/** One particle kind of the running simulation, for legends and pickers (KIND-4, KIND-9). */
+export interface KindInfo {
+  name: string;
+  /** 0xRRGGBB. */
+  color: number;
+  /** See render/markers.ts. */
+  marker: string;
+}
 
 export type FromWorker =
   /**
@@ -106,10 +120,14 @@ export type FromWorker =
       name: string;
       particles: number;
       dimension: Dimension;
+      /** Per species, in type order. */
+      kinds: KindInfo[];
       arena: ArenaInfo;
       piston?: PistonInfo;
       /** The scenario's view (colour mode, trace) and the arena's size, m. */
       view: {
+        /** Whether the scenario draws kinds' markers (KIND-9). */
+        markers: boolean;
         colorMode: ColorMode;
         trace: { enabled: boolean; pointSize: number };
         arenaWidth: number;

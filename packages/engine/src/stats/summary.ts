@@ -36,5 +36,7 @@ export interface StatisticsSummary {
   typeNames: string[];
   /** 0xRRGGBB per type. */
   typeColors: number[];
+  /** Per type, its marker (KIND-9: `disk`, `ring`, …); absent when markers are off. */
+  typeMarkers?: string[];
   statistics: StatisticSummary[];
 }

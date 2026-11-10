@@ -58,6 +58,7 @@ export {
   parseHexColor,
   type ResolveOptions,
   type ResolvedScenario,
+  type ResolvedWall,
   type ParticleSpecies,
 } from './resolve';
 export { loadPresetScenario, readScenarioFile, type ScenarioFile } from './sources';
@@ -70,3 +71,11 @@ export {
   type SpeciesSetup,
   type SpeciesSummary,
 } from './edit';
+export {
+  contrastRatio,
+  DEFAULT_WALL_STYLES,
+  relativeLuminance,
+  wallStyle,
+  type ResolvedWallStyle,
+  type WallKindType,
+} from './wall-styles';

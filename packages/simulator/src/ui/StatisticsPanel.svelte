@@ -1,28 +1,37 @@
-<!-- Speed statistics in the sidebar: which particle types, current or cumulative, the
-     histogram with its Maxwell–Boltzmann curve, and measured vs predicted averages. The
-     prediction uses each type's temperature in the data shown (#23). -->
+<!-- Speed statistics in the sidebar: which particle kinds (KIND-4), current or cumulative,
+     the histogram with its Maxwell–Boltzmann curve, and measured vs predicted averages. The
+     prediction uses each kind's temperature in the data shown (#23). -->
 <script lang="ts">
   import { Checkbox } from '@boltzmann4d/ui/checkbox';
   import { Label } from '@boltzmann4d/ui/label';
-  import * as Select from '@boltzmann4d/ui/select';
   import SpeedHistogram from '../charts/SpeedHistogram.svelte';
   import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
+  import type { KindInfo } from '../worker';
+  import KindPicker from './KindPicker.svelte';
 
   interface Props {
     summary: StatisticsSummary;
+    kinds: KindInfo[];
+    /** Type indices the statistics show, or null for all kinds. */
+    selected: number[] | null;
+    showMarkers: boolean;
+    onKinds: (selected: number[] | null) => void;
   }
 
-  let { summary }: Props = $props();
+  let { summary, kinds, selected, showMarkers, onKinds }: Props = $props();
 
-  let selected = $state<string | null>(null);
   let cumulative = $state(false);
 
   const label = (types: number[]) =>
     types.map((t) => summary.typeNames[t] ?? `Type ${t + 1}`).join(' & ');
   const key = (types: number[]) => types.join(',');
-  // Default to all types together (the last subset).
+  const allKinds = $derived(
+    summary.statistics.find((s) => s.types.length === summary.typeNames.length) ??
+      summary.statistics.at(-1),
+  );
+  // The picked kinds once the worker has sent them (about a second), else all of them.
   const statistic = $derived(
-    summary.statistics.find((s) => key(s.types) === selected) ?? summary.statistics.at(-1),
+    (selected && summary.statistics.find((s) => key(s.types) === key(selected))) || allKinds,
   );
   const distribution = $derived(
     statistic && (cumulative ? statistic.cumulative : statistic.current),
@@ -35,21 +44,8 @@
   <section class="mt-4 border-t pt-3" aria-label="Speed statistics">
     <h2 class="mb-2 text-sm font-semibold">{statistic.label}</h2>
     <div class="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-      {#if summary.statistics.length > 1}
-        <Select.Root
-          type="single"
-          value={key(statistic.types)}
-          onValueChange={(value) => (selected = value)}
-        >
-          <Select.Trigger size="sm" aria-label="Particle types">
-            {label(statistic.types)}
-          </Select.Trigger>
-          <Select.Content>
-            {#each summary.statistics as s (key(s.types))}
-              <Select.Item value={key(s.types)} label={label(s.types)} />
-            {/each}
-          </Select.Content>
-        </Select.Root>
+      {#if kinds.length > 1}
+        <KindPicker {kinds} {selected} {showMarkers} onChange={onKinds} />
       {/if}
       <div class="flex min-h-8 items-center gap-2">
         <Checkbox id={cumulativeId} bind:checked={cumulative} />
