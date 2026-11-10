@@ -1,6 +1,6 @@
 # 0008: Simulation editor and scenario JSON
 
-_In progress: step 1 (engine schema and conversion) is done; next is step 2._ Follows the workspace split (plan 0007), which left `packages/simulation-editor` and the `/editor` and `/upload` routes as placeholders.
+_In progress: steps 1–4 are done; next is step 5 (saved scenarios)._ Follows the workspace split (plan 0007), which left `packages/simulation-editor` and the `/editor` and `/upload` routes as placeholders.
 
 ## Goal
 
@@ -25,11 +25,19 @@ Teachers and students can build their own simulation (arena, species, counts, te
 ## Work
 
 1. Engine (first PR, done): JSON schema and types for scenarios, a validator with readable errors, and `.set ⇄ JSON` conversion with round-trip tests over every bundled preset.
-2. Worker protocol: load a scenario (JSON) instead of only a preset name; presets become scenarios produced from the bundled `.set` files.
-3. Site: `/upload` opens a `.json` or `.set` file (FILE-1's file picker), stores it, and runs it; a route to run a stored scenario.
-4. Simulation editor: a form-based editor over the schema (start from any preset), with live validation, run, and download as `.json` or `.set`. Works at narrow widths and with touch (AGENTS.md UI rules).
-5. Saved scenarios: an IndexedDB store of named scenarios (JSON), listed on `/upload`, with a user default (FILE-2).
+2. Worker protocol (done): `connect`/`load` take a `ScenarioSource`, a bundled preset or a scenario object, and `<Simulator>` takes a `scenario` prop. Presets are converted to scenarios when loaded (`loadPresetScenario`).
+3. Site (done): `/upload` opens a `.json` or `.set` file (FILE-1's file picker, or drag and drop), lists every problem if it can't, and runs it. Storing it moves to step 5.
+4. Simulation editor (done, first version): `/editor` starts from any preset or an opened file and edits:
+   - the arena: dimensions (SIM-7), size (SIM-10), walls (SIM-12–17, no hole in 1D), hole diameter, conducting divider;
+   - red and blue particles: count, mass, radius, temperature, within the PART-1–4 limits;
+   - Maxwell's demon (SIM-24, with a hole) and reactions (SIM-25, 2D with one species);
+   - whether it starts paused (FILE-4).
+
+   Fields are checked as you type, along with the Java dialog's "particles do not fit" check. Run previews it beside the form (below it on phones), and it downloads as `.json` or `.set` (FILE-5/6). Statistics, display options, abscissa limits and particles at given positions aren't editable yet: they're kept from the starting scenario. Positions are kept while the arena is unchanged; a new dimension, size or wall layout places every particle at random. Random placement now follows FILE-3 in divided arenas (red left, blue right; everything left with a hole), as the Java dialog does; no preset combines the two, so presets are unchanged.
+
+5. Saved scenarios: an IndexedDB store of named scenarios (JSON), including opened files, listed on `/upload` with a route to run one, and a user default (FILE-2).
 
 ## Open questions
 
-- Which SIM/PART/FILE requirements the first editor version covers.
+- Whether a `.set` file this app writes loads in the Java app (FILE-6) still needs one manual check.
+- PART-4 allows 0–9999 K, but the engine (from Java's `MAXIMUM_INITIAL_TEMPERATURE`) caps starting temperatures at 1500 K.
