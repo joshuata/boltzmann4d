@@ -1,27 +1,39 @@
-// Simulation Web Worker entry: builds the Simulation from a settings file and paces it
-// with ThreadController.
-import { loadDefaultSettingsText, loadSettings } from '../io';
+// Simulation Web Worker entry: builds the Simulation from a settings file, paces it with
+// ThreadController, and streams frames to the renderer over the port it is given.
+import { loadDefaultSettingsText, loadPresetText, loadSettings } from '../io';
+import type { RenderStream } from '../render/protocol';
 import { Simulation, type SceneInfo } from '../sim';
+import { ArenaType } from '../sim/simulation-info';
 import type { FromWorker, ToWorker } from './index';
 import { ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
-const post = (message: FromWorker, transfer: Transferable[] = []) =>
-  scope.postMessage(message, transfer);
+const post = (message: FromWorker) => scope.postMessage(message);
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+let frames: MessagePort | null = null;
 let threadController: ThreadController | null = null;
-// Messages that arrive while the settings file is still loading.
-let pausedBeforeStart = false;
+let paused = false;
+/** Bumped per load request, so a slow load can't replace a newer one. */
+let loadGeneration = 0;
 
 scope.onmessage = (event: MessageEvent<ToWorker>) => {
-  switch (event.data.type) {
+  const message = event.data;
+  switch (message.type) {
+    case 'connect':
+      frames = message.frames;
+      void load(message.preset);
+      break;
+    case 'load':
+      void load(message.preset);
+      break;
     case 'play':
-      if (threadController) threadController.setPaused(false);
-      else pausedBeforeStart = false;
+      paused = false;
+      threadController?.setPaused(false);
       break;
     case 'pause':
-      if (threadController) threadController.setPaused(true);
-      else pausedBeforeStart = true;
+      paused = true;
+      threadController?.setPaused(true);
       break;
     case 'step':
       threadController?.advanceOneFrame();
@@ -29,28 +41,65 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
   }
 };
 
-async function start(): Promise<void> {
-  const { settings } = loadSettings(await loadDefaultSettingsText());
-  const simulation = new Simulation(settings);
-  const p = simulation.particles;
-  const scene: SceneInfo = {
-    dimension: simulation.dimension,
-    arenaXSize: simulation.arena.xSize,
-    arenaYSize: simulation.arena.ySize,
-    arenaZSize: simulation.arena.zSize,
-    radii: p.radius.slice(),
-    types: p.type.slice(),
-    typeColors: settings.species.map((s) => s.type.defaultColor),
-  };
-  post({ type: 'scene', scene }, [scene.radii.buffer, scene.types.buffer]);
+/**
+ * Loads a preset (default.set when absent) and starts running it, replacing the current
+ * simulation. If the preset can't be loaded or isn't supported yet, reports the error and
+ * keeps the current simulation running. Paused stays paused.
+ */
+async function load(preset?: string): Promise<void> {
+  const generation = ++loadGeneration;
+  let simulation: Simulation;
+  let typeColors: number[];
+  try {
+    const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
+    const { settings } = loadSettings(text);
+    simulation = new Simulation(settings);
+    typeColors = settings.species.map((s) => s.type.defaultColor);
+  } catch (error) {
+    if (generation === loadGeneration) {
+      post({ type: 'error', message: `Can't load ${preset ?? 'default'}: ${errorText(error)}` });
+    }
+    return;
+  }
+  if (generation !== loadGeneration || !frames) return;
+
+  threadController?.stopSimulationThreads();
+  const port = frames;
+  const send = (message: RenderStream, transfer: Transferable[]) =>
+    port.postMessage(message, transfer);
+  send({ type: 'scene', scene: sceneOf(simulation, typeColors) }, []);
 
   threadController = new ThreadController(simulation, (frame, physicsMs) => {
-    post({ type: 'frame', frame, physicsMs }, [frame.positions.buffer, frame.types.buffer]);
+    send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
+    post({ type: 'timing', physicsMs });
   });
-  threadController.setPaused(pausedBeforeStart);
+  threadController.setPaused(paused);
   threadController.startSimulationThreads();
+  // While paused, show the starting state straight away (a no-op while running).
+  threadController.advanceOneFrame();
+  post({ type: 'loaded', preset: preset ?? 'default', particles: simulation.particles.count });
 }
 
-start().catch((error: unknown) => {
-  post({ type: 'error', message: error instanceof Error ? error.message : String(error) });
-});
+function sceneOf(simulation: Simulation, typeColors: number[]): SceneInfo {
+  const p = simulation.particles;
+  const arena = simulation.arena;
+  const divided =
+    arena.type === ArenaType.DIVIDED_ARENA || arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+  return {
+    dimension: simulation.dimension,
+    arenaXSize: arena.xSize,
+    arenaYSize: arena.ySize,
+    arenaZSize: arena.zSize,
+    radii: p.radius.slice(),
+    types: p.type.slice(),
+    typeColors,
+    divider: divided
+      ? {
+          leftX: arena.barrierLeftX,
+          rightX: arena.barrierRightX,
+          edgeY: arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE ? arena.edgeY : undefined,
+          edgeRadius: arena.edgeRadius,
+        }
+      : undefined,
+  };
+}

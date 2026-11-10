@@ -1,22 +1,17 @@
 <script lang="ts">
-  import { createRenderer } from '../render';
   import PlayPauseButton from './PlayPauseButton.svelte';
+  import PresetPicker from './PresetPicker.svelte';
   import { SimulationClient } from './simulation.svelte';
 
   let canvas: HTMLCanvasElement;
   let sim = $state<SimulationClient | null>(null);
 
   $effect(() => {
-    const renderer = createRenderer(canvas);
-    const client = new SimulationClient({
-      onScene: (scene) => renderer.setScene(scene),
-      onFrame: (frame) => renderer.setNextFrameToDisplay(frame),
-    });
+    const client = new SimulationClient(canvas);
     sim = client;
     return () => {
       sim = null;
       client.dispose();
-      renderer.dispose();
     };
   });
 </script>
@@ -25,6 +20,11 @@
   <canvas bind:this={canvas}></canvas>
   <aside>
     <h1>Boltzmann 4D</h1>
+    <PresetPicker
+      value={sim?.preset ?? 'default'}
+      disabled={!sim || sim.loading}
+      onChange={(name) => sim?.loadPreset(name)}
+    />
     <div class="transport" role="group" aria-label="Simulation controls">
       <PlayPauseButton
         paused={sim?.paused ?? false}
@@ -48,7 +48,15 @@
     {#if sim?.error}
       <p class="error" role="alert">Simulation failed to start: {sim.error}</p>
     {:else if sim}
-      <p class="readout">Physics: {sim.physicsMs.toFixed(2)} ms/frame</p>
+      <p class="readout">
+        {sim.loading ? 'Loading…' : `${sim.particleCount} particles`}
+      </p>
+      <p class="readout">
+        Physics: {sim.physicsMs.toFixed(2)} ms/frame · rendering on the {sim.renderThread ===
+        'worker'
+          ? 'render worker'
+          : 'main thread'}
+      </p>
     {/if}
   </aside>
 </main>

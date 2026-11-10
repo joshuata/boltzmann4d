@@ -157,3 +157,10 @@ describe('loadSettings', () => {
     });
   });
 });
+
+describe('presetCatalog', () => {
+  it('lists every bundled preset exactly once', async () => {
+    const { presetCatalog } = await import('./presets');
+    expect(presetCatalog.map((p) => p.name).sort()).toEqual([...presetNames]);
+  });
+});

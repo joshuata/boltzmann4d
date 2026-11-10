@@ -4,7 +4,7 @@
 import { test } from 'vitest';
 import { createEvent } from './event';
 import { collide2D, initPeriodicFlags2D, predictBoundary2D, predictPair2D } from './particle-2d';
-import { Particles, type Arena } from './particles';
+import { createArena, Particles, type Arena } from './particles';
 import { ArenaType } from './simulation-info';
 
 // Local copies, so the timed loops don't go through module bindings (see plan 0002).
@@ -32,8 +32,8 @@ function gas(arena: Arena): Particles {
 }
 
 const arenas: Arena[] = [
-  { type: ArenaType.REFLECTING_BOUNDARIES, xSize: 40, ySize: 40, zSize: 0 },
-  { type: ArenaType.PERIODIC_BOUNDARIES, xSize: 40, ySize: 40, zSize: 0 },
+  createArena(ArenaType.REFLECTING_BOUNDARIES, 40, 40, 0),
+  createArena(ArenaType.PERIODIC_BOUNDARIES, 40, 40, 0),
 ];
 
 for (const arena of arenas) {

@@ -8,3 +8,4 @@ LICENSE
 # Generated data: written by tools, compared exactly; keep it as the tools write it.
 src/sim/parity/*.json
 benchmarks/results/*.json
+vendor/
