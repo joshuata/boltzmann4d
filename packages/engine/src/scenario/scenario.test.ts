@@ -457,12 +457,12 @@ describe('version 2 scenarios', () => {
             [1, 1],
             [2, 2],
           ],
-          kind: { type: 'reflecting' },
+          kind: { type: 'thermal', temperature: 300 },
         },
       ],
     });
     expect(() => resolveScenario(scenario)).toThrow(ScenarioError);
-    expect(() => resolveScenario(scenario)).toThrow("Drawn walls can't be simulated yet");
+    expect(() => resolveScenario(scenario)).toThrow("Thermal walls can't be simulated yet");
   });
 
   it('colours kinds from the palette unless they have their own colour', () => {

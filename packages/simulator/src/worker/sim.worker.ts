@@ -118,9 +118,11 @@ async function load(
         ? await loadPresetScenario(source.name)
         : parseScenario(source.scenario),
     );
+    // Drawn walls can't be combined with the piston yet (WALL-3).
     const canHavePiston =
-      loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
-      loaded.arenaType === ArenaType.MOVABLE_PISTON;
+      loaded.walls.length === 0 &&
+      (loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
+        loaded.arenaType === ArenaType.MOVABLE_PISTON);
     const canConduct =
       loaded.arenaType === ArenaType.DIVIDED_ARENA ||
       loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;

@@ -41,6 +41,7 @@ import {
 import { createArena, Particles, type Arena } from './particles';
 import { compressionLimitPercent, Piston, PistonMode } from './piston';
 import { ReactionTable, type ReactionRule } from './reactions';
+import { SegmentWalls, type WallHit, type WallShape } from './segment-walls';
 import { Thermostat } from './thermostat';
 import { convert } from '../utils/units';
 import { ArenaType, DividerThermalMode } from './simulation-info';
@@ -77,7 +78,7 @@ const PARTICLE = Collision.PARTICLE;
 const { ENTER_WELL, EXIT_WELL } = Collision;
 /** Events between two particles: collisions, and entering or leaving a square well. */
 const isPairType = (type: number) => type === PARTICLE || type === ENTER_WELL || type === EXIT_WELL;
-const { BOUNDARY, EOB, WALL, BARRIER, EDGE, PISTON } = Collision;
+const { BOUNDARY, EOB, WALL, BARRIER, EDGE, PISTON, DRAWN_WALL } = Collision;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
 const LEFT = Wall.LEFT;
 /** Next-event type for a cell crossing (internal; never reported). */
@@ -133,6 +134,11 @@ export interface InitialState {
   reactions?: readonly ReactionRule[];
   /** A square well along the bottom wall (non-periodic 2D arenas). */
   attractiveWall?: AttractiveWallOptions;
+  /**
+   * Drawn walls (WALL-1; reflecting): polylines with points in meters. 2D only, and not in
+   * periodic or piston arenas (WALL-3).
+   */
+  walls?: readonly WallShape[];
   species: readonly InitialSpecies[];
 }
 
@@ -168,6 +174,7 @@ export class Simulation {
     'dividerCollisions',
     'pairPredictions',
     'boundaryPredictions',
+    'wallPredictions',
     'cellCrossings',
     'staleEvents',
   );
@@ -188,6 +195,9 @@ export class Simulation {
   readonly wall: AttractiveWall | null;
   /** Attractive wall: 1 for each particle inside its well. */
   private readonly inWallWell: Uint8Array;
+  /** Drawn walls (null without any). */
+  readonly walls: SegmentWalls | null;
+  private readonly wallHit: WallHit = { time: 0, index: -1 };
 
   /**
    * Each particle's boundary event as Java predicted it: at the particle's own events, and
@@ -389,6 +399,7 @@ export class Simulation {
     );
     for (let k = 0; k < count; k++)
       this.grid.insert(k, this.grid.cellAt(p.x[k]!, p.y[k]!, p.z[k]!));
+    this.walls = init.walls && init.walls.length > 0 ? this.createWalls(init) : null;
 
     // Java predicts everything, then (periodic) zeroes the momentum and predicts
     // everything again; only the second prediction matters, so adjust first.
@@ -511,6 +522,31 @@ export class Simulation {
   private requirePiston(): Piston {
     if (!this.piston) throw new Error('This arena has no piston');
     return this.piston;
+  }
+
+  /**
+   * Drawn walls (WALL-3): 2D, inside a solid box without a piston, and no particle may
+   * start overlapping one.
+   */
+  private createWalls(init: InitialState): SegmentWalls {
+    if (init.dimension !== 2) throw new Error('Drawn walls are only available in 2D');
+    if (
+      init.arenaType === ArenaType.PERIODIC_BOUNDARIES ||
+      init.arenaType === ArenaType.MOVABLE_PISTON
+    ) {
+      throw new Error("Drawn walls can't be used with periodic boundaries or the piston yet");
+    }
+    const p = this.particles;
+    let maxRadius = 0;
+    for (let k = 0; k < p.count; k++) maxRadius = Math.max(maxRadius, p.radius[k]!);
+    const walls = new SegmentWalls(init.walls!, this.grid, maxRadius);
+    for (let k = 0; k < p.count; k++) {
+      // A hair of slack, as placement leaves exactly one radius at best.
+      if (walls.distanceTo(p.x[k]!, p.y[k]!) < p.radius[k]! * (1 - 1e-9)) {
+        throw new Error(`Particle ${k} starts overlapping a drawn wall`);
+      }
+    }
+    return walls;
   }
 
   /** Re-predicts every particle's boundary event from where it is now, then its events. */
@@ -682,7 +718,7 @@ export class Simulation {
       event.part2 = i < j ? j : i;
     } else {
       event.part1 = i;
-      event.part2 = 0;
+      event.part2 = type === DRAWN_WALL ? this.nextPartner[i]! : 0;
     }
     this.onEvent?.(event);
     this.counters.events++;
@@ -715,6 +751,14 @@ export class Simulation {
       this.repredict(a);
       this.repredict(b);
     } else {
+      if (type === DRAWN_WALL) {
+        this.walls!.collide(p, i, event.time, event.part2);
+        this.counters.wallCollisions++;
+        this.collisionCount[i]!++;
+        this.recordEventState(i);
+        this.repredict(i);
+        return event;
+      }
       if (type === BARRIER && this.conductingDivider) {
         this.conductAcrossDivider(i, event);
         return event;
@@ -839,6 +883,21 @@ export class Simulation {
       bestCol = i;
       bestType = this.boundaryType[i]!;
       bestSide = this.boundarySide[i]!;
+    }
+    // Drawn walls, from the particle's present state (no Java to match). They lose ties
+    // with the box's walls.
+    if (this.walls) {
+      const hit = this.wallHit;
+      this.walls.predict(this.particles, i, grid.cellOf[i]!, hit);
+      counters.wallPredictions++;
+      if (hit.time < bestTime || (hit.time === bestTime && 0 < bestRow)) {
+        bestTime = hit.time;
+        bestRow = 0;
+        bestCol = i;
+        bestType = DRAWN_WALL;
+        bestSide = 0;
+        bestPartner = hit.index;
+      }
     }
 
     const neighbours = grid.neighbours;

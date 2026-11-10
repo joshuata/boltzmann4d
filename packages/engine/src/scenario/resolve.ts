@@ -8,9 +8,14 @@
 // velocities and temperature scaling) follow Java exactly, including the order in which
 // random numbers are drawn.
 //
-// Version 2 features the simulation can't run yet (plan 0010) are refused with a
-// ScenarioError: drawn walls and spawn regions (step 4).
+// Scenarios with drawn walls or spawn regions place randomly placed particles anew
+// (EDIT-3): uniformly inside their region (or the arena), clear of walls, the divider and
+// every particle placed before them. Scenarios without either, such as every `.set` file,
+// keep Java's placement and its random draws exactly.
+//
+// Wall kinds other than reflecting (plan 0010 step 7) are refused with a ScenarioError.
 import type { ReactionRule } from '../sim/reactions';
+import { distanceToSegment, type WallShape } from '../sim/segment-walls';
 import { ParticleType } from '../sim/particle-type';
 import { ARENA_DIVIDER_RADIUS, ArenaType } from '../sim/simulation-info';
 import type { DividerThermalMode } from '../sim/simulation-info';
@@ -66,6 +71,8 @@ export interface ResolvedScenario {
   /** Diameter of the hole in the divider, in meters. */
   holeDiameter: number;
   maxwellDemonMode: boolean;
+  /** Drawn walls (reflecting), points in meters. */
+  walls: WallShape[];
   /** The enabled reaction rules, with kinds as species indices (KIND-13). */
   reactions: ReactionRule[];
   /**
@@ -157,6 +164,10 @@ export function resolveScenario(
       suppressReverse: r.suppressReverse,
     })),
     species,
+    walls: scenario.walls.map((w) => ({
+      points: w.points.map(([x, y]) => [nmToM(x), nmToM(y)] as const),
+      closed: w.closed,
+    })),
 
     paused: run.paused,
     simulationSpeed: run.speed,
@@ -199,13 +210,14 @@ export function resolveScenario(
   };
 }
 
-/** Refuses what the simulation can't run yet (plan 0010 step 4). */
+/** Refuses what the simulation can't run yet: wall kinds other than reflecting (step 7). */
 function checkSupported(scenario: Scenario): void {
-  const problems: string[] = [];
-  if (scenario.walls.length > 0) problems.push("Drawn walls can't be simulated yet");
-  if (scenario.spawnRegions.length > 0 || scenario.populations.some((p) => p.region)) {
-    problems.push("Spawn regions can't be simulated yet");
-  }
+  const unsupported = new Set(
+    scenario.walls.map((w) => w.kind.type).filter((type) => type !== 'reflecting'),
+  );
+  const problems = [...unsupported].map(
+    (type) => `${type[0]!.toUpperCase()}${type.slice(1)} walls can't be simulated yet`,
+  );
   if (problems.length > 0) throw new ScenarioError(problems);
 }
 
@@ -237,9 +249,15 @@ function resolveSpecies(
   );
 
   const kindIndex = new Map(scenario.kinds.map((k, i) => [k.id, i]));
+  const placer =
+    scenario.walls.length > 0 || scenario.spawnRegions.length > 0
+      ? new Placer(scenario, builders, arena, random)
+      : null;
   for (const population of scenario.populations) {
     const side = randomSide(scenario.arena.boundary, kindIndex.get(population.kind)!, arena.x);
-    placePopulation(population, builders.get(population.kind)!, dimension, arena, side, random);
+    const species = builders.get(population.kind)!;
+    const place = placer?.forPopulation(population, side, species.type.displayName);
+    placePopulation(population, species, dimension, arena, side, random, place);
   }
 
   const reacting = new Set(rules.flatMap((r) => [...r.reactants, ...r.products]));
@@ -254,7 +272,10 @@ function resolveSpecies(
     }));
 }
 
-/** Places one population's particles, in the order (and with the random draws) Java used. */
+/**
+ * Places one population's particles, in the order (and with the random draws) Java used,
+ * or with `place` for the randomly placed ones in scenarios with walls or spawn regions.
+ */
 function placePopulation(
   population: Population,
   species: SpeciesBuilder,
@@ -262,19 +283,26 @@ function placePopulation(
   arena: { x: number; y: number; z: number },
   side: { min: number; max: number } | undefined,
   random: () => number,
+  place?: (radius: number, placed: number, total: number) => number[],
 ): void {
   const radius = species.type.particleRadius;
   const firstInGroup = species.velocities.length;
+  const total = population.randomlyPlaced.reduce((n, b) => n + b.count, 0);
+  let placed = 0;
 
   for (const block of population.randomlyPlaced) {
     for (let i = 0; i < block.count; i++) {
-      species.positions.push([
-        side
-          ? random() * (side.max - side.min - 2 * radius) + side.min + radius
-          : random() * (arena.x - 2 * radius) + radius,
-        random() * (arena.y - 2 * radius) + radius,
-        random() * (arena.z - 2 * radius) + radius,
-      ]);
+      species.positions.push(
+        place
+          ? place(radius, placed++, total)
+          : [
+              side
+                ? random() * (side.max - side.min - 2 * radius) + side.min + radius
+                : random() * (arena.x - 2 * radius) + radius,
+              random() * (arena.y - 2 * radius) + radius,
+              random() * (arena.z - 2 * radius) + radius,
+            ],
+      );
       species.velocities.push(randomVelocity(block.averageVelocity, dimension, random));
     }
   }
@@ -373,4 +401,149 @@ function scaleVelocitiesToTemperature(
         : 0;
     for (const v of velocities) v.splice(0, 3, ...randomVelocity(speed, dimension, random));
   }
+}
+
+/** Attempts at a random spot per particle before a region counts as full (EDIT-6). */
+const PLACEMENT_ATTEMPTS = 2000;
+
+/**
+ * Places particles uniformly at random in a spawn region or the arena (EDIT-3): the whole
+ * disc inside the shape, clear of drawn walls and the divider, and not overlapping any
+ * particle placed before (explicitly placed ones count from the start).
+ */
+class Placer {
+  /** Placed particles: x, y, radius (m). */
+  private readonly placed: number[] = [];
+  /** Wall segments as x1, y1, x2, y2 (m). */
+  private readonly segments: number[] = [];
+  private readonly regions: Map<string, { name: string; points: [number, number][] }>;
+  private readonly dividerX: number | null;
+
+  constructor(
+    private readonly scenario: Scenario,
+    builders: Map<string, SpeciesBuilder>,
+    private readonly arena: { x: number; y: number },
+    private readonly random: () => number,
+  ) {
+    for (const wall of scenario.walls) {
+      const pts = wall.points;
+      const count = wall.closed ? pts.length : pts.length - 1;
+      for (let k = 0; k < count; k++) {
+        const [x1, y1] = pts[k]!;
+        const [x2, y2] = pts[(k + 1) % pts.length]!;
+        this.segments.push(nmToM(x1), nmToM(y1), nmToM(x2), nmToM(y2));
+      }
+    }
+    this.regions = new Map(
+      scenario.spawnRegions.map((r, i) => {
+        const shape = r.shape;
+        const nm: [number, number][] =
+          shape.type === 'rectangle'
+            ? [shape.min, [shape.max[0], shape.min[1]], shape.max, [shape.min[0], shape.max[1]]]
+            : shape.points;
+        const points = nm.map(([x, y]) => [nmToM(x), nmToM(y)] as [number, number]);
+        return [r.id, { name: r.name ?? `region ${i + 1}`, points }];
+      }),
+    );
+    const boundary = scenario.arena.boundary;
+    this.dividerX = boundary === 'DIVIDED' || boundary === 'HOLE' ? arena.x / 2 : null;
+    for (const population of scenario.populations) {
+      const radius = builders.get(population.kind)!.type.particleRadius;
+      for (const p of population.particles) {
+        this.placed.push(nmToM(p.position[0]), nmToM(p.position[1]), radius);
+      }
+    }
+  }
+
+  /** The placement function for one population's randomly placed particles. */
+  forPopulation(
+    population: Population,
+    side: { min: number; max: number } | undefined,
+    kindName: string,
+  ): (radius: number, placed: number, total: number) => number[] {
+    const region =
+      population.region !== undefined ? this.regions.get(population.region) : undefined;
+    const xMin = side?.min ?? 0;
+    const xMax = side?.max ?? this.arena.x;
+    const shape = region?.points ?? [
+      [xMin, 0],
+      [xMax, 0],
+      [xMax, this.arena.y],
+      [xMin, this.arena.y],
+    ];
+    const where = region ? `spawn region ${region.name}` : 'the arena';
+    return (radius, placed, total) => {
+      const spot = this.place(shape, radius);
+      if (!spot) {
+        throw new ScenarioError([
+          `Only ${placed} of ${total} ${kindName} particles fit in ${where} without overlapping`,
+        ]);
+      }
+      return spot;
+    };
+  }
+
+  private place(shape: [number, number][], radius: number): number[] | null {
+    let xLo = Infinity;
+    let xHi = -Infinity;
+    let yLo = Infinity;
+    let yHi = -Infinity;
+    for (const [x, y] of shape) {
+      xLo = Math.min(xLo, x);
+      xHi = Math.max(xHi, x);
+      yLo = Math.min(yLo, y);
+      yHi = Math.max(yHi, y);
+    }
+    // Inside the box walls too.
+    xLo = Math.max(xLo, 0) + radius;
+    xHi = Math.min(xHi, this.arena.x) - radius;
+    yLo = Math.max(yLo, 0) + radius;
+    yHi = Math.min(yHi, this.arena.y) - radius;
+    if (!(xLo <= xHi && yLo <= yHi)) return null;
+    for (let attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
+      const x = this.random() * (xHi - xLo) + xLo;
+      const y = this.random() * (yHi - yLo) + yLo;
+      if (this.fits(shape, x, y, radius)) {
+        this.placed.push(x, y, radius);
+        return [x, y, 0];
+      }
+    }
+    return null;
+  }
+
+  private fits(shape: [number, number][], x: number, y: number, radius: number): boolean {
+    if (!insidePolygon(shape, x, y)) return false;
+    const n = shape.length;
+    for (let k = 0; k < n; k++) {
+      const [x1, y1] = shape[k]!;
+      const [x2, y2] = shape[(k + 1) % n]!;
+      if (distanceToSegment(x, y, x1, y1, x2, y2) < radius) return false;
+    }
+    if (this.dividerX !== null && Math.abs(x - this.dividerX) < ARENA_DIVIDER_RADIUS + radius) {
+      return false;
+    }
+    const s = this.segments;
+    for (let k = 0; k < s.length; k += 4) {
+      if (distanceToSegment(x, y, s[k]!, s[k + 1]!, s[k + 2]!, s[k + 3]!) < radius) return false;
+    }
+    const p = this.placed;
+    for (let k = 0; k < p.length; k += 3) {
+      const reach = radius + p[k + 2]!;
+      const dx = x - p[k]!;
+      const dy = y - p[k + 1]!;
+      if (dx * dx + dy * dy < reach * reach) return false;
+    }
+    return true;
+  }
+}
+
+/** Whether (x, y) is inside the polygon (even–odd rule). */
+function insidePolygon(points: [number, number][], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const [xi, yi] = points[i]!;
+    const [xj, yj] = points[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
