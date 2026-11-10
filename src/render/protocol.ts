@@ -21,4 +21,7 @@ export type RenderStream =
   { type: 'scene'; scene: SceneInfo } | { type: 'frame'; frame: RenderFrame };
 
 /** Render worker -> main thread. */
-export type FromRenderWorker = { type: 'error'; message: string };
+export type FromRenderWorker =
+  | { type: 'error'; message: string }
+  /** Sent about once a second: simulation frames drawn so far. */
+  | { type: 'drawn'; frames: number };

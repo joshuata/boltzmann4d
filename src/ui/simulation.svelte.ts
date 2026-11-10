@@ -29,6 +29,17 @@ export class SimulationClient {
   loading = $state(true);
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
+  /** Simulation frames the physics delivered per second, over the last second. */
+  simulationFps = $state(0);
+  /** Simulation frames the renderer drew per second (frames replaced before a refresh are skipped). */
+  drawnFps = $state(0);
+
+  // Per-second rate measurement.
+  #framesThisSecond = 0;
+  #drawnTotal = 0;
+  #drawnAtLastTick = 0;
+  #lastTick = performance.now();
+  readonly #rateTimer: ReturnType<typeof setInterval>;
 
   readonly #sim: Worker;
   readonly #renderWorker: Worker | null = null;
@@ -47,7 +58,8 @@ export class SimulationClient {
       const offscreen = canvas.transferControlToOffscreen();
       const worker = new RenderWorker();
       worker.onmessage = (event: MessageEvent<FromRenderWorker>) => {
-        this.error = `Renderer: ${event.data.message}`;
+        if (event.data.type === 'drawn') this.#drawnTotal = event.data.frames;
+        else this.error = `Renderer: ${event.data.message}`;
       };
       const init: ToRenderWorker = {
         type: 'init',
@@ -93,6 +105,7 @@ export class SimulationClient {
       switch (message.type) {
         case 'timing':
           this.physicsMs += 0.05 * (message.physicsMs - this.physicsMs);
+          this.#framesThisSecond++;
           break;
         case 'loaded':
           this.preset = message.preset;
@@ -110,6 +123,7 @@ export class SimulationClient {
     const preset = /[?&]preset=([\w-]+)/.exec(location.search)?.[1];
     if (preset) this.preset = preset;
     this.#send({ type: 'connect', frames: channel.port1, preset }, [channel.port1]);
+    this.#rateTimer = setInterval(() => this.#updateRates(), 1000);
   }
 
   /** Replaces the running simulation with a bundled preset, and remembers it in the URL. */
@@ -139,7 +153,20 @@ export class SimulationClient {
     if (this.paused) this.#send({ type: 'step' });
   }
 
+  /** Turns the last second's counts into rates. */
+  #updateRates(): void {
+    const now = performance.now();
+    const seconds = (now - this.#lastTick) / 1000;
+    if (this.#mainRenderer) this.#drawnTotal = this.#mainRenderer.framesDrawn();
+    this.simulationFps = this.#framesThisSecond / seconds;
+    this.drawnFps = Math.max(0, this.#drawnTotal - this.#drawnAtLastTick) / seconds;
+    this.#framesThisSecond = 0;
+    this.#drawnAtLastTick = this.#drawnTotal;
+    this.#lastTick = now;
+  }
+
   dispose(): void {
+    clearInterval(this.#rateTimer);
     this.#disposed = true;
     this.#resizeObserver.disconnect();
     this.#sim.terminate();
