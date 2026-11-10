@@ -7,7 +7,7 @@
 // The arithmetic in prediction and collision code keeps Java's order of operations,
 // since parity with the Java app depends on bit-identical results. `!` on typed-array
 // reads is deliberate: indices are always in range and it adds no runtime check.
-import { Collision, MAX_TIME, Wall, type EventInfo } from './event';
+import { Collision, MAX_TIME, MIN_TIME, Wall, type EventInfo } from './event';
 import type { Arena, Particles } from './particles';
 import type { Piston } from './piston';
 import { ArenaType } from './simulation-info';
@@ -16,6 +16,7 @@ import { particleKE2D, type Thermostat } from './thermostat';
 // Local copies of imported constants for the hot paths (see plan 0002).
 const NEVER = MAX_TIME;
 const { PARTICLE, WALL: WALL_EVENT, BOUNDARY, EOB, BARRIER, EDGE, PISTON } = Collision;
+const { ENTER_WELL, EXIT_WELL, WELL_REFLECT } = Collision;
 const { LEFT, RIGHT, BOTTOM, TOP } = Wall;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
 const DIVIDED = ArenaType.DIVIDED_ARENA;
@@ -85,6 +86,47 @@ export function predCol2D(
   return dt >= 0 ? t0 + dt : t0;
 }
 
+/** When two approaching particles' centres first come within `wellRadius` (PredColEnterWell). */
+function predEnterWell2D(
+  dX: number,
+  dY: number,
+  dVx: number,
+  dVy: number,
+  wellRadius: number,
+  t0: number,
+): number {
+  const B = dX * dVx + dY * dVy;
+  if (B >= 0) return NEVER;
+  const A = dVx * dVx + dVy * dVy;
+  const C = dX * dX + dY * dY - wellRadius * wellRadius;
+  const rad = B * B - A * C;
+  if (rad < 0) return NEVER;
+  const dt = -(B + Math.sqrt(rad)) / A;
+  return dt >= 0 ? t0 + dt : NEVER;
+}
+
+/**
+ * When two particles' centres next move apart to `wellRadius` (PredColExitWell): the
+ * later root. Never if they don't (no real root gives NaN, which fails the test).
+ */
+function predExitWell2D(
+  dX: number,
+  dY: number,
+  dVx: number,
+  dVy: number,
+  wellRadius: number,
+  t0: number,
+): number {
+  const B = dX * dVx + dY * dVy;
+  const A = dVx * dVx + dVy * dVy;
+  const C = dX * dX + dY * dY - wellRadius * wellRadius;
+  const rad = B * B - A * C;
+  let dt = -(B + Math.sqrt(rad)) / A;
+  const dt2 = -(B - Math.sqrt(rad)) / A;
+  if (dt2 > dt) dt = dt2;
+  return dt >= 0 ? t0 + dt : NEVER;
+}
+
 /**
  * Predicts the next collision between particles i and j (Particle2D.predCol, hard
  * spheres). Writes the absolute time and, in periodic arenas, which image of j is hit
@@ -97,6 +139,9 @@ export function predictPair2D(
   j: number,
   arena: Arena,
   out: EventInfo,
+  wellMultiplier = 0,
+  lastType: number = PARTICLE,
+  lastTime: number = MIN_TIME,
 ): EventInfo {
   const ti = p.t0[i]!;
   const tj = p.t0[j]!;
@@ -121,7 +166,27 @@ export function predictPair2D(
   out.time = predCol2D(dX, dY, dVx, dVy, Dc, currTime);
   out.side = 0;
 
-  if (arena.type === PERIODIC) {
+  if (arena.type !== PERIODIC) {
+    // Square wells (non-periodic arenas only, as in Java): entering or leaving the pair's
+    // well of radius λ·(r1 + r2), if sooner than touching and allowed by the pair's last
+    // event, and never at the very time of that event.
+    if (wellMultiplier > 0) {
+      const wellRadius = Dc * wellMultiplier;
+      const enter = predEnterWell2D(dX, dY, dVx, dVy, wellRadius, currTime);
+      const exit = predExitWell2D(dX, dY, dVx, dVy, wellRadius, currTime);
+      if (enter < out.time && lastType !== ENTER_WELL && lastType !== WELL_REFLECT) {
+        if (lastTime !== enter) {
+          out.type = ENTER_WELL;
+          out.time = enter;
+        }
+      } else if (exit < out.time && lastType !== EXIT_WELL) {
+        if (lastTime !== exit) {
+          out.type = EXIT_WELL;
+          out.time = exit;
+        }
+      }
+    }
+  } else {
     // Check j's images across any boundary that exactly one of the two overlaps; the
     // soonest wins, ties going to the earlier image (normal, x, y, corner).
     const fi = p.bFlag[i]!;
@@ -341,7 +406,8 @@ export function collide2D(
   j: number,
   event: EventInfo,
   arena: Arena,
-): void {
+  wellEnergy = 0.0,
+): number {
   const time = event.time;
   const dt1 = time - p.t0[i]!;
   const dt2 = time - p.t0[j]!;
@@ -388,8 +454,40 @@ export function collide2D(
 
   const mass = p.mass[i]!;
   const targetMass = p.mass[j]!;
-  const nV1a = (2 * targetMass * V2a + (mass - targetMass) * V1a) / (mass + targetMass);
-  const nV2a = (2 * mass * V1a + (targetMass - mass) * V2a) / (mass + targetMass);
+  let type = event.type as number;
+  let nV1a: number;
+  let nV2a: number;
+  if (type === PARTICLE) {
+    nV1a = (2 * targetMass * V2a + (mass - targetMass) * V1a) / (mass + targetMass);
+    nV2a = (2 * mass * V1a + (targetMass - mass) * V2a) / (mass + targetMass);
+  } else {
+    // Square well (Particle2D.collideWith, from Dr. Shirts' notes): the relative speed
+    // along the line of centres becomes sqrt(Δv² ± E/μ), keeping the momentum. Note E/μ,
+    // not 2E/μ: the kinetic energy changes by E/2, the mean of the two types' depths
+    // (joshuata/boltzmann4d#24).
+    const combinedMass = mass + targetMass;
+    const reducedMass = (mass * targetMass) / combinedMass;
+    const momentumTotal = mass * V1a + targetMass * V2a;
+    const velocityDifference = V2a - V1a;
+    const underRadical =
+      type === ENTER_WELL
+        ? velocityDifference * velocityDifference + wellEnergy / reducedMass
+        : velocityDifference * velocityDifference - wellEnergy / reducedMass;
+    if (type === EXIT_WELL && underRadical < 0.0) {
+      // Not enough energy to climb out: bounce off the well's edge and stay inside.
+      nV1a = (2 * targetMass * V2a + (mass - targetMass) * V1a) / combinedMass;
+      nV2a = (2 * mass * V1a + (targetMass - mass) * V2a) / combinedMass;
+      type = WELL_REFLECT;
+    } else {
+      const rootFactor = Math.sqrt(underRadical);
+      let rootFactor1 = rootFactor;
+      let rootFactor2 = rootFactor;
+      if (V1a < V2a) rootFactor1 = -rootFactor1;
+      else rootFactor2 = -rootFactor2;
+      nV1a = (momentumTotal + targetMass * rootFactor1) / combinedMass;
+      nV2a = (momentumTotal + mass * rootFactor2) / combinedMass;
+    }
+  }
 
   p.vx[i] = nV1a * Ax + V1b * Bx;
   p.vy[i] = nV1a * Ay + V1b * By;
@@ -400,6 +498,7 @@ export function collide2D(
   p.cumTime[j] = 0;
   p.t0[i] = time;
   p.t0[j] = time;
+  return type;
 }
 
 /**

@@ -14,7 +14,7 @@
 //   was predicted is stale, and its particle is simply re-predicted.
 import { CellGrid } from './cell-grid';
 import { createCounters } from './counters';
-import { Collision, MAX_TIME, Wall, createEvent, type EventInfo } from './event';
+import { Collision, MAX_TIME, MIN_TIME, Wall, createEvent, type EventInfo } from './event';
 import { EventHeap, INTERNAL_ROW } from './event-heap';
 import type { Dimension, RenderFrame } from './index';
 import {
@@ -36,6 +36,7 @@ import {
 import { createArena, Particles, type Arena } from './particles';
 import { compressionLimitPercent, Piston, PistonMode } from './piston';
 import { Thermostat } from './thermostat';
+import { convert } from '../utils/units';
 import { ArenaType, DividerThermalMode } from './simulation-info';
 
 /** The per-dimension particle functions (particle-2d.ts, particle-3d.ts). */
@@ -59,11 +60,17 @@ const MOTION = {
 } as const;
 // The 2D signatures are the widest (the piston and thermostat are 2D-only so far); the 3D
 // functions take a prefix of the same arguments.
-type Motion = (typeof MOTION)[2];
+// collide returns the event performed in 2D (a well exit may become WELL_REFLECT).
+type Motion = Omit<(typeof MOTION)[2], 'collide'> & {
+  collide: (...args: Parameters<typeof collide2D>) => number | void;
+};
 
 // Local copies for the hot paths (see plan 0002).
 const NEVER = MAX_TIME;
 const PARTICLE = Collision.PARTICLE;
+const { ENTER_WELL, EXIT_WELL } = Collision;
+/** Events between two particles: collisions, and entering or leaving a square well. */
+const isPairType = (type: number) => type === PARTICLE || type === ENTER_WELL || type === EXIT_WELL;
 const { BOUNDARY, EOB, WALL, BARRIER, EDGE, PISTON } = Collision;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
 const LEFT = Wall.LEFT;
@@ -104,8 +111,14 @@ export interface InitialState {
    * ones. Parity tests pass Java's, since Math.sin/cos may differ from Java's in the last bit.
    */
   holeEdges?: { y: ArrayLike<number>; z: ArrayLike<number> };
-  /** Divided arenas: only INSULATING is supported so far. */
+  /** Divided arenas: whether the divider conducts heat. */
   dividerThermalMode?: DividerThermalMode;
+  /**
+   * Attractive square wells between particles (the settings dialog's Energy Wells tab):
+   * a pair interacts within `radiusMultiplier` × (r1 + r2), with depth (in kJ/mol) the sum
+   * of its two species' `depths`. Java only uses them in non-periodic arenas.
+   */
+  wells?: { radiusMultiplier: number; depths: readonly number[] };
   species: readonly InitialSpecies[];
 }
 
@@ -204,6 +217,15 @@ export class Simulation {
   private frameCountsAtOwnTime: boolean[] = [];
   /** Divided arenas whose divider exchanges energy between the two sides. */
   private readonly conductingDivider: boolean;
+  /** Square wells: λ (0 when off) and each species' depth in kJ/mol. */
+  private readonly wellMultiplier: number;
+  private readonly wellDepths: Float64Array;
+  /**
+   * Square wells: each pair's last event (LastCollisions), keyed by min·count + max. A pair
+   * without one counts as a particle collision at MIN_TIME.
+   */
+  private readonly lastPairType = new Map<number, number>();
+  private readonly lastPairTime = new Map<number, number>();
   /** Two-particle scratch store holding reconstructed states for predictions. */
   private readonly scratch = new Particles(2);
 
@@ -240,6 +262,15 @@ export class Simulation {
       init.maxwellDemonMode,
       dimension,
     );
+    const wells = init.wells;
+    this.wellMultiplier =
+      wells &&
+      wells.radiusMultiplier > 0 &&
+      init.dimension === 2 && // 2D only so far
+      init.arenaType !== ArenaType.PERIODIC_BOUNDARIES
+        ? wells.radiusMultiplier
+        : 0;
+    this.wellDepths = Float64Array.from(init.species, (_, t) => wells?.depths[t] ?? 0);
     this.conductingDivider =
       init.dividerThermalMode === DividerThermalMode.CONDUCTING &&
       (init.arenaType === ArenaType.DIVIDED_ARENA ||
@@ -307,13 +338,20 @@ export class Simulation {
         r2 = r;
       }
     }
-    this.grid = new CellGrid(this.arena, count, r1 + r2, dimension);
+    // ... or, with square wells, the largest well diameter.
+    this.grid = new CellGrid(
+      this.arena,
+      count,
+      (r1 + r2) * Math.max(1, this.wellMultiplier),
+      dimension,
+    );
     for (let k = 0; k < count; k++)
       this.grid.insert(k, this.grid.cellAt(p.x[k]!, p.y[k]!, p.z[k]!));
 
     // Java predicts everything, then (periodic) zeroes the momentum and predicts
     // everything again; only the second prediction matters, so adjust first.
     if (this.arena.type === PERIODIC) this.setTotalMomentum(0, 0, 0);
+    if (this.wellMultiplier > 0) this.markStartingWells();
     for (let k = 0; k < count; k++) this.recordEventState(k);
     for (let k = 0; k < count; k++) this.repredict(k);
   }
@@ -491,6 +529,38 @@ export class Simulation {
     return frame;
   }
 
+  /**
+   * Square wells: potential energy in joules. A pair inside its well (its last event was
+   * entering, a bounce off the well's edge, or a collision inside) holds −E/2, where E
+   * is the sum of the two species' depths: that's what entering gives the pair in kinetic
+   * energy (joshuata/boltzmann4d#24). 0 without wells.
+   */
+  potentialEnergy(): number {
+    if (this.wellMultiplier === 0) return 0;
+    const p = this.particles;
+    let total = 0;
+    for (const [key, type] of this.lastPairType) {
+      if (type === EXIT_WELL) continue; // every other recorded pair event leaves it inside
+      const a = Math.floor(key / p.count);
+      const b = key - a * p.count;
+      const depth = this.wellDepths[p.type[a]!]! + this.wellDepths[p.type[b]!]!;
+      total -= (convert('kJ/mol', 'amu·m^2/s^2', depth) / 2) * AMU_JOULE;
+    }
+    return total;
+  }
+
+  /** Pairs inside each other's square well, as [lower index, higher index]. */
+  pairsInWells(): [number, number][] {
+    const count = this.particles.count;
+    const pairs: [number, number][] = [];
+    for (const [key, type] of this.lastPairType) {
+      if (type === EXIT_WELL) continue; // every other recorded pair event leaves it inside
+      const a = Math.floor(key / count);
+      pairs.push([a, key - a * count]);
+    }
+    return pairs;
+  }
+
   /** Total kinetic energy in joules (sum of Particle2D/3D.getKE). */
   kineticEnergy(): number {
     let total = 0;
@@ -502,7 +572,7 @@ export class Simulation {
   private isReal(i: number): boolean {
     const type = this.nextType[i]!;
     if (type === CROSSING) return false;
-    if (type !== PARTICLE) return true;
+    if (!isPairType(type)) return true;
     return this.collisionCount[this.nextPartner[i]!] === this.nextPartnerCount[i];
   }
 
@@ -545,7 +615,8 @@ export class Simulation {
     event.time = this.heap.time[i]!;
     event.side = this.nextSide[i]!;
     event.type = type as EventInfo['type'];
-    if (type === PARTICLE) {
+    const pair = isPairType(type);
+    if (pair) {
       const j = this.nextPartner[i]!;
       event.part1 = i < j ? i : j;
       event.part2 = i < j ? j : i;
@@ -556,12 +627,26 @@ export class Simulation {
     this.onEvent?.(event);
     this.counters.events++;
 
-    if (type === PARTICLE) {
+    if (pair) {
       const a = event.part1;
       const b = event.part2;
       this.moveToTime(p, a, event.time);
       this.moveToTime(p, b, event.time);
-      this.collide(p, a, b, event, this.arena);
+      const wellEnergy =
+        type === PARTICLE
+          ? 0.0
+          : convert(
+              'kJ/mol',
+              'amu·m^2/s^2',
+              this.wellDepths[p.type[a]!]! + this.wellDepths[p.type[b]!]!,
+            );
+      // An exit without the energy to leave comes back as WELL_REFLECT.
+      const performed = this.collide(p, a, b, event, this.arena, wellEnergy);
+      if (this.wellMultiplier > 0) {
+        const key = a * p.count + b;
+        this.lastPairType.set(key, performed as number); // wells are 2D-only
+        this.lastPairTime.set(key, event.time);
+      }
       this.counters.particleCollisions++;
       this.collisionCount[a]!++;
       this.collisionCount[b]!++;
@@ -698,6 +783,8 @@ export class Simulation {
     const neighbourCount = grid.neighbourCount;
     const firstNeighbour = grid.cellOf[i]! * neighbourCount;
     const countI = this.collisionCount[i]!;
+    const wells = this.wellMultiplier;
+    const count = this.particles.count;
     const eventT0 = this.eventT0;
     const tI = eventT0[i]!;
     for (let m = 0; m < neighbourCount; m++) {
@@ -713,7 +800,21 @@ export class Simulation {
           loadedAt = te;
         }
         this.predictionState(k, te, 1);
-        predictPair(scratch, 0, 1, arena, out);
+        if (wells) {
+          const key = i < k ? i * count + k : k * count + i;
+          predictPair(
+            scratch,
+            0,
+            1,
+            arena,
+            out,
+            wells,
+            this.lastPairType.get(key) ?? PARTICLE,
+            this.lastPairTime.get(key) ?? MIN_TIME,
+          );
+        } else {
+          predictPair(scratch, 0, 1, arena, out);
+        }
         counters.pairPredictions++;
         const t = out.time;
         if (t === NEVER) continue;
@@ -726,13 +827,13 @@ export class Simulation {
           bestTime = t;
           bestRow = row;
           bestCol = col;
-          bestType = PARTICLE;
+          bestType = out.type;
           bestPartner = k;
           bestSide = out.side;
         }
         // Offer the event to k if it beats k's own next event.
         if (heap.keyBefore(t, row, col, k)) {
-          this.nextType[k] = PARTICLE;
+          this.nextType[k] = out.type;
           this.nextPartner[k] = i;
           this.nextSide[k] = out.side;
           this.nextPartnerCount[k] = countI;
@@ -744,9 +845,42 @@ export class Simulation {
     this.nextType[i] = bestType;
     this.nextSide[i] = bestSide;
     this.nextPartner[i] = bestPartner;
-    if (bestType === PARTICLE) this.nextPartnerCount[i] = this.collisionCount[bestPartner]!;
+    if (isPairType(bestType)) this.nextPartnerCount[i] = this.collisionCount[bestPartner]!;
     if (bestType === CROSSING) this.nextCell[i] = crossingCell;
     heap.set(i, bestTime, bestRow, bestCol);
+  }
+
+  /**
+   * Pairs that start inside each other's well count as having just entered it
+   * (Physics.initializeLastCollisions), so their first well event is an exit.
+   */
+  private markStartingWells(): void {
+    const p = this.particles;
+    const grid = this.grid;
+    const count = p.count;
+    for (let a = 0; a < count; a++) {
+      const first = grid.cellOf[a]! * grid.neighbourCount;
+      for (let m = 0; m < grid.neighbourCount; m++) {
+        {
+          const c = grid.neighbours[first + m]!;
+          if (c < 0) continue;
+          for (let b = grid.head[c]!; b >= 0; b = grid.next[b]!) {
+            if (b <= a) continue;
+            // In the plane. Java measures in 3D, and its loader gives 2D particles a random z,
+            // so it misses most pairs that start inside a well (joshuata/boltzmann4d#24).
+            // That changes no events (an inside pair can't be predicted to enter, and exits
+            // are the same either way), only this bookkeeping.
+            const ddx = p.x[a]! - p.x[b]!;
+            const ddy = p.y[a]! - p.y[b]!;
+            const distance = Math.sqrt(0.0 + ddx * ddx + ddy * ddy);
+            if (distance < this.wellMultiplier * (p.radius[b]! + p.radius[a]!)) {
+              this.lastPairType.set(a * count + b, ENTER_WELL);
+              this.lastPairTime.set(a * count + b, this.time);
+            }
+          }
+        }
+      }
+    }
   }
 
   /** Remembers particle i's state right after an event (for predictionState). */

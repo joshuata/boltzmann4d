@@ -27,6 +27,13 @@ const scenes: [string, () => Promise<InitialState>][] = [
     'default, piston (50)',
     async () => ({ ...(await preset('default')), arenaType: ArenaType.MOVABLE_PISTON }),
   ],
+  [
+    '2Dmixture, square wells (60)',
+    async () => ({
+      ...(await preset('2Dmixture')),
+      wells: { radiusMultiplier: 1.5, depths: [4.0, 1.0] },
+    }),
+  ],
   ['3Dmixture (60, reflecting)', () => preset('3Dmixture')],
   ['3Dbrownian (200, periodic)', () => preset('3Dbrownian')],
   ['synthetic (1000, reflecting)', async () => syntheticGas({ count: 1000 })],
