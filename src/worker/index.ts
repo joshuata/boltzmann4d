@@ -17,6 +17,8 @@ export interface ArenaOptions {
    * of the contact distance, and each species' depth in kJ/mol. null turns them off.
    */
   wells?: { radiusMultiplier: number; depths: number[] } | null;
+  /** A square well along the bottom wall: width in m, depth in kJ/mol. null turns it off. */
+  attractiveWall?: { width: number; depth: number } | null;
 }
 
 /** What the sidebar needs to offer a piston arena's controls. */

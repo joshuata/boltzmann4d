@@ -8,6 +8,7 @@
 // since parity with the Java app depends on bit-identical results. `!` on typed-array
 // reads is deliberate: indices are always in range and it adds no runtime check.
 import { Collision, MAX_TIME, MIN_TIME, Wall, type EventInfo } from './event';
+import type { AttractiveWall } from './attractive-wall';
 import type { Arena, Particles } from './particles';
 import type { Piston } from './piston';
 import { ArenaType } from './simulation-info';
@@ -16,7 +17,7 @@ import { particleKE2D, type Thermostat } from './thermostat';
 // Local copies of imported constants for the hot paths (see plan 0002).
 const NEVER = MAX_TIME;
 const { PARTICLE, WALL: WALL_EVENT, BOUNDARY, EOB, BARRIER, EDGE, PISTON } = Collision;
-const { ENTER_WELL, EXIT_WELL, WELL_REFLECT } = Collision;
+const { ENTER_WELL, EXIT_WELL, WELL_REFLECT, ENTER_GRAVITY_WELL, EXIT_GRAVITY_WELL } = Collision;
 const { LEFT, RIGHT, BOTTOM, TOP } = Wall;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
 const DIVIDED = ArenaType.DIVIDED_ARENA;
@@ -241,6 +242,7 @@ export function predictBoundary2D(
   out: EventInfo,
   holeOpen = false,
   piston: Piston | null = null,
+  wall: AttractiveWall | null = null,
 ): EventInfo {
   const t0 = p.t0[i]!;
   const x = p.x[i]!;
@@ -307,6 +309,14 @@ export function predictBoundary2D(
       colTime = (arena.ySize - radius - y) / yVel;
     }
     yType = periodic ? BOUNDARY : WALL_EVENT;
+    // The attractive wall: crossing the top of its well comes before the wall itself.
+    if (wall && !periodic) {
+      const wellColTime = (wall.width - y) / yVel;
+      if (wellColTime > 0) {
+        colTime = wellColTime;
+        yType = yVel < 0 ? ENTER_GRAVITY_WELL : EXIT_GRAVITY_WELL;
+      }
+    }
     yTime = t0 + colTime;
   }
   if (yTime < out.time) {
@@ -517,6 +527,7 @@ export function boundaryCollide2D(
   arena: Arena,
   piston: Piston | null = null,
   thermostat: Thermostat | null = null,
+  wall: AttractiveWall | null = null,
 ): void {
   const dt = event.time - p.t0[i]!;
   p.cumTime[i] = p.cumTime[i]! + dt;
@@ -574,6 +585,22 @@ export function boundaryCollide2D(
         p.vy[i] = -p.vy[i]! * velAdjust;
       }
       break;
+    case ENTER_GRAVITY_WELL:
+    case EXIT_GRAVITY_WELL: {
+      // Crossing the top of the attractive wall's well: falling in gains its energy;
+      // climbing out costs it, and without enough the particle bounces back down.
+      p.x[i] = p.x[i]! + p.vx[i]! * dt;
+      p.y[i] = wall!.width;
+      const vy = p.vy[i]!;
+      const delta = (2 * wall!.energy) / p.mass[i]!;
+      if (event.type === ENTER_GRAVITY_WELL) {
+        p.vy[i] = -Math.sqrt(vy * vy + delta);
+      } else {
+        const remaining = vy * vy - delta;
+        p.vy[i] = remaining >= 0 ? Math.sqrt(remaining) : -vy;
+      }
+      break;
+    }
     case EDGE:
       p.x[i] = p.x[i]! + p.vx[i]! * dt;
       p.y[i] = p.y[i]! + p.vy[i]! * dt;
