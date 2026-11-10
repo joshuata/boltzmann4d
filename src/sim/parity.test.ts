@@ -25,6 +25,8 @@ interface ParityFixture {
     positions: number[];
     velocities: number[];
   }[];
+  /** Square-well scenarios. */
+  wells?: { radiusMultiplier: number; depths: number[] };
   frameDuration: number;
   frames: number;
   /** Run-time actions, applied just before the given frame (scenario fixtures). */
@@ -56,6 +58,7 @@ function initialState(f: ParityFixture): InitialState {
     holeDiameter: f.holeDiameter,
     maxwellDemonMode: f.maxwellDemonMode,
     dividerThermalMode: f.dividerThermalMode,
+    wells: f.wells,
     species: f.species.map((s) => ({
       type: { particleMass: s.mass, particleRadius: s.radius },
       positions: Float64Array.from(s.positions),

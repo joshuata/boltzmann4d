@@ -11,6 +11,11 @@ import type { StatisticsSummary } from '../stats/summary';
 export interface ArenaOptions {
   piston?: boolean;
   conductingDivider?: boolean;
+  /**
+   * Attractive square wells between particles (non-periodic arenas): radius as a multiple
+   * of the contact distance, and each species' depth in kJ/mol. null turns them off.
+   */
+  wells?: { radiusMultiplier: number; depths: number[] } | null;
 }
 
 /** What the sidebar needs to offer a piston arena's controls. */
@@ -25,6 +30,10 @@ export interface PistonInfo {
 export interface ArenaInfo {
   canHavePiston: boolean;
   canConduct: boolean;
+  /** Square wells work in every arena but periodic ones (as in Java). */
+  canHaveWells: boolean;
+  /** Species names, for per-species settings. */
+  typeNames: string[];
   options: ArenaOptions;
 }
 

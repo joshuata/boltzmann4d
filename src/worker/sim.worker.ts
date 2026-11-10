@@ -95,17 +95,25 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
         ? DividerThermalMode.CONDUCTING
         : DividerThermalMode.INSULATING;
     }
+    const canHaveWells = settings.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
+    const wells = canHaveWells && arena.wells ? arena.wells : null;
+    const simulationSettings = wells ? { ...settings, wells } : settings;
     arenaInfo = {
       canHavePiston,
       canConduct,
+      canHaveWells,
+      typeNames: settings.species.map((s) => s.type.displayName),
       options: {
         piston: settings.arenaType === ArenaType.MOVABLE_PISTON,
         conductingDivider: settings.dividerThermalMode === DividerThermalMode.CONDUCTING,
+        wells,
       },
     };
     speed = parseSimulationSpeed(settings.simulationSpeed);
     let stats: Statistics | null = null;
-    simulation = new Simulation(settings, { onEvent: (event) => stats?.notifyOfEvent(event) });
+    simulation = new Simulation(simulationSettings, {
+      onEvent: (event) => stats?.notifyOfEvent(event),
+    });
     typeColors = settings.species.map((s) => s.type.defaultColor);
     statistics = stats = new Statistics(statsContext(settings), simulation.particles, {
       forgetMultiplier: settings.forgetMultiplier,
