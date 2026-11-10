@@ -1,6 +1,7 @@
 <script lang="ts">
   import PlayPauseButton from './PlayPauseButton.svelte';
   import PresetPicker from './PresetPicker.svelte';
+  import StatisticsPanel from './StatisticsPanel.svelte';
   import { SimulationClient } from './simulation.svelte';
 
   let canvas: HTMLCanvasElement;
@@ -60,6 +61,9 @@
         Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}
       </p>
     {/if}
+    {#if sim?.statistics}
+      <StatisticsPanel summary={sim.statistics} />
+    {/if}
   </aside>
 </main>
 
@@ -97,9 +101,16 @@
     gap: 0.5rem;
   }
   @media (max-width: 700px) {
+    /* Phones: the arena takes a fixed share of the screen and the sidebar follows it,
+       with the page scrolling, so the statistics aren't squeezed below the fold. */
     main {
       grid-template-columns: 1fr;
-      grid-template-rows: 1fr auto;
+      grid-template-rows: auto auto;
+      height: auto;
+      min-height: 100%;
+    }
+    canvas {
+      height: min(60vh, 90vw);
     }
     aside {
       border-left: none;

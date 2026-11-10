@@ -3,12 +3,19 @@
 import { loadDefaultSettingsText, loadPresetText, loadSettings } from '../io';
 import type { RenderStream } from '../render/protocol';
 import { Simulation, type SceneInfo } from '../sim';
+import { Statistics, statsContext } from '../stats';
 import { ArenaType } from '../sim/simulation-info';
 import type { FromWorker, ToWorker } from './index';
 import { ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const post = (message: FromWorker) => scope.postMessage(message);
+/**
+ * Statistics are summarised every this many frames: about once a second at the app's
+ * 37 ms frames, like the Java app, but counted in frames so samples are reproducible.
+ */
+const SUMMARY_EVERY_FRAMES = 27;
+
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 let frames: MessagePort | null = null;
@@ -49,12 +56,19 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
 async function load(preset?: string): Promise<void> {
   const generation = ++loadGeneration;
   let simulation: Simulation;
+  let statistics: Statistics;
   let typeColors: number[];
   try {
     const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
     const { settings } = loadSettings(text);
-    simulation = new Simulation(settings);
+    let stats: Statistics | null = null;
+    simulation = new Simulation(settings, { onEvent: (event) => stats?.notifyOfEvent(event) });
     typeColors = settings.species.map((s) => s.type.defaultColor);
+    statistics = stats = new Statistics(statsContext(settings), simulation.particles, {
+      forgetMultiplier: settings.forgetMultiplier,
+      typeNames: settings.species.map((s) => s.type.displayName),
+      typeColors,
+    });
   } catch (error) {
     if (generation === loadGeneration) {
       post({ type: 'error', message: `Can't load ${preset ?? 'default'}: ${errorText(error)}` });
@@ -69,10 +83,16 @@ async function load(preset?: string): Promise<void> {
     port.postMessage(message, transfer);
   send({ type: 'scene', scene: sceneOf(simulation, typeColors) }, []);
 
-  threadController = new ThreadController(simulation, (frame, physicsMs) => {
+  let frameCount = 0;
+  const controller = new ThreadController(simulation, (frame, physicsMs) => {
     send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
     post({ type: 'timing', physicsMs });
+    if (frameCount++ % SUMMARY_EVERY_FRAMES === 0 || controller.isPaused()) {
+      statistics.sampleCurrent();
+      post({ type: 'statistics', summary: statistics.summary(simulation.time) });
+    }
   });
+  threadController = controller;
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
   // While paused, show the starting state straight away (a no-op while running).

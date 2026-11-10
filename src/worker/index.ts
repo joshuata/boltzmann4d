@@ -1,6 +1,7 @@
 // Main-thread <-> simulation-worker message protocol (mirrors ThreadController.java).
 // Frames don't come back here: they stream to the renderer over the `frames` port
 // (render/protocol.ts), so the main thread only handles controls and readouts.
+import type { StatisticsSummary } from '../stats/summary';
 
 export type ToWorker =
   /**
@@ -19,4 +20,6 @@ export type FromWorker =
   | { type: 'timing'; physicsMs: number }
   /** A preset finished loading and is now the running simulation. */
   | { type: 'loaded'; preset: string; particles: number }
+  /** About once a second (every SUMMARY_EVERY_FRAMES frames), and after each step. */
+  | { type: 'statistics'; summary: StatisticsSummary }
   | { type: 'error'; message: string };
