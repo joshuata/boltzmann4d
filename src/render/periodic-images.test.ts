@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { periodicImages } from './periodic-images';
+import { periodicImages, periodicImages3D } from './periodic-images';
 
 const images = (x: number, y: number) => {
   const out = new Float64Array(8);
@@ -37,5 +37,17 @@ describe('periodicImages', () => {
       [0.5, 7.5],
       [10.5, 7.5],
     ]);
+  });
+});
+
+describe('periodicImages3D', () => {
+  it('draws one copy per combination of crossed faces', () => {
+    const out = new Float64Array(24);
+    expect(periodicImages3D(5, 4, 3, 1, 10, 8, 6, out)).toBe(1);
+    expect(periodicImages3D(0.5, 4, 5.5, 1, 10, 8, 6, out)).toBe(4);
+    expect(Array.from(out.slice(0, 12))).toEqual([
+      0.5, 4, 5.5, 10.5, 4, 5.5, 0.5, 4, -0.5, 10.5, 4, -0.5,
+    ]);
+    expect(periodicImages3D(-0.5, 0.2, 0.3, 1, 10, 8, 6, out)).toBe(8);
   });
 });

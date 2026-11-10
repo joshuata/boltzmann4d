@@ -6,9 +6,10 @@ A fixture holds:
 
 - the exact initial state Java loaded for the preset (Java places particles randomly, so the state is recorded rather than re-generated),
 - every event Java performed, as `[type, time, part1, part2, side]`, over whole frames until at least 2,000 events,
-- the final positions and velocities after those frames.
+- the final positions and velocities after those frames (`z` and `vz` too for 3D presets),
+- for 3D arenas with a hole, the ring of edge spheres Java built (`edgeY`, `edgeZ`): they come from `Math.sin`/`Math.cos`, whose last bit differs between the JVM and JavaScript, so the test uses Java's ring rather than recomputing it.
 
-Presets whose arena type isn't ported yet (dividers and holes) are skipped by the test, not deleted, so they start checking as soon as the port lands.
+Presets whose arena type isn't ported yet (the conducting divider) are skipped by the test, not deleted, so they start checking as soon as the port lands.
 
 Run the parity test with:
 
