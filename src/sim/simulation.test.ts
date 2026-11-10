@@ -151,14 +151,6 @@ describe('Simulation', () => {
     expect(() => new Simulation({ ...init, arenaType: ArenaType.MOVABLE_PISTON })).toThrow(
       /not supported yet/,
     );
-    expect(
-      () =>
-        new Simulation({
-          ...init,
-          arenaType: ArenaType.DIVIDED_ARENA,
-          dividerThermalMode: DividerThermalMode.CONDUCTING,
-        }),
-    ).toThrow(/Conducting/);
   });
 
   it.each([ArenaType.REFLECTING_BOUNDARIES, ArenaType.PERIODIC_BOUNDARIES])(
@@ -243,5 +235,59 @@ describe("Maxwell's demon", () => {
     // Through the hole, the next thing it meets is the right-hand wall.
     expect(sim.step()).toMatchObject({ type: Collision.WALL, side: 2 /* RIGHT */ });
     expect(sim.particles.x[0]).toBeCloseTo(40e-9 - 0.5e-9, 18);
+  });
+});
+
+describe('conducting divider', () => {
+  /** Mean kinetic energy (amu·m²/s²) of the particles left and right of the divider. */
+  function sideEnergies(sim: Simulation): [number, number] {
+    const p = sim.particles;
+    const centre = sim.arena.xSize / 2;
+    const sum = [0, 0];
+    const count = [0, 0];
+    for (let i = 0; i < p.count; i++) {
+      const side = p.x[i]! > centre ? 1 : 0;
+      sum[side]! += 0.5 * p.mass[i]! * (p.vx[i]! ** 2 + p.vy[i]! ** 2);
+      count[side]!++;
+    }
+    return [sum[0]! / count[0]!, sum[1]! / count[1]!];
+  }
+
+  it('conserves energy and carries heat from the hot side to the cold side', async () => {
+    const { settings } = loadSettings(await loadPresetText('2Dhotcold'), {
+      random: seededRandom(3),
+    });
+    const conducting = { ...settings, dividerThermalMode: DividerThermalMode.CONDUCTING };
+    const insulating = new Simulation(settings);
+    const sim = new Simulation(conducting);
+    const energy = sim.kineticEnergy();
+    const [hot, cold] = sideEnergies(sim);
+    expect(hot / cold).toBeGreaterThan(1.5); // the preset starts at 500 K and 300 K
+
+    // Let heat flow, then average each side over many snapshots (30 particles a side
+    // fluctuate by about ±18% at any one moment).
+    const averages = (run: Simulation) => {
+      // step() leaves sim.time at the last frame, so move everyone to the last event.
+      let last = 0;
+      const step = () => (last = run.step()!.time);
+      for (let k = 0; k < 40_000; k++) step();
+      let left = 0;
+      let right = 0;
+      for (let n = 0; n < 400; n++) {
+        for (let k = 0; k < 100; k++) step();
+        run.advanceToTime(last);
+        const [l, r] = sideEnergies(run);
+        left += l;
+        right += r;
+      }
+      return left / right;
+    };
+    const conductingRatio = averages(sim);
+    const insulatingRatio = averages(insulating);
+    expect(sim.kineticEnergy() / energy).toBeCloseTo(1, 12);
+    expectNoOverlapsInside(sim);
+    // The sides end up at one temperature; without conduction they stay apart.
+    expect(conductingRatio).toBeCloseTo(1, 1);
+    expect(insulatingRatio / (hot / cold)).toBeCloseTo(1, 1);
   });
 });

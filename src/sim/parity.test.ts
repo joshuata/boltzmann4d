@@ -67,11 +67,7 @@ describe('parity with the Java app', () => {
 
     it(name, async (context) => {
       const f = await load();
-      if (
-        !SUPPORTED.has(f.arenaType) ||
-        f.dimension !== 2 ||
-        f.dividerThermalMode === 'CONDUCTING'
-      ) {
+      if (!SUPPORTED.has(f.arenaType) || f.dimension !== 2) {
         context.skip(`${f.dimension}D ${f.arenaType} is not ported yet`);
       }
       const events: number[][] = [];

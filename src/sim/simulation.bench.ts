@@ -4,7 +4,7 @@ import { test } from 'vitest';
 import { loadPresetText, loadSettings } from '../io';
 import { syntheticGas, seededRandom } from './scenes';
 import { Simulation, type InitialState } from './simulation';
-import { ArenaType } from './simulation-info';
+import { ArenaType, DividerThermalMode } from './simulation-info';
 
 const EVENTS = 1000;
 
@@ -15,6 +15,13 @@ async function preset(name: string): Promise<InitialState> {
 const scenes: [string, () => Promise<InitialState>][] = [
   ['2Dmixture (60, reflecting)', () => preset('2Dmixture')],
   ['2Dbrownian (200, periodic)', () => preset('2Dbrownian')],
+  [
+    '2Dhotcold, conducting divider (60)',
+    async () => ({
+      ...(await preset('2Dhotcold')),
+      dividerThermalMode: DividerThermalMode.CONDUCTING,
+    }),
+  ],
   ['synthetic (1000, reflecting)', async () => syntheticGas({ count: 1000 })],
   [
     'synthetic (1000, periodic)',
