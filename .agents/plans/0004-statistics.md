@@ -22,7 +22,7 @@ From a survey of `vendor/boltzmann3d/src/edu/byu/chem/boltzmann/model/statistics
   - Orange markers show the predicted average ± width, and green markers the measured average ± width.
   - A history mode plots the last 300 sampled averages.
 
-### Open: which temperature the predictions use
+### Open: which temperature the predictions use (joshuata/boltzmann4d#23)
 
 Java predicts each species' distribution from its _initial_ temperature. Species that can exchange energy settle at a shared temperature, and the prediction doesn't follow. In a test with the heavy species started 4× hotter, both species settled near 750 K, but the predictions stayed at 300 K and 1,200 K (predicted mean speeds 21–59% off). This affects the hot/cold presets (once the divider conducts heat) and the effusion presets (gas mixes through the hole). It also affects any run with a thermostat or piston that changes the energy.
 
