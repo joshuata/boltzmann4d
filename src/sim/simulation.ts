@@ -14,7 +14,7 @@
 //   was predicted is stale, and its particle is simply re-predicted.
 import { CellGrid } from './cell-grid';
 import { createCounters } from './counters';
-import { Collision, MAX_TIME, createEvent, type EventInfo } from './event';
+import { Collision, MAX_TIME, Wall, createEvent, type EventInfo } from './event';
 import { EventHeap, INTERNAL_ROW } from './event-heap';
 import type { Dimension, RenderFrame } from './index';
 import {
@@ -62,6 +62,7 @@ const NEVER = MAX_TIME;
 const PARTICLE = Collision.PARTICLE;
 const { BOUNDARY, EOB, WALL, BARRIER, EDGE } = Collision;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
+const LEFT = Wall.LEFT;
 /** Next-event type for a cell crossing (internal; never reported). */
 const CROSSING = 255;
 
@@ -177,7 +178,15 @@ export class Simulation {
   private readonly eventY: Float64Array;
   private readonly eventZ: Float64Array;
   private readonly eventT0: Float64Array;
+  /**
+   * Times at which Java moved every particle: frame ends, and (conducting divider) each
+   * divider hit. A frame end comes after events at exactly that time; a divider hit's move
+   * comes before the predictions it triggers, so it counts for predictions at that time.
+   */
   private frameTimes: number[] = [];
+  private frameCountsAtOwnTime: boolean[] = [];
+  /** Divided arenas whose divider exchanges energy between the two sides. */
+  private readonly conductingDivider: boolean;
   /** Two-particle scratch store holding reconstructed states for predictions. */
   private readonly scratch = new Particles(2);
 
@@ -193,8 +202,8 @@ export class Simulation {
     if (init.arenaType === ArenaType.MOVABLE_PISTON) {
       throw new Error(`Arena type ${init.arenaType} is not supported yet`);
     }
-    if (init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
-      throw new Error('Conducting dividers are not supported yet');
+    if (init.dimension === 3 && init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
+      throw new Error('Conducting dividers are not supported in 3D yet');
     }
     const dimension = init.dimension;
     this.dimension = dimension;
@@ -214,6 +223,10 @@ export class Simulation {
       init.maxwellDemonMode,
       dimension,
     );
+    this.conductingDivider =
+      init.dividerThermalMode === DividerThermalMode.CONDUCTING &&
+      (init.arenaType === ArenaType.DIVIDED_ARENA ||
+        init.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE);
     if (init.holeEdges) {
       if (init.holeEdges.y.length !== this.arena.edgeY.length) {
         throw new Error('holeEdges must have one entry per edge sphere');
@@ -327,6 +340,7 @@ export class Simulation {
       this.resetWrap(k);
     }
     this.frameTimes.push(maxTime);
+    this.frameCountsAtOwnTime.push(false);
     this.time = maxTime;
   }
 
@@ -449,6 +463,10 @@ export class Simulation {
       this.repredict(a);
       this.repredict(b);
     } else {
+      if (type === BARRIER && this.conductingDivider) {
+        this.conductAcrossDivider(i, event);
+        return event;
+      }
       this.boundaryCollide(p, i, event, this.arena);
       if (type === WALL) this.counters.wallCollisions++;
       else if (type === BOUNDARY || type === EOB) this.counters.boundaryCrossings++;
@@ -458,6 +476,75 @@ export class Simulation {
       this.repredict(i);
     }
     return event;
+  }
+
+  /**
+   * A conducting divider (Physics.PerformEvent): particle i bounces off the divider and
+   * swaps its normal (x) kinetic energy with the particle on the other side that is
+   * heading for the divider and closest to it. i leaves the divider; the partner keeps
+   * its direction. Without such a partner it's an ordinary bounce.
+   */
+  private conductAcrossDivider(i: number, event: Readonly<EventInfo>): void {
+    const p = this.particles;
+    const partner = this.findIncomingParticleOnOppositeSide(i, event.side, event.time);
+    let partnerEnergy = 0;
+    let partnerDirection = 0;
+    if (partner >= 0) {
+      const v = p.vx[partner]!;
+      partnerEnergy = 0.5 * p.mass[partner]! * v * v;
+      partnerDirection = Math.sign(v);
+    }
+    this.boundaryCollide(p, i, event, this.arena);
+    this.counters.dividerCollisions++;
+    this.collisionCount[i]!++;
+    if (partner >= 0) {
+      const v = p.vx[i]!;
+      const currentEnergy = 0.5 * p.mass[i]! * v * v;
+      const currentDirection = event.side === LEFT ? -1.0 : 1.0;
+      p.vx[i] = currentDirection * Math.sqrt((2.0 * partnerEnergy) / p.mass[i]!);
+      p.vx[partner] = partnerDirection * Math.sqrt((2.0 * currentEnergy) / p.mass[partner]!);
+      this.collisionCount[partner]!++;
+      this.recordEventState(i);
+      this.recordEventState(partner);
+      this.repredict(i);
+      this.repredict(partner);
+    } else {
+      this.recordEventState(i);
+      this.repredict(i);
+    }
+  }
+
+  /**
+   * Java finds the conducting partner by moving every other particle to the event time
+   * (which, like a frame end, changes the rounding of later predictions; see frameTimes),
+   * then taking the closest one heading for the divider from the other side. The first
+   * index wins ties.
+   */
+  private findIncomingParticleOnOppositeSide(i: number, side: number, time: number): number {
+    const p = this.particles;
+    const arena = this.arena;
+    const currentOnLeft = side === LEFT;
+    const centerX = arena.xSize / 2.0;
+    let nearest = -1;
+    let nearestGap = Infinity;
+    for (let k = 0; k < p.count; k++) {
+      if (k === i) continue;
+      this.moveToTime(p, k, time);
+      const x = p.x[k]!;
+      if (x > centerX !== currentOnLeft) continue;
+      const v = p.vx[k]!;
+      if (currentOnLeft ? !(v < 0.0) : !(v > 0.0)) continue;
+      const gap = currentOnLeft
+        ? x - p.radius[k]! - arena.barrierRightX
+        : arena.barrierLeftX - p.radius[k]! - x;
+      if (gap < nearestGap) {
+        nearestGap = gap;
+        nearest = k;
+      }
+    }
+    this.frameTimes.push(time);
+    this.frameCountsAtOwnTime.push(true);
+    return nearest;
   }
 
   /**
@@ -640,7 +727,8 @@ export class Simulation {
       }
       for (let f = lo; f < frames.length; f++) {
         const frame = frames[f]!;
-        if (frame > te || (frame === te && !includeFrameAtTe)) break;
+        if (frame > te || (frame === te && !includeFrameAtTe && !this.frameCountsAtOwnTime[f]))
+          break;
         const dt = frame - t;
         x = x + vx * dt;
         y = y + vy * dt;

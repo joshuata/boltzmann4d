@@ -75,7 +75,7 @@ describe('parity with the Java app', () => {
       if (
         !SUPPORTED.has(f.arenaType) ||
         f.dimension === 1 ||
-        f.dividerThermalMode === 'CONDUCTING'
+        (f.dimension === 3 && f.dividerThermalMode === 'CONDUCTING')
       ) {
         context.skip(`${f.dimension}D ${f.arenaType} is not ported yet`);
       }
