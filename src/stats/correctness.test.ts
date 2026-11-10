@@ -129,6 +129,43 @@ describe('speed statistics against kinetic theory', () => {
     // ... the count-weighted mean of the starting temperatures, since energy is conserved.
     const tStart = (ctx.types[0]!.initialTemperature + ctx.types[1]!.initialTemperature) / 2;
     expect((tLight + tHeavy) / 2 / tStart).toBeCloseTo(1, 1.5);
+
+    // Predictions use the measured temperatures (#23), so they describe this gas: each
+    // species and the mix match, bin by bin. (At the starting temperatures they were
+    // 21–59% off.)
+    const temperatures = stats.temperatures('cumulative');
+    expect(temperatures[0]! / tLight).toBeCloseTo(1, 10);
+    for (const s of stats.speed) {
+      expect(s.cumulativeValues.average() / s.predictedAverage(temperatures)).toBeCloseTo(1, 1.5);
+      expect(s.cumulativeValues.width() / s.predictedWidth(temperatures)).toBeCloseTo(1, 1.5);
+      const n = s.types.reduce((sum, t) => sum + ctx.types[t]!.count, 0);
+      const density = (v: number) =>
+        s.types.reduce(
+          (sum, t) =>
+            sum +
+            (ctx.types[t]!.count / n) *
+              velocityDistribution(v, ctx.types[t]!.mass * AMU, temperatures[t]!, 2),
+          0,
+        );
+      expect(worstBinError(s.cumulative, density)).toBeLessThan(0.015);
+    }
+    const summary = stats.summary(0).statistics[2]!.cumulative.prediction;
+    expect(summary.average).toBe(stats.speed[2]!.predictedAverage(temperatures));
+    expect(summary.temperatures).toEqual([temperatures[0], temperatures[1]]);
+  });
+
+  it('predicts from the starting temperature until there is data', () => {
+    const init = syntheticGas({ count: 40, seed: 7 });
+    let stats: Statistics | null = null;
+    const sim = new Simulation(init, { onEvent: (e) => stats?.notifyOfEvent(e) });
+    stats = new Statistics(statsContext(init), sim.particles);
+    const start = stats.ctx.types.map((t) => t.initialTemperature);
+    expect(Array.from(stats.temperatures('cumulative'))).toEqual(start);
+    expect(Array.from(stats.temperatures('current'))).toEqual(start);
+    // Every particle starts at its type's speed, so the current sample is exactly that.
+    stats.sampleCurrent();
+    const current = stats.temperatures('current');
+    start.forEach((t, i) => expect(current[i]! / t).toBeCloseTo(1, 10));
   });
 
   it('the current histogram, sampled every frame, matches the time-weighted one', () => {

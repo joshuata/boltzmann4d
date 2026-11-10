@@ -1,5 +1,6 @@
 <!-- Speed statistics in the sidebar: which particle types, current or cumulative, the
-     histogram with its Maxwell–Boltzmann curve, and measured vs predicted averages. -->
+     histogram with its Maxwell–Boltzmann curve, and measured vs predicted averages. The
+     prediction uses each type's temperature in the data shown (#23). -->
 <script lang="ts">
   import SpeedHistogram from '../charts/SpeedHistogram.svelte';
   import type { StatisticsSummary } from '../stats/summary';
@@ -57,8 +58,20 @@
       <div>
         <dt><span class="swatch predicted"></span>Predicted</dt>
         <dd>
-          {fmt(statistic.prediction.average)} ± {fmt(statistic.prediction.width)}
+          {fmt(distribution.prediction.average)} ± {fmt(distribution.prediction.width)}
           {statistic.unit}
+        </dd>
+      </div>
+      <div>
+        <dt>Temperature</dt>
+        <dd>
+          {distribution.prediction.temperatures
+            .map((t, i) =>
+              statistic.types.length > 1
+                ? `${label([statistic.types[i]!])} ${fmt(t)} K`
+                : `${fmt(t)} K`,
+            )
+            .join(' · ')}
         </dd>
       </div>
     </dl>
