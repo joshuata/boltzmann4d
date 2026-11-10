@@ -3,6 +3,7 @@
 // initial state Java loaded, every event Java performed over whole frames, and the final
 // state. The TypeScript engine must reproduce them bit for bit.
 import { describe, expect, it } from 'vitest';
+import { javaReaction } from './reactions';
 import { Simulation, type InitialState } from './simulation';
 import type { PistonMode } from './piston';
 import { ArenaType } from './simulation-info';
@@ -73,7 +74,9 @@ function initialState(f: ParityFixture): InitialState {
     maxwellDemonMode: f.maxwellDemonMode,
     dividerThermalMode: f.dividerThermalMode,
     wells: f.wells,
-    reactions: f.reactions,
+    reactions: f.reactions && [
+      javaReaction(f.reactions.forward, f.reactions.reverse, f.reactions.suppressReverse),
+    ],
     holeEdges: f.edgeY && f.edgeZ ? { y: f.edgeY, z: f.edgeZ } : undefined,
     species: f.species.map((s) => ({
       type: { particleMass: s.mass, particleRadius: s.radius },

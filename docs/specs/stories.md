@@ -52,3 +52,14 @@ Where an outcome is statistical, "matches" means within normal fluctuations for 
 ## Maxwell demon
 
 - **STORY-28** Divided box with particles on the left, demon mode, Color by KE: by opening and closing the hole by hand the user can reach an average energy on the right well above the left.
+
+## Built in the editor
+
+_Web port only:_ experiments the editor (`editor.md`) makes possible. They aren't in the manual.
+
+- **STORY-29 Draw a chamber.** From a blank arena, draw a closed rectangle in the middle, a spawn region inside it with 40 particles of kind A at 300 K, and run: the particles stay inside the rectangle, its corners included, and the speed histogram relaxes to Maxwell–Boltzmann. Kinetic energy is constant to round-off (WALL-2).
+- **STORY-30 Osmosis.** Split the arena with a semipermeable wall that passes small kind A and stops large kind B. Spawn A on both sides and B on the left only: A crosses both ways. At equilibrium the left side holds more particles in total and has the higher pressure (the difference is the osmotic pressure), while A has about the same number density on both sides when the gas is dilute.
+- **STORY-31 Effusion through a gate.** Two chambers joined by a gate, 60 light and 60 heavy particles in the left one, gate closed. Open the gate: light particles escape faster, by about sqrt(m_heavy / m_light), as in STORY-14. Close it again: the counts on each side stop changing except by fluctuation.
+- **STORY-32 Heat conduction.** A channel between a thermal wall at 600 K on the left and one at 200 K on the right, filled with 100 particles: the left end warms, the right end cools, and a steady temperature gradient forms along the channel (Color by KE shows it).
+- **STORY-33 Chained reactions.** Three kinds of equal mass and radius, rules A + A → B + B and B + B → C + C, both with the reverse suppressed: A falls, B rises then falls, and C rises, as for consecutive reactions.
+- **STORY-34 Colour-blind check.** Build a scenario with 8 kinds on the default palette. In the editor's colour-vision previews and in a greyscale screenshot of the running simulation, every kind can be told apart by colour or marker, and the legend names each one (KIND-8, KIND-9).

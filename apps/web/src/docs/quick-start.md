@@ -23,18 +23,19 @@ In 3D, drag the arena (or use the arrow keys) to turn it.
 
 ## Look at the particles
 
-- **Colour** shows particles by type (red and blue), by speed or by kinetic energy.
+- **Colour** shows particles by type (red and blue, or each kind's colour), by speed or by kinetic energy.
+- **Kind markers** draw a ring, dot or other mark on each kind's particles, so kinds can be told apart without colour.
 - **Trace paths** (2D) leaves a mark wherever particles have been, which shows how far they travel between collisions.
 - The bar in the corner of a 2D arena shows the scale in nanometres.
 
 ## Change the arena
 
-Some simulations offer extra arena options in the sidebar, such as a movable piston, a divider or a hole. In the Maxwell's demon simulation, click the arena (or the **Open hole** button) to open and close the hole.
+Some simulations offer extra arena options in the sidebar, such as a movable piston, a divider or a hole. In the Maxwell's demon simulation, click the arena (or the **Open hole** button) to open and close the hole. Gates drawn in the [scenario editor](editor) open and close the same way: tap one, or use its button.
 
 ## Read the statistics
 
-The speed histogram shows how many particles have each speed, next to the Maxwell–Boltzmann prediction for the gas's temperature. Choose red, blue or both particle types, and turn on **Cumulative** to average over time instead of showing the current instant.
+The speed histogram shows how many particles have each speed, next to the Maxwell–Boltzmann prediction for the gas's temperature. Choose **All kinds** or tap the kinds to show (each button names a kind with its colour and marker), and turn on **Cumulative** to average over time instead of showing the current instant.
 
 ## Learn more
 
-The [About](about) page lists the original Boltzmann 3D manual and classroom worksheets, which explain the physics and suggest experiments.
+To build your own simulation, see the [scenario editor](editor) guide. The [About](about) page lists the original Boltzmann 3D manual and classroom worksheets, which explain the physics and suggest experiments.

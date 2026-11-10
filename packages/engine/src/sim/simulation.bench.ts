@@ -1,7 +1,8 @@
 // Engine benchmarks: run with `mise run bench`. Each iteration performs 1,000 events, so
 // events per second = hz × 1,000. Starting states are fixed (seeded) for comparability.
 import { test } from 'vitest';
-import { loadPresetText, loadSetFile } from '../io';
+import { loadDefaultSetFileText, loadPresetText, loadSetFile } from '../io';
+import { parseScenario, resolveScenario, setFileToScenario, type ScenarioInput } from '../scenario';
 import { syntheticGas, seededRandom } from './scenes';
 import { PistonMode } from './piston';
 import { Simulation, type InitialState } from './simulation';
@@ -13,7 +14,33 @@ async function preset(name: string): Promise<InitialState> {
   return loadSetFile(await loadPresetText(name), { random: seededRandom(1) }).scenario;
 }
 
+/**
+ * The default 70 × 50 nm box with drawn walls (plan 0010 step 4): a comb of three walls
+ * with gaps and a triangle, and `count` particles placed around them.
+ */
+async function drawnWalls(count: number): Promise<InitialState> {
+  const { scenario } = setFileToScenario(await loadDefaultSetFileText());
+  const input = structuredClone(scenario) as ScenarioInput;
+  const wall = (id: string, points: [number, number][], closed = false) => ({
+    id,
+    points,
+    closed,
+    kind: { type: 'reflecting' as const },
+  });
+  input.walls = [
+    wall('a', [[15, 0], [15, 35]]), // prettier-ignore
+    wall('b', [[30, 15], [30, 50]]), // prettier-ignore
+    wall('c', [[45, 0], [45, 35]]), // prettier-ignore
+    wall('t', [[52, 10], [64, 10], [58, 22]], true), // prettier-ignore
+  ];
+  input.populations = [{ kind: 'red', randomlyPlaced: [{ count, averageVelocity: 1500 }] }];
+  return resolveScenario(parseScenario(input), { random: seededRandom(1) });
+}
+
 const scenes: [string, () => Promise<InitialState>][] = [
+  ['default (50, reflecting)', () => preset('default')],
+  ['default, drawn walls (50)', () => drawnWalls(50)],
+  ['default, drawn walls (300)', () => drawnWalls(300)],
   ['2Dmixture (60, reflecting)', () => preset('2Dmixture')],
   ['2Dbrownian (200, periodic)', () => preset('2Dbrownian')],
   [

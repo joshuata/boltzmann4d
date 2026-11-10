@@ -1,8 +1,15 @@
 // 1D/2D view: orthographic camera over the arena, one instanced circle per particle.
 // Periodic arenas draw each disc's wrapped images, clipped to the box. Trace mode
-// accumulates particle marks in an off-screen target drawn behind the particles.
+// accumulates particle marks in an off-screen target drawn behind the particles. Drawn
+// walls are lines of a fixed width in pixels (WALL-5), and each kind's marker is drawn
+// over its particles (KIND-9).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import type { RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
+import { MARKER_SHAPES, markerColor, type MarkerShape } from './markers';
 import { periodicImages } from './periodic-images';
 import { disposeTree, NM, ParticleColors, type View } from './view';
 
@@ -28,6 +35,7 @@ export function createView2D(info: SceneInfo): View {
     ),
   );
   const plug = info.divider ? addDivider(root, info.divider, arena.y) : null;
+  const { materials: wallMaterials, gates } = addWalls(root, info.walls ?? [], arena);
   const placePiston = info.piston ? addPiston(root, info.piston, arena) : null;
   placePiston?.(arena.y);
 
@@ -55,6 +63,9 @@ export function createView2D(info: SceneInfo): View {
   particles.count = 0; // nothing to draw until the first frame
   particles.setColorAt(0, new THREE.Color()); // allocate instance colours
   root.add(particles);
+
+  const markers = createMarkers(info, capacity, clipping);
+  root.add(markers.group);
 
   const colors = new ParticleColors(info);
   const trace = createTrace(capacity, camera, clipping);
@@ -84,6 +95,11 @@ export function createView2D(info: SceneInfo): View {
     display(frame: RenderFrame) {
       if (frame.pistonY !== undefined) placePiston?.(frame.pistonY * NM);
       if (plug && frame.holeOpen !== undefined) plug.visible = !frame.holeOpen;
+      // Open gates fade (WALL-4).
+      if (frame.openGates) {
+        for (const [w, material] of gates)
+          material.opacity = frame.openGates.includes(w) ? 0.25 : 1;
+      }
       // The simulation went back in time: it restarted, so start the trace afresh.
       if (frame.time < lastTime) trace.reset();
       lastTime = frame.time;
@@ -102,11 +118,13 @@ export function createView2D(info: SceneInfo): View {
           matrix.makeScale(r, r, 1).setPosition(ix, iy, 0);
           particles.setColorAt(drawn, color);
           particles.setMatrixAt(drawn, matrix);
+          markers.place(frame.types[i]!, matrix, color);
           trace.mark(drawn, ix, iy, color);
           drawn++;
         }
       }
       particles.count = drawn;
+      markers.done();
       particles.instanceMatrix.needsUpdate = true;
       if (particles.instanceColor) particles.instanceColor.needsUpdate = true;
       trace.marked(drawn);
@@ -118,11 +136,19 @@ export function createView2D(info: SceneInfo): View {
     setTrace(enabled, pointSize) {
       trace.setEnabled(enabled, pointSize);
     },
+    setMarkers(enabled) {
+      markers.group.visible = enabled;
+    },
     beforeRender(renderer) {
+      if (wallMaterials.length > 0) {
+        const size = renderer.getSize(new THREE.Vector2());
+        for (const material of wallMaterials) material.resolution.copy(size);
+      }
       trace.draw(renderer);
     },
     dispose() {
       particles.dispose();
+      markers.dispose();
       trace.dispose();
       disposeTree(root);
     },
@@ -304,4 +330,138 @@ function addPiston(
     shaft.scale.set(2 * piston.shaftRadius * NM, top - valveTop, 1);
     shaft.position.set(arena.x / 2, (valveTop + top) / 2, 0);
   };
+}
+
+/**
+ * Drawn walls (WALL-5): each a line `lineWidth` pixels wide in its colour, dashed or solid,
+ * and attractive walls' wells as a faint band of the well's width each side. Returns the
+ * materials (which need the drawing size to draw widths in pixels) and the gates'.
+ */
+function addWalls(
+  root: THREE.Group,
+  walls: NonNullable<SceneInfo['walls']>,
+  arena: { x: number; y: number },
+): { materials: LineMaterial[]; gates: Map<number, LineMaterial> } {
+  const dash = 0.012 * Math.max(arena.x, arena.y); // nm
+  const materials: LineMaterial[] = [];
+  const gates = new Map<number, LineMaterial>();
+  walls.forEach((wall, w) => {
+    const positions: number[] = [];
+    const n = wall.points.length / 2;
+    for (let k = 0; k <= (wall.closed ? n : n - 1); k++) {
+      const m = k % n;
+      positions.push(wall.points[2 * m]! * NM, wall.points[2 * m + 1]! * NM, 0.1);
+    }
+    const geometry = new LineGeometry();
+    geometry.setPositions(positions);
+    if (wall.well) {
+      const band = new LineMaterial({
+        color: wall.color,
+        linewidth: 2 * wall.well * NM,
+        worldUnits: true,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false,
+      });
+      const well = new Line2(geometry, band);
+      well.renderOrder = -0.5;
+      root.add(well);
+      materials.push(band);
+    }
+    const material = new LineMaterial({
+      color: wall.color,
+      linewidth: wall.lineWidth,
+      worldUnits: false,
+      dashed: wall.dash === 'dashed',
+      dashSize: dash,
+      gapSize: dash * 0.7,
+      transparent: wall.gate === true,
+    });
+    const line = new Line2(geometry, material);
+    line.computeLineDistances();
+    line.renderOrder = 1;
+    root.add(line);
+    materials.push(material);
+    if (wall.gate) gates.set(w, material);
+  });
+  return { materials, gates };
+}
+
+/**
+ * Kind markers (KIND-9): for each marker in use, an instanced mesh of its shape, placed
+ * over the particles of the kinds that have it, in a colour contrasting with each disc.
+ */
+function createMarkers(info: SceneInfo, capacity: number, clipping: THREE.Plane[] | null) {
+  const group = new THREE.Group();
+  group.renderOrder = 2;
+  const material = new THREE.MeshBasicMaterial();
+  material.clippingPlanes = clipping;
+  // Per type, the mesh drawing its marker (null for the plain disc or no marker).
+  const byType: (THREE.InstancedMesh | null)[] = [];
+  const meshes = new Map<string, THREE.InstancedMesh>();
+  for (const name of info.typeMarkers ?? []) {
+    const shapes = MARKER_SHAPES[name] ?? [];
+    if (shapes.length === 0) {
+      byType.push(null);
+      continue;
+    }
+    let mesh = meshes.get(name);
+    if (!mesh) {
+      mesh = new THREE.InstancedMesh(markerGeometry(shapes), material, capacity);
+      mesh.count = 0;
+      mesh.setColorAt(0, new THREE.Color());
+      mesh.renderOrder = 2;
+      mesh.position.z = 0.05;
+      meshes.set(name, mesh);
+      group.add(mesh);
+    }
+    byType.push(mesh);
+  }
+  const counts = new Map<THREE.InstancedMesh, number>();
+  const contrast = new THREE.Color();
+  return {
+    group,
+    /** Adds the marker of a particle showing `type`, at the disc's transform. */
+    place(type: number, matrix: THREE.Matrix4, color: THREE.Color) {
+      const mesh = byType[type];
+      if (!mesh) return;
+      const k = counts.get(mesh) ?? 0;
+      mesh.setMatrixAt(k, matrix);
+      mesh.setColorAt(k, contrast.setHex(markerColor(color.r, color.g, color.b)));
+      counts.set(mesh, k + 1);
+    },
+    /** Ends a frame: shows what was placed. */
+    done() {
+      for (const mesh of meshes.values()) {
+        mesh.count = counts.get(mesh) ?? 0;
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      }
+      counts.clear();
+    },
+    dispose() {
+      for (const mesh of meshes.values()) {
+        mesh.geometry.dispose();
+        mesh.dispose();
+      }
+      material.dispose();
+    },
+  };
+}
+
+function markerGeometry(shapes: readonly MarkerShape[]): THREE.BufferGeometry {
+  const parts = shapes.map((shape) => {
+    const geometry =
+      shape.type === 'circle'
+        ? new THREE.CircleGeometry(shape.radius, 24)
+        : new THREE.ShapeGeometry(
+            new THREE.Shape(shape.points.map(([x, y]) => new THREE.Vector2(x, y))),
+          );
+    // ShapeGeometry has no normals; markers are unlit, so keep positions only.
+    const plain = new THREE.BufferGeometry();
+    plain.setAttribute('position', geometry.getAttribute('position'));
+    plain.setIndex(geometry.getIndex());
+    return plain;
+  });
+  return parts.length === 1 ? parts[0]! : mergeGeometries(parts)!;
 }
