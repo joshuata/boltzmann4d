@@ -6,6 +6,7 @@
 // only runs the UI. Browsers that can't hand a canvas to a worker draw on the main
 // thread instead, fed through the same channel.
 import type { Renderer, ViewSize } from '../render';
+import type { Dimension } from '../sim';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '../stats/summary';
@@ -21,12 +22,16 @@ export class SimulationClient {
    * (browsers time to about 0.1 ms here, so single frames are too coarse to show).
    */
   physicsMs = $state(0);
+  /** The user's multiplier on the preset's simulation speed (1 = as the preset sets it). */
+  rateScale = $state(1);
   /** Set if the simulation or the renderer failed, or a preset couldn't be loaded. */
   error = $state<string | null>(null);
   /** The preset running now (or being loaded), by file name without `.set`. */
   preset = $state('default');
   /** Particles in the running simulation (0 until it has loaded). */
   particleCount = $state(0);
+  /** Dimension of the running simulation (3D views can be turned). */
+  dimension = $state<Dimension>(2);
   /** True while a preset is loading. */
   loading = $state(true);
   /** Arena options the running preset can take, and which are on (null until loaded). */
@@ -142,6 +147,7 @@ export class SimulationClient {
           this.particleCount = message.particles;
           this.arena = message.arena;
           this.piston = message.piston ? { ...message.piston, level: 0, moving: false } : null;
+          this.dimension = message.dimension;
           this.loading = false;
           this.error = null;
           break;
@@ -195,9 +201,26 @@ export class SimulationClient {
     this.#send({ type: 'stopPiston' });
   }
 
+  /** 3D: turns the view by these angles about the x and y axes, in degrees. */
+  rotate(aboutX: number, aboutY: number): void {
+    if (this.#renderWorker) {
+      const message: ToRenderWorker = { type: 'rotate', aboutX, aboutY };
+      this.#renderWorker.postMessage(message);
+    } else {
+      this.#mainRenderer?.rotate(aboutX, aboutY);
+    }
+  }
+
   setPaused(paused: boolean): void {
     this.paused = paused;
     this.#send({ type: paused ? 'pause' : 'play' });
+  }
+
+  /** Speeds the simulation up or slows it down relative to the preset's speed. */
+  setRateScale(scale: number): void {
+    if (!Number.isFinite(scale) || scale <= 0) return;
+    this.rateScale = scale;
+    this.#send({ type: 'rate', scale });
   }
 
   advanceOneFrame(): void {

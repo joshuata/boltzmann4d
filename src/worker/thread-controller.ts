@@ -39,6 +39,8 @@ export type TickSource = (tick: () => void) => () => void;
 export interface PacingOptions {
   /** Multiplies the rate simulated time advances at (settings' `simulation_speed`). */
   speed?: number;
+  /** The user's extra multiplier on top of `speed` (the sidebar's rate slider); see setRateScale. */
+  rateScale?: number;
   /** Milliseconds, monotonic; defaults to performance.now(). */
   now?: () => number;
   /** Defaults to requestAnimationFrame when available, else a FALLBACK_TICK_MS timer. */
@@ -69,11 +71,17 @@ export function parseSimulationSpeed(text: string | undefined): number {
   return Number.isFinite(speed) && speed > 0 ? speed : 1;
 }
 
+function validScale(scale: number | undefined): number {
+  return scale !== undefined && Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
 export class ThreadController {
   private readonly physics: FramePhysics;
   private readonly giveFrameToViewForDisplaying: GiveFrame;
+  /** Simulated seconds per real millisecond at a rate scale of 1. */
+  private readonly baseRate: number;
   /** Simulated seconds per real millisecond. */
-  private readonly rate: number;
+  private rate: number;
   private readonly now: () => number;
   private readonly ticks: TickSource;
   private stopTicks: (() => void) | null = null;
@@ -84,7 +92,8 @@ export class ThreadController {
   constructor(physics: FramePhysics, giveFrameToView: GiveFrame, options: PacingOptions = {}) {
     this.physics = physics;
     this.giveFrameToViewForDisplaying = giveFrameToView;
-    this.rate = (physics.frameDuration / FRAME_DURATION) * (options.speed ?? 1);
+    this.baseRate = (physics.frameDuration / FRAME_DURATION) * (options.speed ?? 1);
+    this.rate = this.baseRate * validScale(options.rateScale);
     this.now = options.now ?? (() => performance.now());
     this.ticks = options.ticks ?? defaultTickSource;
   }
@@ -106,6 +115,14 @@ export class ThreadController {
     // Time spent paused isn't simulated: resume from now.
     else if (this.paused) this.lastTick = this.now();
     this.paused = paused;
+  }
+
+  /**
+   * Multiplies how fast simulated time follows the wall clock (1 = the preset's speed).
+   * Takes effect from the next tick; the physics itself is unchanged.
+   */
+  setRateScale(scale: number): void {
+    this.rate = this.baseRate * validScale(scale);
   }
 
   isPaused(): boolean {

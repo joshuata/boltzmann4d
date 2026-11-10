@@ -2,6 +2,7 @@
 // Frames don't come back here: they stream to the renderer over the `frames` port
 // (render/protocol.ts), so the main thread only handles controls and readouts.
 import type { PistonMode } from '../sim/piston';
+import type { Dimension } from '../sim';
 import type { StatisticsSummary } from '../stats/summary';
 
 /**
@@ -50,7 +51,9 @@ export type ToWorker =
   | { type: 'stopPiston' }
   | { type: 'play' }
   | { type: 'pause' }
-  | { type: 'step' };
+  | { type: 'step' }
+  /** Multiply the preset's simulation speed (kept across preset loads). */
+  | { type: 'rate'; scale: number };
 
 export type FromWorker =
   /**
@@ -69,6 +72,7 @@ export type FromWorker =
       type: 'loaded';
       preset: string;
       particles: number;
+      dimension: Dimension;
       arena: ArenaInfo;
       piston?: PistonInfo;
     }
