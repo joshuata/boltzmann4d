@@ -2,9 +2,15 @@
 // ThreadController, and streams frames to the renderer over the port it is given.
 import { loadDefaultSettingsText, loadPresetText, loadSettings } from '@boltzmann4d/engine/io';
 import type { RenderStream } from '../render/protocol';
-import { Simulation, type SceneInfo } from '@boltzmann4d/engine/sim';
+import type { SimulationSettings } from '@boltzmann4d/engine/io';
+import { Simulation, type ColorMode, type SceneInfo } from '@boltzmann4d/engine/sim';
 import { DefaultParticleInfo, ParticleType } from '@boltzmann4d/engine/sim/particle-type';
-import { Statistics, statsContext } from '@boltzmann4d/engine/stats';
+import { averageVelocity, avgKineticEnergy } from '@boltzmann4d/engine/stats/formulas';
+import { Statistics, statsContext, weightedAverage, type StatsContext } from '@boltzmann4d/engine/stats';
+import { convert } from '@boltzmann4d/engine/utils/units';
+
+/** kg per amu. */
+const AMU_KG = 1.660538782e-27;
 import {
   ArenaType,
   DividerThermalMode,
@@ -84,6 +90,7 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
   let statistics: Statistics;
   let typeColors: number[];
   let viewingAngles: [number, number];
+  let view: ViewSettings;
   let speed: number;
   let arenaInfo: ArenaInfo;
   try {
@@ -165,7 +172,9 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
     });
     typeColors = settings.species.map((s) => s.type.defaultColor);
     viewingAngles = settings.viewingAngles;
-    statistics = stats = new Statistics(statsContext(settings), simulation.particles, {
+    const ctx = statsContext(settings);
+    view = viewOf(settings, ctx);
+    statistics = stats = new Statistics(ctx, simulation.particles, {
       forgetMultiplier: settings.forgetMultiplier,
       typeNames: settings.species.map((s) => s.type.displayName),
       typeColors,
@@ -182,13 +191,17 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
   const port = frames;
   const send = (message: RenderStream, transfer: Transferable[]) =>
     port.postMessage(message, transfer);
-  send({ type: 'scene', scene: sceneOf(simulation, typeColors, viewingAngles) }, []);
+  send({ type: 'scene', scene: sceneOf(simulation, typeColors, viewingAngles, view) }, []);
 
   let lastSummary = -Infinity;
   const controller = new ThreadController(
     simulation,
     (frame, physicsMs) => {
-      send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
+      send({ type: 'frame', frame }, [
+        frame.positions.buffer,
+        frame.types.buffer,
+        frame.speeds.buffer,
+      ]);
       const piston = simulation.piston;
       post({
         type: 'timing',
@@ -221,6 +234,12 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
       ? { maxLevel: simulation.maxPistonLevel(), arenaHeight: simulation.arena.ySize }
       : undefined,
     dimension: simulation.dimension,
+    view: {
+      colorMode: view.colorMode,
+      trace: view.trace,
+      arenaWidth: simulation.arena.xSize,
+      arenaHeight: simulation.arena.ySize,
+    },
   });
 }
 
@@ -228,6 +247,7 @@ function sceneOf(
   simulation: Simulation,
   typeColors: number[],
   viewingAngles: [number, number],
+  view: ViewSettings,
 ): SceneInfo {
   const p = simulation.particles;
   const arena = simulation.arena;
@@ -252,10 +272,38 @@ function sceneOf(
           edgeZ: hole ? arena.edgeZ.slice() : undefined,
           edgeRadius: arena.edgeRadius,
           holeDiameter: hole ? arena.holeDiameter : undefined,
+          demon: hole && arena.maxwellDemonMode,
         }
       : undefined,
     piston: simulation.piston
       ? { valveRadius: PISTON_VALVE_RADIUS, shaftRadius: PISTON_SHAFT_RADIUS }
       : undefined,
+    masses: p.mass.slice(),
+    colorLimits: view.colorLimits,
+    colorMode: view.colorMode,
+    trace: view.trace,
   };
+}
+
+/** The settings file's view settings and the colour-mode limits (MainGuiFullView). */
+function viewOf(settings: SimulationSettings, ctx: StatsContext): ViewSettings {
+  const all = ctx.types.map((_, t) => t);
+  const speed = weightedAverage(ctx, all, (t) =>
+    averageVelocity(ctx.types[t]!.initialTemperature, ctx.types[t]!.mass * AMU_KG, ctx.dimension),
+  );
+  const energy = weightedAverage(ctx, all, (t) =>
+    convert('J', 'kJ/mol', avgKineticEnergy(ctx.types[t]!.initialTemperature, ctx.dimension)),
+  );
+  const mode = settings.coloringMode;
+  return {
+    colorLimits: { speed: 2.5 * speed, energy: 2.5 * energy },
+    colorMode: mode === 'SPEED' || mode === 'KE' ? mode : 'NORMAL',
+    trace: { enabled: settings.traceMode, pointSize: settings.tracePointSize || 2 },
+  };
+}
+
+interface ViewSettings {
+  colorLimits: { speed: number; energy: number };
+  colorMode: ColorMode;
+  trace: { enabled: boolean; pointSize: number };
 }

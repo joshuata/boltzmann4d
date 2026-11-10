@@ -31,12 +31,27 @@ export interface SceneInfo {
     edgeRadius: number;
     /** The hole's diameter in meters; absent without a hole. */
     holeDiameter?: number;
+    /** Maxwell's demon: the hole opens and closes (frames say which). */
+    demon?: boolean;
   };
   /** Piston arenas: the piston's valve and shaft radii, meters (its height comes per frame). */
   piston?: { valveRadius: number; shaftRadius: number };
   /** 3D: the starting view rotation about the x and y axes, in degrees. */
   viewingAngles?: readonly [number, number];
+  /** Per particle, amu (for the kinetic-energy colour mode). */
+  masses?: Float64Array;
+  /**
+   * Colour modes: the speed (m/s) and kinetic energy (kJ/mol) that map to the end of the
+   * hue scale, 2.5 × the predicted averages over all types (MainGuiFullView).
+   */
+  colorLimits?: { speed: number; energy: number };
+  /** The settings file's view: colour mode and trace. */
+  colorMode?: ColorMode;
+  trace?: { enabled: boolean; pointSize: number };
 }
+
+/** How particles are coloured: by type, or by speed or kinetic energy on a hue scale. */
+export type ColorMode = 'NORMAL' | 'SPEED' | 'KE';
 
 /** Snapshot of particle state handed to the renderer (mirrors RenderFrame.java). */
 export interface RenderFrame {
@@ -46,6 +61,10 @@ export interface RenderFrame {
   positions: Float64Array;
   /** Per-particle type index into the particle-type table. */
   types: Uint16Array;
+  /** Per-particle speed, m/s (for the speed and kinetic-energy colour modes). */
+  speeds: Float32Array;
+  /** Maxwell's demon: whether the hole is open this frame. */
+  holeOpen?: boolean;
   /** Piston arenas: y of the piston's underside, meters. */
   pistonY?: number;
 }

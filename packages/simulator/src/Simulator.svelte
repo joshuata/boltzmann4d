@@ -10,6 +10,8 @@
   import PistonPanel from './ui/PistonPanel.svelte';
   import PlayPauseButton from './ui/PlayPauseButton.svelte';
   import RateSlider from './ui/RateSlider.svelte';
+  import ScaleBar from './ui/ScaleBar.svelte';
+  import ViewOptions from './ui/ViewOptions.svelte';
   import { rotateView } from './ui/rotate-view';
   import { SimulationClient } from './ui/simulation.svelte';
 
@@ -52,6 +54,7 @@
 <div
   class="grid h-full min-h-0 grid-rows-[min(55dvh,90vw)_1fr] overflow-hidden md:grid-cols-[1fr_320px] md:grid-rows-1"
 >
+  <div class="relative min-h-0 min-w-0">
   <canvas
     bind:this={canvas}
     class={[
@@ -64,9 +67,22 @@
       ? 'Simulation arena; drag or use the arrow keys to turn it'
       : 'Simulation arena'}
   ></canvas>
+  {#if sim && sim.dimension !== 3}
+    <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
+  {/if}
+  </div>
   <aside
     class="bg-muted/40 min-h-0 overflow-y-auto overscroll-contain border-t p-4 md:border-t-0 md:border-l"
   >
+    {#if sim}
+      <ViewOptions
+        colorMode={sim.colorMode}
+        trace={sim.trace.enabled}
+        canTrace={sim.dimension !== 3}
+        onColorMode={(mode) => sim?.setColorMode(mode)}
+        onTrace={(enabled) => sim?.setTrace(enabled)}
+      />
+    {/if}
     {#if sim?.arena}
       <ArenaOptions
         arena={sim.arena}

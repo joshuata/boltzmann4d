@@ -6,7 +6,7 @@
 // only runs the UI. Browsers that can't hand a canvas to a worker draw on the main
 // thread instead, fed through the same channel.
 import type { Renderer, ViewSize } from '../render';
-import type { Dimension } from '@boltzmann4d/engine/sim';
+import type { ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
@@ -32,6 +32,13 @@ export class SimulationClient {
   particleCount = $state(0);
   /** Dimension of the running simulation (3D views can be turned). */
   dimension = $state<Dimension>(2);
+  /** How particles are coloured, and trace mode (the settings file's until changed). */
+  colorMode = $state<ColorMode>('NORMAL');
+  trace = $state({ enabled: false, pointSize: 2 });
+  /** The arena's size in m, and the canvas's in CSS pixels (for the scale bar). */
+  arenaSize = $state.raw({ width: 0, height: 0 });
+  canvasSize = $state.raw({ width: 0, height: 0 });
+  #viewChosen = false;
   /** True while a preset is loading. */
   loading = $state(true);
   /** Arena options the running preset can take, and which are on (null until loaded). */
@@ -112,6 +119,7 @@ export class SimulationClient {
 
     this.#resizeObserver = new ResizeObserver(() => {
       const next = size();
+      this.canvasSize = { width: next.width, height: next.height };
       if (this.#renderWorker) {
         const message: ToRenderWorker = { type: 'resize', size: next };
         this.#renderWorker.postMessage(message);
@@ -149,6 +157,11 @@ export class SimulationClient {
           this.arena = message.arena;
           this.piston = message.piston ? { ...message.piston, level: 0, moving: false } : null;
           this.dimension = message.dimension;
+          this.arenaSize = { width: message.view.arenaWidth, height: message.view.arenaHeight };
+          if (!this.#viewChosen) {
+            this.colorMode = message.view.colorMode;
+            this.trace = { ...message.view.trace };
+          }
           this.loading = false;
           this.error = null;
           break;
@@ -188,6 +201,30 @@ export class SimulationClient {
 
   stopPiston(): void {
     this.#send({ type: 'stopPiston' });
+  }
+
+  /** Colours particles by type, speed or kinetic energy (kept across presets). */
+  setColorMode(mode: ColorMode): void {
+    this.#viewChosen = true;
+    this.colorMode = mode;
+    this.#toRenderer({ type: 'colorMode', mode });
+  }
+
+  /** Trace mode: particles leave marks (2D; kept across presets). */
+  setTrace(enabled: boolean): void {
+    this.#viewChosen = true;
+    this.trace = { ...this.trace, enabled };
+    this.#toRenderer({ type: 'trace', enabled, pointSize: this.trace.pointSize });
+  }
+
+  #toRenderer(message: Extract<ToRenderWorker, { type: 'colorMode' | 'trace' }>): void {
+    if (this.#renderWorker) {
+      this.#renderWorker.postMessage(message);
+    } else if (message.type === 'colorMode') {
+      this.#mainRenderer?.setColorMode(message.mode);
+    } else {
+      this.#mainRenderer?.setTrace(message.enabled, message.pointSize);
+    }
   }
 
   /** 3D: turns the view by these angles about the x and y axes, in degrees. */

@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import type { RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
 import { periodicImages3D } from './periodic-images';
-import { disposeTree, NM, type View } from './view';
+import { disposeTree, NM, ParticleColors, type View } from './view';
 
 /** Vertical field of view, in degrees (LwjglRenderSurface). */
 const FIELD_OF_VIEW = 30;
@@ -71,6 +71,8 @@ export function createView3D(info: SceneInfo): View {
     (_, i) => new THREE.Color(info.typeColors[info.types[i] ?? 0] ?? 0xffffff),
   );
   for (let i = 0; i < count; i++) particles.setColorAt(i, colors[i]!);
+  const particleColors = new ParticleColors(info);
+  let wasColoured = false;
   box.add(particles);
 
   let aboutX = info.viewingAngles?.[0] ?? 0;
@@ -102,6 +104,7 @@ export function createView3D(info: SceneInfo): View {
     },
     display(frame: RenderFrame) {
       if (frame.dimension !== 3) return;
+      const coloured = particleColors.mode !== 'NORMAL';
       const n = Math.min(frame.types.length, count);
       const p = frame.positions;
       let drawn = 0;
@@ -112,19 +115,33 @@ export function createView3D(info: SceneInfo): View {
         const r = radii[i]! * NM;
         if (!periodic) {
           matrix.makeScale(r, r, r).setPosition(x, y, z);
+          if (coloured) particles.setColorAt(drawn, particleColors.of(frame, i));
           particles.setMatrixAt(drawn++, matrix);
           continue;
         }
         const k = periodicImages3D(x, y, z, r, w, h, d, images);
         for (let m = 0; m < k; m++) {
           matrix.makeScale(r, r, r).setPosition(images[3 * m]!, images[3 * m + 1]!, images[3 * m + 2]!); // prettier-ignore
-          particles.setColorAt(drawn, colors[i]!);
+          particles.setColorAt(drawn, coloured ? particleColors.of(frame, i) : colors[i]!);
           particles.setMatrixAt(drawn++, matrix);
         }
       }
       particles.count = drawn;
       particles.instanceMatrix.needsUpdate = true;
-      if (periodic && particles.instanceColor) particles.instanceColor.needsUpdate = true;
+      // Back to normal colours: restore them once.
+      if (wasColoured && !coloured && !periodic) {
+        for (let i = 0; i < count; i++) particles.setColorAt(i, colors[i]!);
+      }
+      if ((periodic || coloured || wasColoured) && particles.instanceColor) {
+        particles.instanceColor.needsUpdate = true;
+      }
+      wasColoured = coloured;
+    },
+    setColorMode(mode) {
+      particleColors.mode = mode;
+    },
+    setTrace() {
+      // Trace mode is 2D-only so far.
     },
     rotate(dx, dy) {
       aboutX = (((aboutX + dx) % 360) + 360) % 360;

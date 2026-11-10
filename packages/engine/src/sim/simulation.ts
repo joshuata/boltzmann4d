@@ -554,18 +554,25 @@ export class Simulation {
     const p = this.particles;
     const d = this.dimension;
     const positions = new Float64Array(p.count * d);
+    const speeds = new Float32Array(p.count);
     for (let k = 0; k < p.count; k++) {
       positions[d * k] = p.x[k]!;
       positions[d * k + 1] = p.y[k]!;
       if (d === 3) positions[d * k + 2] = p.z[k]!;
+      const vx = p.vx[k]!;
+      const vy = p.vy[k]!;
+      const vz = p.vz[k]!;
+      speeds[k] = Math.sqrt(vx * vx + vy * vy + vz * vz);
     }
     const frame: RenderFrame = {
       dimension: this.dimension,
       time: this.time,
       positions,
       types: p.color.slice(), // what each particle shows (reactions recolour)
+      speeds,
     };
     if (this.piston) frame.pistonY = this.piston.position();
+    if (this.arena.maxwellDemonMode) frame.holeOpen = this.holeOpen;
     return frame;
   }
 
