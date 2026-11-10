@@ -1,0 +1,5 @@
+/* The site's stylesheet: the shared theme (Tailwind + shadcn-svelte tokens) plus where
+   Tailwind should look for class names. */
+@import '@boltzmann4d/ui/theme.css';
+
+@source '../../../packages';

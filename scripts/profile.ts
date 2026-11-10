@@ -10,10 +10,10 @@
 // https://www.speedscope.app.
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { loadSettings } from '../src/io/load';
-import { seededRandom, syntheticGas } from '../src/sim/scenes';
-import { Simulation, type InitialState } from '../src/sim/simulation';
-import { ArenaType } from '../src/sim/simulation-info';
+import { loadSettings } from '@boltzmann4d/engine/io/load';
+import { seededRandom, syntheticGas } from '@boltzmann4d/engine/sim/scenes';
+import { Simulation, type InitialState } from '@boltzmann4d/engine/sim/simulation';
+import { ArenaType } from '@boltzmann4d/engine/sim/simulation-info';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -39,7 +39,10 @@ if (values.particles) {
   init = syntheticGas({ count, arenaType, seed });
   label = `synthetic gas (${values.periodic ? 'periodic' : 'reflecting'})`;
 } else {
-  const path = new URL(`../src/io/simsettingsfiles/presets/${preset}.set`, import.meta.url);
+  const path = new URL(
+    `../packages/engine/src/io/simsettingsfiles/presets/${preset}.set`,
+    import.meta.url,
+  );
   init = loadSettings(readFileSync(path, 'utf8'), { random: seededRandom(seed) }).settings;
   label = preset;
 }

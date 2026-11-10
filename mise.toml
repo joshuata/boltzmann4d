@@ -22,14 +22,14 @@ auto = true
 postinstall = "mise deps"
 
 [tasks.dev]
-description = "Start the Vite dev server"
+description = "Start the SvelteKit dev server (apps/web)"
 run = "pnpm dev"
 
 [tasks.build]
-description = "Type-check and build the production bundle into dist/"
+description = "Type-check every workspace and build the static site into apps/web/build/"
 run = "pnpm build"
-sources = ["src/**/*", "index.html", "package.json", "pnpm-lock.yaml", "tsconfig.json", "vite.config.ts", "svelte.config.js"]
-outputs = ["dist/**/*"]
+sources = ["packages/*/src/**/*", "packages/*/package.json", "packages/*/tsconfig.json", "packages/*/svelte.config.js", "apps/web/src/**/*", "apps/web/static/**/*", "apps/web/package.json", "apps/web/tsconfig.json", "apps/web/vite.config.ts", "scripts/**/*.ts", "package.json", "pnpm-lock.yaml", "tsconfig.base.json"]
+outputs = ["apps/web/build/**/*"]
 
 [tasks.test]
 description = "Run the Vitest suite once"
@@ -51,17 +51,17 @@ run = "node --import tsx --cpu-prof --cpu-prof-dir=profiles scripts/profile.ts"
 # Set FORCE=1 to rerun anyway.
 
 [tasks."java:parity"]
-description = "Java app: write parity fixtures (src/sim/parity/*.json) with boltzmann3d's ParityDump"
+description = "Java app: write parity fixtures (packages/engine/src/sim/parity/*.json) with boltzmann3d's ParityDump"
 run = """
 set -eu
 inputs="src tests/edu/byu/chem/boltzmann/tools/scenarios tests/edu/byu/chem/boltzmann/tools/ParityDump.java tests/edu/byu/chem/boltzmann/tools/JsonWriter.java build.xml"
-stamp=src/sim/parity/java-inputs.txt
+stamp=packages/engine/src/sim/parity/java-inputs.txt
 hash=$(scripts/java-inputs-hash.sh $inputs)
 if [ -z "${FORCE:-}" ] && [ "$hash" = "$(cat $stamp 2>/dev/null)" ]; then
   echo "java:parity: Java program unchanged since the fixtures were written; skipping"
   exit 0
 fi
-(cd vendor/boltzmann3d && mise exec java@temurin-25 ant@1.10.18 -- ant -q parity-dump -Dparity.out="{{config_root}}/src/sim/parity")
+(cd vendor/boltzmann3d && mise exec java@temurin-25 ant@1.10.18 -- ant -q parity-dump -Dparity.out="{{config_root}}/packages/engine/src/sim/parity")
 echo "$hash" > $stamp
 """
 
@@ -83,13 +83,13 @@ echo "$hash" > $stamp
 [tasks."web:bench"]
 description = "Web engine: physics scaling benchmark under Node (benchmarks/results/web-node.json)"
 run = "node --expose-gc --import tsx scripts/bench-scaling.ts"
-sources = ["src/sim/**/*.ts", "scripts/bench-scaling.ts", "package.json", "pnpm-lock.yaml"]
+sources = ["packages/engine/src/sim/**/*.ts", "scripts/bench-scaling.ts", "package.json", "pnpm-lock.yaml"]
 outputs = ["benchmarks/results/web-node.json"]
 
 [tasks."test:parity"]
 description = "Web engine: check it reproduces the Java app's events bit for bit (refreshes fixtures first if the Java app changed)"
 depends = ["java:parity"]
-run = "pnpm exec vitest run src/sim/parity.test.ts"
+run = "pnpm exec vitest run --project engine src/sim/parity.test.ts"
 
 [tasks."bench:report"]
 description = "Rebuild the tables in benchmarks/README.md (reruns either benchmark first if its program changed)"

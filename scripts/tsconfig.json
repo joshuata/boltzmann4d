@@ -1,11 +1,10 @@
 {
-  // Node-side scripts (profiling, tooling). Separate from the app's tsconfig so that
-  // src/ never sees Node types: src/sim, src/io and friends must stay browser-safe.
-  "extends": "../tsconfig.json",
+  // Node-side scripts (profiling, benchmarks, reports). They import the engine package,
+  // which has its own tsconfig without Node types, so the engine stays browser-safe.
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node", "vite/client"],
-    "noEmit": true
+    "lib": ["es2022"],
+    "types": ["node", "vite/client"]
   },
-  "include": ["**/*.ts", "../src/**/*.ts"],
-  "exclude": ["../src/**/*.svelte.ts", "../src/**/*.test.ts", "../src/**/*.bench.ts"]
+  "include": ["**/*.ts"]
 }
