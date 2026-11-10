@@ -3,8 +3,9 @@
 // - Cumulative: each particle's speed, weighted by how long it held that speed (time since
 //   its previous particle–particle collision, wall bounces not counted, as in Java; #18).
 // - Current: every particle's speed in one frame, weight 1.
-// - Prediction: the Maxwell–Boltzmann speed distribution at each type's initial
-//   temperature, mixed by particle count.
+// - Prediction: the Maxwell–Boltzmann speed distribution of each type at a given
+//   temperature per type, mixed by particle count. Statistics passes the temperatures
+//   measured from the data being compared (#23); Java used each type's initial one.
 import { averageVelocity, BOLTZMANN_CONST, velocityWidth } from './formulas';
 import { HistogramBins, type Range } from './histogram-bins';
 import { weightedAverage, weightedWidth, type StatsContext } from './stats-context';
@@ -60,6 +61,7 @@ export class InstantaneousSpeed {
     this.types = types;
     this.slotOfType = new Int32Array(ctx.types.length).fill(-1);
     types.forEach((type, slot) => (this.slotOfType[type] = slot));
+    // The axis is fixed from the starting temperatures, as in Java.
     this.range = { min: 0.0, max: this.predictedAverage() * 2.5 };
     this.current = new HistogramBins(this.range, CURRENT_BINS, types.length);
     this.cumulative = new HistogramBins(this.range, CUMULATIVE_BINS, types.length);
@@ -92,21 +94,24 @@ export class InstantaneousSpeed {
     this.cumulative.reset();
   }
 
-  /** Mean speed predicted for these types (m/s). */
-  predictedAverage(): number {
+  /**
+   * Mean speed predicted for these types (m/s), with `temperatures` (K) per context type
+   * (by default each type's initial temperature).
+   */
+  predictedAverage(temperatures: ArrayLike<number> = this.initialTemperatures()): number {
     const { ctx } = this;
     return weightedAverage(ctx, this.types, (t) =>
-      averageVelocity(ctx.types[t]!.initialTemperature, amuToKg(ctx.types[t]!.mass), ctx.dimension),
+      averageVelocity(temperatures[t]!, amuToKg(ctx.types[t]!.mass), ctx.dimension),
     );
   }
 
-  /** Width of the predicted speed distribution (m/s). */
-  predictedWidth(): number {
+  /** Width of the predicted speed distribution (m/s); see predictedAverage. */
+  predictedWidth(temperatures: ArrayLike<number> = this.initialTemperatures()): number {
     const { ctx } = this;
     const avg = (t: number) =>
-      averageVelocity(ctx.types[t]!.initialTemperature, amuToKg(ctx.types[t]!.mass), ctx.dimension);
+      averageVelocity(temperatures[t]!, amuToKg(ctx.types[t]!.mass), ctx.dimension);
     const width = (t: number) =>
-      velocityWidth(ctx.types[t]!.initialTemperature, amuToKg(ctx.types[t]!.mass), ctx.dimension);
+      velocityWidth(temperatures[t]!, amuToKg(ctx.types[t]!.mass), ctx.dimension);
     return weightedWidth(ctx, this.types, avg, width);
   }
 
@@ -114,7 +119,10 @@ export class InstantaneousSpeed {
    * The predicted density sampled at `points` bin centres across the statistic's range
    * (ProbabilityDensityFunctionPointCreater): x_i = span·(i + ½)/points + min.
    */
-  predictionCurve(points: number): Float64Array {
+  predictionCurve(
+    points: number,
+    temperatures: ArrayLike<number> = this.initialTemperatures(),
+  ): Float64Array {
     const { ctx, range } = this;
     const span = range.max - range.min;
     let total = 0;
@@ -126,11 +134,14 @@ export class InstantaneousSpeed {
       for (const t of this.types) {
         const type = ctx.types[t]!;
         y +=
-          velocityDistribution(x, amuToKg(type.mass), type.initialTemperature, ctx.dimension) *
-          type.count;
+          velocityDistribution(x, amuToKg(type.mass), temperatures[t]!, ctx.dimension) * type.count;
       }
       curve[i] = total === 0 ? 0 : y / total;
     }
     return curve;
+  }
+
+  private initialTemperatures(): number[] {
+    return this.ctx.types.map((type) => type.initialTemperature);
   }
 }
