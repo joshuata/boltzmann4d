@@ -25,3 +25,41 @@ export async function loadPresetText(name: string): Promise<string> {
 export async function loadDefaultSettingsText(): Promise<string> {
   return (await import('./simsettingsfiles/default.set?raw')).default;
 }
+
+export interface PresetInfo {
+  /** File name without `.set`, as accepted by loadPresetText. */
+  name: string;
+  label: string;
+  dimensions: 1 | 2 | 3;
+}
+
+/** The presets the Java app offers, with its labels (resources/SimulationPresets.java). */
+export const presetCatalog: readonly PresetInfo[] = [
+  { name: 'default', label: 'Original default', dimensions: 2 },
+  { name: '2Dbrownian', label: 'Brownian motion', dimensions: 2 },
+  { name: '2Ddiffuse', label: 'Diffusion', dimensions: 2 },
+  { name: '2Deffuse', label: 'Effusion', dimensions: 2 },
+  { name: '2Dentropy', label: 'Entropy', dimensions: 2 },
+  { name: '2Dequal', label: 'Equal masses', dimensions: 2 },
+  { name: '2Dequil', label: 'Equilibration', dimensions: 2 },
+  { name: '2Dhotcold', label: 'Hot and cold', dimensions: 2 },
+  { name: '2Dhyd100', label: 'Hydrogen, 100 K', dimensions: 2 },
+  { name: '2Dhyd1000', label: 'Hydrogen, 1000 K', dimensions: 2 },
+  { name: '2Dliquid', label: 'Liquid', dimensions: 2 },
+  { name: '2Dmixture', label: 'Hydrogen / oxygen mixture', dimensions: 2 },
+  { name: '2Doxy100', label: 'Oxygen, 100 K', dimensions: 2 },
+  { name: '2Doxy1000', label: 'Oxygen, 1000 K', dimensions: 2 },
+  { name: '2Dpresnum', label: 'Pressure and particle number', dimensions: 2 },
+  { name: '3Dbrownian', label: 'Brownian motion', dimensions: 3 },
+  { name: '3Ddiffuse', label: 'Diffusion', dimensions: 3 },
+  { name: '3Deffuse', label: 'Effusion', dimensions: 3 },
+  { name: '3Dentropy', label: 'Entropy', dimensions: 3 },
+  { name: '3Dequil', label: 'Equilibration', dimensions: 3 },
+  { name: '3Dhotcold', label: 'Hot and cold', dimensions: 3 },
+  { name: '3Dhyd100', label: 'Hydrogen, 100 K', dimensions: 3 },
+  { name: '3Dhyd1000', label: 'Hydrogen, 1000 K', dimensions: 3 },
+  { name: '3Dmixture', label: 'Hydrogen / oxygen mixture', dimensions: 3 },
+  { name: '3Doxy100', label: 'Oxygen, 100 K', dimensions: 3 },
+  { name: '3Doxy1000', label: 'Oxygen, 1000 K', dimensions: 3 },
+  { name: '3Dpresnum', label: 'Pressure and particle number', dimensions: 3 },
+];

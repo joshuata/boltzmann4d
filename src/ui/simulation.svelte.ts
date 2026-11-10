@@ -19,8 +19,14 @@ export class SimulationClient {
    * (browsers time to about 0.1 ms here, so single frames are too coarse to show).
    */
   physicsMs = $state(0);
-  /** Set if the simulation or the renderer failed to start. */
+  /** Set if the simulation or the renderer failed, or a preset couldn't be loaded. */
   error = $state<string | null>(null);
+  /** The preset running now (or being loaded), by file name without `.set`. */
+  preset = $state('default');
+  /** Particles in the running simulation (0 until it has loaded). */
+  particleCount = $state(0);
+  /** True while a preset is loading. */
+  loading = $state(true);
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
 
@@ -84,12 +90,44 @@ export class SimulationClient {
     this.#sim = new SimWorker();
     this.#sim.onmessage = (event: MessageEvent<FromWorker>) => {
       const message = event.data;
-      if (message.type === 'timing') this.physicsMs += 0.05 * (message.physicsMs - this.physicsMs);
-      else this.error = message.message;
+      switch (message.type) {
+        case 'timing':
+          this.physicsMs += 0.05 * (message.physicsMs - this.physicsMs);
+          break;
+        case 'loaded':
+          this.preset = message.preset;
+          this.particleCount = message.particles;
+          this.loading = false;
+          this.error = null;
+          break;
+        case 'error':
+          this.error = message.message;
+          this.loading = false;
+          break;
+      }
     };
     // `?preset=2Dhotcold` loads a bundled preset instead of default.set.
     const preset = /[?&]preset=([\w-]+)/.exec(location.search)?.[1];
+    if (preset) this.preset = preset;
     this.#send({ type: 'connect', frames: channel.port1, preset }, [channel.port1]);
+  }
+
+  /** Replaces the running simulation with a bundled preset, and remembers it in the URL. */
+  loadPreset(name: string): void {
+    if (name === this.preset && !this.error) return;
+    this.preset = name;
+    this.loading = true;
+    this.#send({ type: 'load', preset: name });
+    const query = location.search
+      .replace(/^\?/, '')
+      .split('&')
+      .filter((part) => part && !part.startsWith('preset='));
+    if (name !== 'default') query.push(`preset=${name}`);
+    history.replaceState(
+      null,
+      '',
+      `${location.pathname}${query.length ? `?${query.join('&')}` : ''}${location.hash}`,
+    );
   }
 
   setPaused(paused: boolean): void {

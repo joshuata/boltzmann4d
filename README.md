@@ -7,6 +7,6 @@ pnpm install
 pnpm dev
 ```
 
-Until there's a preset picker, `?preset=<name>` loads one of the bundled presets (for example `?preset=2Deffuse`; names are the files in `src/io/simsettingsfiles/presets/`), and `?render=main` draws on the main thread instead of the render worker.
+Pick a preset from the sidebar; the choice is kept in the URL (`?preset=2Deffuse`), so links and reloads open the same preset. `?render=main` draws on the main thread instead of the render worker.
 
 See [AGENTS.md](AGENTS.md) for the architecture and contributor notes. Licensed under GPL-3.0.

@@ -8,10 +8,15 @@ export type ToWorker =
    * when absent). The worker starts after this.
    */
   | { type: 'connect'; frames: MessagePort; preset?: string }
+  /** Replace the running simulation with a bundled preset (keeps play/pause). */
+  | { type: 'load'; preset: string }
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'step' };
 
 export type FromWorker =
   /** `physicsMs`: wall-clock time the physics took for the latest frame. */
-  { type: 'timing'; physicsMs: number } | { type: 'error'; message: string };
+  | { type: 'timing'; physicsMs: number }
+  /** A preset finished loading and is now the running simulation. */
+  | { type: 'loaded'; preset: string; particles: number }
+  | { type: 'error'; message: string };

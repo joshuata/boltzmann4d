@@ -9,26 +9,31 @@ import { ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const post = (message: FromWorker) => scope.postMessage(message);
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+let frames: MessagePort | null = null;
 let threadController: ThreadController | null = null;
-// Controls that arrive while the settings file is still loading.
-let pausedBeforeStart = false;
+let paused = false;
+/** Bumped per load request, so a slow load can't replace a newer one. */
+let loadGeneration = 0;
 
 scope.onmessage = (event: MessageEvent<ToWorker>) => {
   const message = event.data;
   switch (message.type) {
     case 'connect':
-      start(message.frames, message.preset).catch((error: unknown) => {
-        post({ type: 'error', message: error instanceof Error ? error.message : String(error) });
-      });
+      frames = message.frames;
+      void load(message.preset);
+      break;
+    case 'load':
+      void load(message.preset);
       break;
     case 'play':
-      if (threadController) threadController.setPaused(false);
-      else pausedBeforeStart = false;
+      paused = false;
+      threadController?.setPaused(false);
       break;
     case 'pause':
-      if (threadController) threadController.setPaused(true);
-      else pausedBeforeStart = true;
+      paused = true;
+      threadController?.setPaused(true);
       break;
     case 'step':
       threadController?.advanceOneFrame();
@@ -36,25 +41,58 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
   }
 };
 
-async function start(frames: MessagePort, preset?: string): Promise<void> {
-  const send = (message: RenderStream, transfer: Transferable[]) =>
-    frames.postMessage(message, transfer);
+/**
+ * Loads a preset (default.set when absent) and starts running it, replacing the current
+ * simulation. If the preset can't be loaded or isn't supported yet, reports the error and
+ * keeps the current simulation running. Paused stays paused.
+ */
+async function load(preset?: string): Promise<void> {
+  const generation = ++loadGeneration;
+  let simulation: Simulation;
+  let typeColors: number[];
+  try {
+    const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
+    const { settings } = loadSettings(text);
+    simulation = new Simulation(settings);
+    typeColors = settings.species.map((s) => s.type.defaultColor);
+  } catch (error) {
+    if (generation === loadGeneration) {
+      post({ type: 'error', message: `Can't load ${preset ?? 'default'}: ${errorText(error)}` });
+    }
+    return;
+  }
+  if (generation !== loadGeneration || !frames) return;
 
-  const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
-  const { settings } = loadSettings(text);
-  const simulation = new Simulation(settings);
+  threadController?.stopSimulationThreads();
+  const port = frames;
+  const send = (message: RenderStream, transfer: Transferable[]) =>
+    port.postMessage(message, transfer);
+  send({ type: 'scene', scene: sceneOf(simulation, typeColors) }, []);
+
+  threadController = new ThreadController(simulation, (frame, physicsMs) => {
+    send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
+    post({ type: 'timing', physicsMs });
+  });
+  threadController.setPaused(paused);
+  threadController.startSimulationThreads();
+  // While paused, show the starting state straight away (a no-op while running).
+  threadController.advanceOneFrame();
+  post({ type: 'loaded', preset: preset ?? 'default', particles: simulation.particles.count });
+}
+
+function sceneOf(simulation: Simulation, typeColors: number[]): SceneInfo {
   const p = simulation.particles;
   const arena = simulation.arena;
   const divided =
     arena.type === ArenaType.DIVIDED_ARENA || arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
-  const scene: SceneInfo = {
+  return {
     dimension: simulation.dimension,
-    arenaXSize: simulation.arena.xSize,
-    arenaYSize: simulation.arena.ySize,
-    arenaZSize: simulation.arena.zSize,
+    arenaXSize: arena.xSize,
+    arenaYSize: arena.ySize,
+    arenaZSize: arena.zSize,
     radii: p.radius.slice(),
     types: p.type.slice(),
-    typeColors: settings.species.map((s) => s.type.defaultColor),
+    typeColors,
     divider: divided
       ? {
           leftX: arena.barrierLeftX,
@@ -64,12 +102,4 @@ async function start(frames: MessagePort, preset?: string): Promise<void> {
         }
       : undefined,
   };
-  send({ type: 'scene', scene }, [scene.radii.buffer, scene.types.buffer]);
-
-  threadController = new ThreadController(simulation, (frame, physicsMs) => {
-    send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
-    post({ type: 'timing', physicsMs });
-  });
-  threadController.setPaused(pausedBeforeStart);
-  threadController.startSimulationThreads();
 }
