@@ -1,5 +1,7 @@
 # 0004: Statistics and charts
 
+_Archived 2026-11-09: steps 1–4 are done; step 5 is scheduled in plan 0006, Phases 2 and 3._
+
 Plan 0001 step 5 (and the chart part of step 7): port the Java app's statistics, its theoretical predictions (`Formulas`), and the histogram/history display, starting with the speed distribution against Maxwell–Boltzmann theory.
 
 ## What the Java app does
