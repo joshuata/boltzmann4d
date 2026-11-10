@@ -30,3 +30,13 @@ export {
   type ResolvedScenario,
   type ParticleSpecies,
 } from './resolve';
+export { loadPresetScenario, readScenarioFile, type ScenarioFile } from './sources';
+export {
+  ARENA_SIZE_LIMITS,
+  SPECIES_LIMITS,
+  describeSpecies,
+  scenarioProblems,
+  withSpecies,
+  type SpeciesSetup,
+  type SpeciesSummary,
+} from './edit';

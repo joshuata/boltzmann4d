@@ -10,6 +10,7 @@
   import PanelRightOpenIcon from '@lucide/svelte/icons/panel-right-open';
   import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
   import StepForwardIcon from '@lucide/svelte/icons/step-forward';
+  import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
   import { untrack } from 'svelte';
   import ArenaOptions from './ui/ArenaOptions.svelte';
   import PistonPanel from './ui/PistonPanel.svelte';
@@ -20,6 +21,7 @@
   import { missingBrowserFeatures } from './ui/browser-support';
   import { rotateView } from './ui/rotate-view';
   import { SimulationClient } from './ui/simulation.svelte';
+  import type { ScenarioSource } from './worker';
 
   // LayerChart is most of the UI bundle, so the statistics panel loads after the arena.
   const statisticsPanel = import('./ui/StatisticsPanel.svelte');
@@ -27,9 +29,20 @@
   interface Props {
     /** Bundled preset to run (file name without `.set`). Changing it loads the new preset. */
     preset?: string;
+    /**
+     * A scenario to run instead of a preset, e.g. from a file the user opened; `name` labels
+     * it in errors. Passing a different object loads it.
+     */
+    scenario?: { name: string; scenario: ScenarioInput };
   }
 
-  let { preset = 'default' }: Props = $props();
+  let { preset = 'default', scenario }: Props = $props();
+
+  const source = $derived<ScenarioSource>(
+    scenario
+      ? { kind: 'scenario', name: scenario.name, scenario: scenario.scenario }
+      : { kind: 'preset', name: preset },
+  );
 
   let canvas: HTMLCanvasElement;
   /** The whole viewer (arena and sidebar), which goes fullscreen. */
@@ -54,7 +67,7 @@
     if (missing.length > 0) return;
     const client = new SimulationClient(
       canvas,
-      untrack(() => preset),
+      untrack(() => source),
     );
     sim = client;
     return () => {
@@ -63,10 +76,10 @@
     };
   });
 
-  // Follow later changes to `preset` (loadPreset ignores the one already running).
+  // Follow later changes to `preset` or `scenario` (load ignores the one already running).
   $effect(() => {
-    const name = preset;
-    untrack(() => sim?.loadPreset(name));
+    const next = source;
+    untrack(() => sim?.load(next));
   });
 </script>
 

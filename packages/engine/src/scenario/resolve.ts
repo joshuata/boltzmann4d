@@ -8,7 +8,7 @@
 // velocities and temperature scaling) follow Java exactly, including the order in which
 // random numbers are drawn.
 import { ParticleType, DefaultParticleInfo } from '../sim/particle-type';
-import { ArenaType } from '../sim/simulation-info';
+import { ARENA_DIVIDER_RADIUS, ArenaType } from '../sim/simulation-info';
 import type { DividerThermalMode } from '../sim/simulation-info';
 import { avgKineticEnergy, speed as speedFromEnergy } from '../stats/formulas';
 import { convert, Energy } from '../utils/units';
@@ -123,7 +123,7 @@ export function resolveScenario(
     holeDiameter: nmToM(Math.round(a.holeSize)),
     maxwellDemonMode: modes.maxwellDemon,
     reactionMode: modes.reaction,
-    species: resolveSpecies(scenario.particleGroups, a.dimensions, arena, random),
+    species: resolveSpecies(scenario.particleGroups, a.dimensions, arena, a.boundary, random),
 
     paused: run.paused,
     simulationSpeed: run.speed,
@@ -171,6 +171,7 @@ function resolveSpecies(
   groups: ParticleGroup[],
   dimension: Dimension,
   arena: { x: number; y: number; z: number },
+  boundary: Boundary,
   random: () => number,
 ): ParticleSpecies[] {
   const red: SpeciesBuilder = {
@@ -198,10 +199,13 @@ function resolveSpecies(
     );
     const firstInGroup = species.velocities.length;
 
+    const side = randomSide(boundary, pg.color, arena.x);
     for (const block of pg.randomlyPlaced) {
       for (let i = 0; i < block.count; i++) {
         species.positions.push([
-          random() * (arena.x - 2 * radius) + radius,
+          side
+            ? random() * (side.max - side.min - 2 * radius) + side.min + radius
+            : random() * (arena.x - 2 * radius) + radius,
           random() * (arena.y - 2 * radius) + radius,
           random() * (arena.z - 2 * radius) + radius,
         ]);
@@ -238,6 +242,23 @@ function resolveSpecies(
       positions: Float64Array.from(s.positions.flat()),
       velocities: Float64Array.from(s.velocities.flat()),
     }));
+}
+
+/**
+ * Where randomly placed particles go along x in a divided arena (FILE-3), as the Java app's
+ * settings dialog does it (SimSettingsController.randomlyPlaceParticles): red on the left and
+ * blue on the right of a closed divider, everything on the left of one with a hole so it can
+ * leak through. Undefined means the whole width.
+ */
+function randomSide(
+  boundary: Boundary,
+  color: ParticleGroup['color'],
+  width: number,
+): { min: number; max: number } | undefined {
+  const left = { min: 0, max: width / 2 - ARENA_DIVIDER_RADIUS };
+  if (boundary === 'HOLE') return left;
+  if (boundary !== 'DIVIDED') return undefined;
+  return color === 'RED' ? left : { min: width / 2 + ARENA_DIVIDER_RADIUS, max: width };
 }
 
 /** theta is the azimuth, phi the polar angle; 1D keeps only the sign of cos(theta). */

@@ -1,38 +1,59 @@
-<!-- Home: choose a bundled simulation, upload settings, or open the editor. -->
+<!-- Home: the bundled simulations grouped by topic, each with what it shows and a link per
+     dimension; plus upload, the editor and the quick start. -->
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { presetCatalog } from '@boltzmann4d/engine/io/presets';
   import { Button } from '@boltzmann4d/ui/button';
-
-  const groups = [
-    { title: '2D', presets: presetCatalog.filter((p) => p.dimensions === 2) },
-    { title: '3D', presets: presetCatalog.filter((p) => p.dimensions === 3) },
-  ];
+  import { presetGuide } from '../lib/preset-guide';
 </script>
 
-<svelte:head><title>Boltzmann 4D</title></svelte:head>
+<svelte:head>
+  <title>Boltzmann 4D</title>
+  <meta
+    name="description"
+    content="A kinetic theory demonstrator in the browser: an event-driven hard-sphere gas in 2D and 3D."
+  />
+</svelte:head>
 
-<div class="mx-auto max-w-3xl space-y-6 px-4 py-6">
-  <div class="space-y-2">
+<div class="mx-auto max-w-4xl space-y-8 px-4 py-6">
+  <div class="space-y-3">
     <h1 class="text-2xl font-semibold">Boltzmann 4D</h1>
-    <p class="text-muted-foreground">
-      A kinetic theory demonstrator: an event-driven hard-sphere gas in 2D and 3D.
+    <p class="text-muted-foreground max-w-prose">
+      A kinetic theory demonstrator: watch a gas of hard spheres collide in 2D and 3D, and compare
+      what it does with the predictions of kinetic theory. Pick a simulation below to start.
     </p>
+    <nav class="flex flex-wrap gap-2" aria-label="Get started">
+      <Button variant="outline" href={resolve('/docs/[slug]', { slug: 'quick-start' })}>
+        Quick start
+      </Button>
+      <Button variant="outline" href={resolve('/upload')}>Upload settings</Button>
+      <Button variant="outline" href={resolve('/editor')}>Simulation editor</Button>
+    </nav>
   </div>
-  <nav class="flex flex-wrap gap-2" aria-label="Other tools">
-    <Button variant="outline" href={resolve('/upload')}>Upload settings</Button>
-    <Button variant="outline" href={resolve('/editor')}>Simulation editor</Button>
-  </nav>
-  {#each groups as group (group.title)}
-    <section class="space-y-2">
-      <h2 class="text-lg font-semibold">{group.title}</h2>
-      <ul class="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2">
-        {#each group.presets as preset (preset.name)}
-          <li>
-            <a
-              class="hover:bg-muted block rounded-md border px-3 py-2 text-sm"
-              href={resolve('/simulate/[preset]', { preset: preset.name })}>{preset.label}</a
-            >
+
+  {#each presetGuide as topic (topic.title)}
+    <section class="space-y-3">
+      <h2 class="text-lg font-semibold">{topic.title}</h2>
+      <ul class="grid gap-3 sm:grid-cols-2">
+        {#each topic.entries as entry (entry.title)}
+          <li class="flex flex-col gap-3 rounded-lg border p-4">
+            <div class="flex-1 space-y-1">
+              <h3 class="font-medium">{entry.title}</h3>
+              {#if entry.description}
+                <p class="text-muted-foreground text-sm">{entry.description}</p>
+              {/if}
+            </div>
+            <div class="flex gap-2">
+              {#each entry.presets as preset (preset.name)}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  href={resolve('/simulate/[preset]', { preset: preset.name })}
+                  aria-label={`${entry.title} in ${preset.dimensions}D`}
+                >
+                  {preset.dimensions}D
+                </Button>
+              {/each}
+            </div>
           </li>
         {/each}
       </ul>

@@ -11,7 +11,14 @@ import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/p
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
-import type { ArenaInfo, ArenaOptions, FromWorker, PistonInfo, ToWorker } from '../worker';
+import type {
+  ArenaInfo,
+  ArenaOptions,
+  FromWorker,
+  PistonInfo,
+  ScenarioSource,
+  ToWorker,
+} from '../worker';
 import SimWorker from '../worker/sim.worker?worker';
 
 export class SimulationClient {
@@ -22,17 +29,17 @@ export class SimulationClient {
    * (browsers time to about 0.1 ms here, so single frames are too coarse to show).
    */
   physicsMs = $state(0);
-  /** The user's multiplier on the preset's simulation speed (1 = as the preset sets it). */
+  /** The user's multiplier on the scenario's simulation speed (1 = as the scenario sets it). */
   rateScale = $state(1);
-  /** Set if the simulation or the renderer failed, or a preset couldn't be loaded. */
+  /** Set if the simulation or the renderer failed, or a scenario couldn't be loaded. */
   error = $state<string | null>(null);
-  /** The preset running now (or being loaded), by file name without `.set`. */
-  preset = $state('default');
+  /** What is running now (or being loaded). */
+  source = $state.raw<ScenarioSource>({ kind: 'preset', name: 'default' });
   /** Particles in the running simulation (0 until it has loaded). */
   particleCount = $state(0);
   /** Dimension of the running simulation (3D views can be turned). */
   dimension = $state<Dimension>(2);
-  /** How particles are coloured, and trace mode (the settings file's until changed). */
+  /** How particles are coloured, and trace mode (the scenario's until changed). */
   colorMode = $state<ColorMode>('NORMAL');
   trace = $state({ enabled: false, pointSize: 2 });
   /** The arena's size in m, and the canvas's in CSS pixels (for the scale bar). */
@@ -41,9 +48,9 @@ export class SimulationClient {
   #viewChosen = false;
   /** Maxwell's demon: whether the hole is open (null without the demon). */
   holeOpen = $state<boolean | null>(null);
-  /** True while a preset is loading. */
+  /** True while a scenario is loading. */
   loading = $state(true);
-  /** Arena options the running preset can take, and which are on (null until loaded). */
+  /** Arena options the running scenario can take, and which are on (null until loaded). */
   arena = $state.raw<ArenaInfo | null>(null);
   /** Piston arenas: limits, and the piston's level and motion as of the latest frame. */
   piston = $state.raw<(PistonInfo & { level: number; moving: boolean }) | null>(null);
@@ -77,8 +84,11 @@ export class SimulationClient {
   #disposed = false;
   readonly #resizeObserver: ResizeObserver;
 
-  /** `preset`: the bundled preset to start with (file name without `.set`). */
-  constructor(canvas: HTMLCanvasElement, preset = 'default') {
+  /** `source`: what to start with (the default preset when absent). */
+  constructor(
+    canvas: HTMLCanvasElement,
+    source: ScenarioSource = { kind: 'preset', name: 'default' },
+  ) {
     const channel = new MessageChannel();
     const size = () => viewSize(canvas);
 
@@ -145,7 +155,7 @@ export class SimulationClient {
         case 'timing':
           this.physicsMs += 0.05 * (message.physicsMs - this.physicsMs);
           this.#framesThisSecond++;
-          // A newly loaded preset starts again from 0: count only forward progress.
+          // A newly loaded scenario starts again from 0: count only forward progress.
           this.#simulatedThisSecond += Math.max(0, message.time - this.#lastFrameTime);
           this.#lastFrameTime = message.time;
           if ((message.holeOpen ?? null) !== this.holeOpen) {
@@ -164,7 +174,6 @@ export class SimulationClient {
           this.statistics = message.summary;
           break;
         case 'loaded':
-          this.preset = message.preset;
           this.particleCount = message.particles;
           this.arena = message.arena;
           this.piston = message.piston ? { ...message.piston, level: 0, moving: false } : null;
@@ -183,25 +192,27 @@ export class SimulationClient {
           break;
       }
     };
-    this.preset = preset;
-    this.#send({ type: 'connect', frames: channel.port1, preset }, [channel.port1]);
+    this.source = source;
+    this.#send({ type: 'connect', frames: channel.port1, source: cloneable(source) }, [
+      channel.port1,
+    ]);
     this.#rateTimer = setInterval(() => this.#updateRates(), 1000);
   }
 
-  /** Replaces the running simulation with a bundled preset. */
-  loadPreset(name: string): void {
-    if (name === this.preset && !this.error) return;
-    this.preset = name;
+  /** Replaces the running simulation; does nothing if `source` is already running. */
+  load(source: ScenarioSource): void {
+    if (sameSource(source, this.source) && !this.error) return;
+    this.source = source;
     this.loading = true;
-    this.#send({ type: 'load', preset: name });
+    this.#send({ type: 'load', source: cloneable(source) });
   }
 
-  /** Reloads the running preset with these arena options (the simulation starts over). */
+  /** Reloads the running scenario with these arena options (the simulation starts over). */
   setArenaOptions(options: ArenaOptions): void {
     this.loading = true;
     this.#send({
       type: 'load',
-      preset: this.preset,
+      source: cloneable(this.source),
       arena: { ...this.arena?.options, ...options },
     });
   }
@@ -225,14 +236,14 @@ export class SimulationClient {
     this.#send({ type: 'setHoleOpen', open });
   }
 
-  /** Colours particles by type, speed or kinetic energy (kept across presets). */
+  /** Colours particles by type, speed or kinetic energy (kept across scenarios). */
   setColorMode(mode: ColorMode): void {
     this.#viewChosen = true;
     this.colorMode = mode;
     this.#toRenderer({ type: 'colorMode', mode });
   }
 
-  /** Trace mode: particles leave marks (2D; kept across presets). */
+  /** Trace mode: particles leave marks (2D; kept across scenarios). */
   setTrace(enabled: boolean): void {
     this.#viewChosen = true;
     this.trace = { ...this.trace, enabled };
@@ -264,7 +275,7 @@ export class SimulationClient {
     this.#send({ type: paused ? 'pause' : 'play' });
   }
 
-  /** Speeds the simulation up or slows it down relative to the preset's speed. */
+  /** Speeds the simulation up or slows it down relative to the scenario's speed. */
   setRateScale(scale: number): void {
     if (!Number.isFinite(scale) || scale <= 0) return;
     this.rateScale = scale;
@@ -315,3 +326,14 @@ function viewSize(canvas: HTMLCanvasElement): ViewSize {
     pixelRatio: window.devicePixelRatio,
   };
 }
+
+/** Presets match by name; supplied scenarios only when they are the same object. */
+function sameSource(a: ScenarioSource, b: ScenarioSource): boolean {
+  if (a.kind === 'preset' || b.kind === 'preset') {
+    return a.kind === b.kind && a.name === b.name;
+  }
+  return a.scenario === b.scenario;
+}
+
+/** A copy postMessage can clone (pages may pass reactive proxies). */
+const cloneable = (source: ScenarioSource): ScenarioSource => $state.snapshot(source);
