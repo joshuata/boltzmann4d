@@ -4,7 +4,7 @@ A phased plan for bringing the requirements in `docs/specs/` into the app. Each 
 
 ## Context
 
-`docs/specs/` lists what the app must do, with requirement IDs and 28 classroom scenarios (`SCN-*`). Today the app covers part of it: 2D and 3D hard-sphere physics (walls, periodic, divider, hole, the demon gate without a UI toggle); in 2D also the conducting divider, the movable piston with its thermostat, pair wells, the attractive wall and red↔blue reactions, turned on from the sidebar's Arena box; loading bundled presets from a SvelteKit site with 2D/3D menus; play/pause/step, a rate slider and collapsible performance readouts; and the Instantaneous Speed histogram with Red/Blue/Both, checked against kinetic theory (plans 0002, 0003, 0004 steps 1–4, 0005 steps 1–5, 0007). There are no particle controls, Restart button, pressure, 1D, 3D piston or reactions, reverse, trace, colouring, save or export.
+`docs/specs/` lists what the app must do, with requirement IDs and 28 classroom scenarios (`SCN-*`). Today the app covers part of it: 2D and 3D hard-sphere physics (walls, periodic, divider, hole, the demon gate without a UI toggle); in 2D also the conducting divider, the movable piston with its thermostat, pair wells, the attractive wall and red↔blue reactions, turned on from the sidebar's Arena box; loading bundled presets from a SvelteKit site with 2D/3D menus; play/pause/step, a rate slider and collapsible performance readouts; colour by type, speed or KE (2D and 3D), trace (2D), the demon's closed hole and a scale bar; and the Instantaneous Speed histogram with Red/Blue/Both, checked against kinetic theory (plans 0002, 0003, 0004 steps 1–4, 0005 steps 1–6, 0007). There are no particle controls, Restart button, pressure, 1D, 3D piston or reactions, reverse, 3D trace, coloured histogram bars, save or export.
 
 The aim is to **enable the learning outcomes, not replicate the desktop app exactly**. Phases are ordered by the classroom scenarios they unlock, and each one says where it deliberately simplifies the desktop UI.
 
@@ -49,7 +49,7 @@ _Not started._ Finishes plan 0004 step 5.
 
 - **Requirements:** STAT-1, 3–5, 7–17, 19–23; PRED-1–7, 11; VIEW-4; OPT-4.
 - **Unlocks:** SCN-3, 4, 5, 6; history plots for SCN-7–13.
-- **Work:** the remaining statistics (velocity components, kinetic energy, free path, time per collision, collision rate, the per-particle averages) behind a plot picker; the Width toggle; editable axis limits that clear only that plot's cumulative data; a history view; the forget-time option; finite-system corrections (with Java bug 2 fixed, see plan 0004); Color by Speed / KE for particles (2D from plan 0005 step 6; add 3D) and the matching bar colours.
+- **Work:** the remaining statistics (velocity components, kinetic energy, free path, time per collision, collision rate, the per-particle averages) behind a plot picker; the Width toggle; editable axis limits that clear only that plot's cumulative data; a history view; the forget-time option; finite-system corrections (with Java bug 2 fixed, see plan 0004); the histogram bar colours matching Color by Speed / KE (particle colouring is done in 2D and 3D, plan 0005 step 6).
 - **Simplify:** history may cover the last 150 summaries rather than frames; per-particle-average plots show a note instead of offering a cumulative view (STAT-18); stepping plots with + and − is optional.
 
 ### Phase 4: Chaos, reversibility and trajectories
@@ -58,7 +58,7 @@ _Not started._
 
 - **Requirements:** SIM-4, 32; CTRL-2 (doubling steps), CTRL-6; VIEW-5.
 - **Unlocks:** SCN-21, 22; the trace for SCN-15 and `2Dliquid`.
-- **Work:** `reverse()` in `Simulation` (flip velocities, re-predict); trace mode in `packages/simulator/src/render` with dot size and Clear (2D from plan 0005 step 6; add dot sprites in 3D); a `2Dequal` test that the halves match and then diverge around 95–120 ps.
+- **Work:** `reverse()` in `Simulation` (flip velocities, re-predict); trace in 3D (dot sprites) and a Clear control (2D trace with `trace_point_size` is done, plan 0005 step 6); a `2Dequal` test that the halves match and then diverge around 95–120 ps.
 
 ### Phase 5: 1D
 

@@ -2,7 +2,7 @@
 
 Plan 0001 (archived) steps 6–8 for 2D: port every remaining 2D physics mode, its run-time controls, and the 2D rendering baseline. 3D is a separate effort (another session).
 
-_In progress: the physics modes (steps 1–5) are done except the heat reservoir (#34); the rendering baseline, the hole toggle and restart remain._
+_In progress: the physics modes (steps 1–5) are done except the heat reservoir (#34); so is the rendering baseline (step 6) except 3D trace. The hole toggle and a Restart control remain._
 
 ## Where 2D stands
 
@@ -26,15 +26,15 @@ All done except the heat reservoir; the table records what each one ported.
 | Attractive wall and heat reservoir | `predBoundaryCol` y-branch, gravity-well collide, `PhysicsFormulas.calculateVelocityChange` (~120 lines) | Settings dialog, Energy Wells tab; run-time reservoir temperature | — |
 | Red↔blue reactions | `Particle2D.collideWith` reaction branch, `ReactionRelationship` (~90 lines) | Settings dialog, Reactions tab | Per-particle colour in engine, statistics and renderer |
 
-Rendering for 2D (`vendor/boltzmann3d/docs/rendering-baseline.md`):
+Rendering for 2D (`vendor/boltzmann3d/docs/rendering-baseline.md`), all done in step 6 unless noted:
 
 - **Colour modes:** Normal, Speed and KE. The hue comes from speed or KE against 2.5× the predicted average. Frames need velocities.
 - **Trace mode** with `trace_point_size`, cleared on load, restart and resize.
-- **Piston drawing:** valve slab and shaft, positioned within the frame. _Done (step 2)._
+- **Piston drawing:** valve slab and shaft, positioned within the frame. _Step 2._
 - **Maxwell demon closed state**, drawn as a solid divider.
-- **Palettes:** `color_scheme` DARK, LIGHT and CUSTOM.
-- **Particle colours that change** during a run (reactions). _Done (step 5)._
-- **Scale ruler** in nm.
+- **Palettes:** `color_scheme` DARK, LIGHT and CUSTOM. _Not needed: Java never reads `color_scheme`._
+- **Particle colours that change** during a run (reactions). _Step 5._
+- **Scale ruler** in nm. _A scale bar replaces the Swing rulers._
 
 Run-time controls: the piston panel (step 2) and simulation speed (`ThreadController` paces by wall-clock time, scaled by `simulation_speed` and the rate slider) are done. Still missing: the hole toggle (click the arena) and a Restart control (today only changing an arena option restarts).
 
@@ -70,6 +70,6 @@ Decision (2026-11-09): replicate Java where its behaviour is defensible, and pro
 3. **Pair energy wells:** engine (cell size, sparse last-event map) and parity fixture. _Done: `predictPair2D` predicts entering and leaving a pair's well (non-periodic arenas, as in Java) from the pair's last event, kept in a sparse map; `collide2D` performs entering, leaving and bouncing off the well's edge (WELL_REFLECT). Cells cover the largest well. `2Dwells` and `2Dwells-mixture` scenario fixtures (wells set through ParityDump's `wells` directive) match bit for bit; kinetic plus well energy is conserved to 1e-9, also with deep wells. The Arena box offers attractive wells (radius multiple, depth per species)._
 4. **Attractive wall and heat reservoir:** engine with the bugs fixed, conservation tests, reservoir temperature control. _Attractive wall done, with Java's bugs fixed: crossing the well's top changes the kinetic energy by the depth (Java changed the speed), x keeps moving, and particles without the energy to leave bounce back. Kinetic plus well energy is conserved to 1e-9, and a dilute gas fills the well by the Boltzmann factor (within 2.5%). The heat reservoir is deferred to joshuata/boltzmann4d#34: Java's rule settles the gas near half the reservoir temperature, and a correct thermal wall needs a seeded random generator in `packages/engine/src/sim`._
 5. **Reactions:** per-particle colour in the engine, frames and renderer, plus a parity fixture. _Done: `Particles.color` (the colour shown; type, mass and radius stay), reactions in `collide2D`, frames carry colours and the 2D view recolours, statistics bin by colour. `2Dreactions` and `2Dreactions-suppressed` scenario fixtures (ParityDump's `reactions` directive) match bit for bit, final colours included. Kinetic plus chemical energy is conserved to 1e-9 and the equilibrium [blue]/[red] matches exp(−ΔE/2kT) within 2.5%, so Java's model is sound. The Arena box offers reactions on one-species 2D presets; `reaction_mode TRUE` (2Dequil) now turns them on with the tab's defaults (8 and 4 kJ/mol), where Java ignored it. Statistics still weight predictions by the starting counts per colour._
-6. **Rendering baseline:** colour modes, trace, demon closed state, palettes, scale ruler.
+6. **Rendering baseline:** colour modes, trace, demon closed state, palettes, scale ruler. _Done: colour by type, speed or kinetic energy (hue 0.7 → 0 up to 2.5 × the predicted average, as Java's colourers; 2D and 3D); trace mode in 2D (marks accumulated in an off-screen target, cleared on resize, restart or turning it off; `2Dliquid` starts with it on); the demon's hole drawn closed while it is; Java's grey piston; a scale bar over the 2D arena in place of the Swing rulers. Palettes aren't needed: Java never reads `color_scheme` and always uses one palette. A View box in the sidebar picks the colour mode and trace. 3D trace is still to do._
 7. **Run-time controls:** hole toggle and restart. _Simulation speed is done: wall-clock frame pacing in `packages/simulator/src/worker/thread-controller.ts`, with the rate slider on top._
 8. **Settings:** the parts of the Simulation Settings dialog that turn these modes on (arena, wells, reactions), as Svelte components. _Done for the ported modes: the Arena box (`packages/simulator/src/ui/ArenaOptions.svelte`) offers the movable piston, conducting divider, pair wells, attractive wall and reactions, and restarts on a change. The heat reservoir waits on #34; a full settings editor is plan 0008._
