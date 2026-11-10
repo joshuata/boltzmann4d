@@ -20,6 +20,8 @@ export class SimulationClient {
    * (browsers time to about 0.1 ms here, so single frames are too coarse to show).
    */
   physicsMs = $state(0);
+  /** The user's multiplier on the preset's simulation speed (1 = as the preset sets it). */
+  rateScale = $state(1);
   /** Set if the simulation or the renderer failed, or a preset couldn't be loaded. */
   error = $state<string | null>(null);
   /** The preset running now (or being loaded), by file name without `.set`. */
@@ -164,6 +166,13 @@ export class SimulationClient {
   setPaused(paused: boolean): void {
     this.paused = paused;
     this.#send({ type: paused ? 'pause' : 'play' });
+  }
+
+  /** Speeds the simulation up or slows it down relative to the preset's speed. */
+  setRateScale(scale: number): void {
+    if (!Number.isFinite(scale) || scale <= 0) return;
+    this.rateScale = scale;
+    this.#send({ type: 'rate', scale });
   }
 
   advanceOneFrame(): void {

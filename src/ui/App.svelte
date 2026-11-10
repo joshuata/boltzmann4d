@@ -1,6 +1,7 @@
 <script lang="ts">
   import PlayPauseButton from './PlayPauseButton.svelte';
   import PresetPicker from './PresetPicker.svelte';
+  import RateSlider from './RateSlider.svelte';
   import { SimulationClient } from './simulation.svelte';
 
   // LayerChart is most of the UI bundle, so the statistics panel loads after the arena.
@@ -48,6 +49,11 @@
         </svg>
       </button>
     </div>
+    <RateSlider
+      value={sim?.rateScale ?? 1}
+      disabled={!sim}
+      onChange={(scale) => sim?.setRateScale(scale)}
+    />
     {#if sim?.error}
       <p class="error" role="alert">Simulation failed to start: {sim.error}</p>
     {:else if sim}

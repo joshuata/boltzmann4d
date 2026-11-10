@@ -18,6 +18,8 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
 let frames: MessagePort | null = null;
 let threadController: ThreadController | null = null;
 let paused = false;
+/** The user's speed multiplier on top of each preset's own speed. */
+let rateScale = 1;
 /** Bumped per load request, so a slow load can't replace a newer one. */
 let loadGeneration = 0;
 
@@ -41,6 +43,10 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       break;
     case 'step':
       threadController?.advanceOneFrame();
+      break;
+    case 'rate':
+      rateScale = message.scale;
+      threadController?.setRateScale(rateScale);
       break;
   }
 };
@@ -95,7 +101,7 @@ async function load(preset?: string): Promise<void> {
         post({ type: 'statistics', summary: statistics.summary(simulation.time) });
       }
     },
-    { speed },
+    { speed, rateScale },
   );
   threadController = controller;
   threadController.setPaused(paused);
