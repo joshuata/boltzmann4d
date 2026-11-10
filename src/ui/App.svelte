@@ -3,6 +3,9 @@
   import PresetPicker from './PresetPicker.svelte';
   import { SimulationClient } from './simulation.svelte';
 
+  // LayerChart is most of the UI bundle, so the statistics panel loads after the arena.
+  const statisticsPanel = import('./StatisticsPanel.svelte');
+
   let canvas: HTMLCanvasElement;
   let sim = $state<SimulationClient | null>(null);
 
@@ -60,25 +63,36 @@
         Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}
       </p>
     {/if}
+    {#if sim?.statistics}
+      {#await statisticsPanel then { default: StatisticsPanel }}
+        <StatisticsPanel summary={sim.statistics} />
+      {/await}
+    {/if}
   </aside>
 </main>
 
 <style>
+  /* The page never scrolls: the arena stays put and the sidebar scrolls on its own. */
   main {
     display: grid;
     grid-template-columns: 1fr 320px;
-    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
   }
   canvas {
     width: 100%;
     height: 100%;
     display: block;
     min-width: 0;
+    min-height: 0;
   }
   aside {
     background: var(--panel-bg);
     border-left: 1px solid var(--panel-border);
     padding: 1rem;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   h1 {
     font-size: 1.25rem;
@@ -97,9 +111,11 @@
     gap: 0.5rem;
   }
   @media (max-width: 700px) {
+    /* Phones: the arena takes a fixed share of the top of the screen and the sidebar
+       scrolls in the space below it. */
     main {
       grid-template-columns: 1fr;
-      grid-template-rows: 1fr auto;
+      grid-template-rows: min(55dvh, 90vw) 1fr;
     }
     aside {
       border-left: none;

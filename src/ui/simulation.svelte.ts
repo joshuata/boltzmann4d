@@ -8,6 +8,7 @@
 import type { Renderer, ViewSize } from '../render';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import RenderWorker from '../render/render.worker?worker';
+import type { StatisticsSummary } from '../stats/summary';
 import type { FromWorker, ToWorker } from '../worker';
 import SimWorker from '../worker/sim.worker?worker';
 
@@ -27,6 +28,8 @@ export class SimulationClient {
   particleCount = $state(0);
   /** True while a preset is loading. */
   loading = $state(true);
+  /** Latest statistics from the physics worker (about once a second); null until the first. */
+  statistics = $state.raw<StatisticsSummary | null>(null);
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
   /** Simulation frames the physics delivered per second, over the last second. */
@@ -106,6 +109,9 @@ export class SimulationClient {
         case 'timing':
           this.physicsMs += 0.05 * (message.physicsMs - this.physicsMs);
           this.#framesThisSecond++;
+          break;
+        case 'statistics':
+          this.statistics = message.summary;
           break;
         case 'loaded':
           this.preset = message.preset;

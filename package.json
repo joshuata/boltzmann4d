@@ -15,6 +15,7 @@
     "format": "hk fix --all"
   },
   "dependencies": {
+    "layerchart": "^2.9.2",
     "ohm-js": "^17.5.0",
     "three": "^0.187.0"
   },
