@@ -1,0 +1,50 @@
+{
+  // Open this file (File > Open Workspace from File) instead of the repo folder.
+  // Each workspace package is its own folder so the Svelte language server runs from the
+  // package and resolves its dependencies there (pnpm doesn't hoist them to the root).
+  "folders": [
+    {
+      "name": "root",
+      "path": "."
+    },
+    {
+      "name": "web",
+      "path": "apps/web"
+    },
+    {
+      "name": "engine",
+      "path": "packages/engine"
+    },
+    {
+      "name": "simulator",
+      "path": "packages/simulator"
+    },
+    {
+      "name": "simulation-editor",
+      "path": "packages/simulation-editor"
+    },
+    {
+      "name": "ui",
+      "path": "packages/ui"
+    },
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules/": true,
+      "build/": true,
+      ".svelte-kit/": true
+    },
+    "files.watcherExclude": {
+      "**/.git/objects/**": true,
+      "**/.git/subtree-cache/**": true,
+      "**/node_modules/*/**": true,
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "svelte.svelte-vscode",
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint"
+    ],
+  },
+}
