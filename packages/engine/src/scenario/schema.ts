@@ -372,14 +372,27 @@ export type ValidationResult =
 
 const describeIssues = (error: z.ZodError) => error.issues.map(describeIssue);
 
+/** Just the fields that say what kind of document this is. */
+const HeaderSchema = z.object(
+  {
+    format: ScenarioObjectSchema.shape.format,
+    version: z.union([z.literal(1), z.literal(SCENARIO_VERSION)], {
+      error: `Unsupported scenario version (this app reads versions 1 and ${SCENARIO_VERSION})`,
+    }),
+  },
+  { error: 'Not a Boltzmann 4D scenario file (expected a JSON object)' },
+);
+
 /**
  * Checks a parsed JSON value against the schema, with one readable line per problem. Version 1
  * documents are checked against the version 1 schema (so problems name their own paths), then
  * converted to version 2.
  */
 export function validateScenario(value: unknown): ValidationResult {
-  const version = (value as { version?: unknown } | null)?.version;
-  if (version === 1) {
+  // Another kind of document, or another version: say only that, not every field it lacks.
+  const header = HeaderSchema.safeParse(value);
+  if (!header.success) return { success: false, problems: describeIssues(header.error) };
+  if (header.data.version === 1) {
     const v1 = ScenarioV1Schema.safeParse(value);
     if (!v1.success) return { success: false, problems: describeIssues(v1.error) };
     value = migrateV1(v1.data);

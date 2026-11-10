@@ -11,7 +11,7 @@ Turn a feature idea into a researched GitHub issue with an implementation plan a
 
 - Do not edit, create or delete files in the repo, and do not commit, branch, push or open PRs. That includes `.agents/plans/`: whoever implements the issue copies the plan there.
 - Shell commands are for reading only (`git log`, `grep`, `gh issue list`, …). Do not run installs, builds, formatters or tests that write files.
-- The only things this skill creates are the GitHub issue, its plan comment, and (if available) a private plan artifact. Scratch files go in the agent's scratchpad or temp directory, never the repo.
+- The only things this skill creates are the GitHub issue and its plan artifact (a GitHub issue artifact, see step 5). Scratch files go in the agent's scratchpad or temp directory, never the repo.
 
 ## Workflow
 
@@ -51,7 +51,7 @@ Then ask whether to file it. Stop here if they say no or want changes; iterate o
 
 Depends on <plans/issues>. Relates to <spec IDs> in `docs/specs/<file>.md`.
 
-The detailed implementation plan is attached below.
+The detailed implementation plan is attached as the issue's plan artifact.
 ```
 
 **5. Attach the plan.** Write the plan in the same shape as `.agents/plans/*.md`, so it can be dropped in there later:
@@ -82,12 +82,20 @@ _Not started._ Tracked in joshuata/boltzmann4d#<issue>. <Dependencies.>
 - <...>
 ```
 
-Leave `NNNN` as is; the implementer picks the next free number. Then attach it in both places:
+Leave `NNNN` as is; the implementer picks the next free number. Then attach it to the issue as a [GitHub issue artifact](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/using-artifacts-with-issues) of type `plan`, so it shows in the issue's Artifacts panel, keeps a version history, and any agent can read it with `gh` or the REST API:
 
-- **Issue comment (always):** `gh issue comment <n> --body-file <plan>`, so the plan lives on GitHub for any agent.
-- **Artifact (when the agent has an Artifact/publish tool):** publish the plan as a private artifact page titled "Plan: <title>", and edit the issue body's last line to link it (`gh issue edit <n> --body-file …`). Tell the user the link is private until they share it.
+```sh
+gh issue artifact create <n> --type plan --name "<title>" --body-file <plan.md> -R joshuata/boltzmann4d
+```
 
-**6. Finish.** Reply with the issue URL, the plan comment URL and the artifact URL, and nothing else to do: no branch, no code.
+- Artifact names may only contain letters, numbers, spaces, periods, hyphens and underscores, and must start and end with a letter or number (no colons or parentheses). The `plan` type already marks it as the plan, so the name is just the plan's title.
+
+- This needs GitHub CLI 2.103 or later, which `mise.toml` pins (run `mise install`); issue artifacts are in public preview. Without them, use `POST /repos/joshuata/boltzmann4d/issues/<n>/artifacts` with `{"type": "plan", "name": …, "body": …}` via `gh api`.
+- One plan artifact per issue. To revise the plan later, edit it in place so the history is kept: `gh issue artifact list <n> --type plan` for its number, then `gh issue artifact edit <n> <artifact-number> --body-file <plan.md>`.
+- Don't post the plan as an issue comment or publish it anywhere else (gists, chat artifact pages): the issue artifact is the single copy.
+- Implementers fetch it with `gh issue artifact download <n> <artifact-number> -O .agents/plans/NNNN-<slug>.md`.
+
+**6. Finish.** Reply with the issue URL and the plan artifact URL (`gh issue artifact list <n> --json url`), and nothing else to do: no branch, no code.
 
 ## Writing style
 

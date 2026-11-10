@@ -208,6 +208,14 @@ describe('validateScenario', () => {
     expect(() => parseScenarioJson('{"hello": 1}')).toThrow(ScenarioError);
     expect(() => parseScenarioJson('{"hello": 1}')).toThrow(/Not a Boltzmann 4D scenario file/);
     expect(() => parseScenarioJson('not json')).toThrow(/Not valid JSON/);
+    expect(validateScenario({ format: 'boltzmann4d-scenario', version: 3 })).toEqual({
+      success: false,
+      problems: ['version: Unsupported scenario version (this app reads versions 1 and 2)'],
+    });
+    expect(validateScenario([1, 2])).toEqual({
+      success: false,
+      problems: ['Not a Boltzmann 4D scenario file (expected a JSON object)'],
+    });
   });
 
   it('reports .set problems as SetFileError', async () => {

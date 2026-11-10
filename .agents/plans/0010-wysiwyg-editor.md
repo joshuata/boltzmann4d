@@ -1,6 +1,6 @@
 # 0010: WYSIWYG scenario editor, drawn walls and particle kinds
 
-_In progress: steps 1 (spec) and 2 (schema v2 and palettes) are done; next is step 3._ Replaces plan 0008 step 4 (the form-based editor); builds on plan 0008 steps 2 and 3 (the worker loads a scenario JSON, a route runs a stored scenario), which must land first or alongside step 3 here.
+_In progress: steps 1 (spec) and 2 (schema v2 and palettes) are done; next is step 3._ Replaces plan 0008 step 4's form editor (on `/editor`, which already runs, saves and downloads scenarios) and builds on plan 0008 steps 2 and 3 (the worker loads a scenario; `/upload` opens files), all done. The form editor was ported to scenario version 2 in step 2 and keeps working until step 6 replaces it.
 
 ## Goal
 
@@ -63,7 +63,7 @@ A palette module in the engine (pure data, used by the renderer and the editor):
 
 ## Work
 
-Each step is one PR. Steps 2–4 are engine work and can start before plan 0008 step 2; steps 5 onward need it.
+Each step is one PR. Steps 2–4 are engine work; step 6 replaces the form editor in `packages/simulation-editor`.
 
 1. **Spec (done).** `docs/specs/editor.md` with requirement IDs: `KIND-*` (kinds, palettes, reaction rules), `WALL-*` (drawn-wall physics) and `EDIT-*` (the editor), plus STORY-29–34 in `stories.md` (a chamber, osmosis, effusion through a gate, heat conduction, chained reactions, a colour-blind check). `particles.md` and `simulation.md` note where kinds and rules extend PART-5 and SIM-25–29.
 2. **Schema v2 and palettes (done).** The version 2 schema, the v1 → v2 migration, the `.set` compatibility check, the palette module and its CVD test. Round-trip tests over every bundled preset (`.set → v1 → v2 → .set`).
