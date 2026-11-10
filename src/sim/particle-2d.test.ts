@@ -243,19 +243,33 @@ describe('2D event loop (brute force)', () => {
   it('keeps a reflecting gas in the box, without overlaps, at constant energy', () => {
     const p = randomGas(16, reflecting, 7);
     const { ke } = momentumAndEnergy(p);
+    // Plain comparisons, reported once at the end: calling expect() ~400k times in the
+    // loop made this test slow enough to time out on CI.
+    const violations: string[] = [];
+    let step = 0;
     runBruteForce(p, reflecting, 3000, () => {
+      step++;
       for (let i = 0; i < p.count; i++) {
         const r = p.radius[i]!;
-        expect(p.x[i]).toBeGreaterThanOrEqual(r - 1e-9);
-        expect(p.x[i]).toBeLessThanOrEqual(reflecting.xSize - r + 1e-9);
-        expect(p.y[i]).toBeGreaterThanOrEqual(r - 1e-9);
-        expect(p.y[i]).toBeLessThanOrEqual(reflecting.ySize - r + 1e-9);
+        const x = p.x[i]!;
+        const y = p.y[i]!;
+        if (
+          x < r - 1e-9 ||
+          x > reflecting.xSize - r + 1e-9 ||
+          y < r - 1e-9 ||
+          y > reflecting.ySize - r + 1e-9
+        ) {
+          violations.push(`step ${step}: particle ${i} outside the box at (${x}, ${y})`);
+        }
         for (let j = i + 1; j < p.count; j++) {
-          const d = Math.hypot(p.x[i]! - p.x[j]!, p.y[i]! - p.y[j]!);
-          expect(d).toBeGreaterThanOrEqual(r + p.radius[j]! - 1e-9);
+          const d = Math.hypot(x - p.x[j]!, y - p.y[j]!);
+          if (d < r + p.radius[j]! - 1e-9) {
+            violations.push(`step ${step}: particles ${i} and ${j} overlap (distance ${d})`);
+          }
         }
       }
     });
+    expect(violations.slice(0, 10)).toEqual([]);
     expect(momentumAndEnergy(p).ke).toBeCloseTo(ke, 10);
   });
 
