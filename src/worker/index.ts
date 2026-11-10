@@ -16,10 +16,13 @@ export type ToWorker =
   | { type: 'step' };
 
 export type FromWorker =
-  /** `physicsMs`: wall-clock time the physics took for the latest frame. */
-  | { type: 'timing'; physicsMs: number }
+  /**
+   * Sent with every frame. `physicsMs`: wall-clock time the physics took to produce it;
+   * `time`: its simulation time (s).
+   */
+  | { type: 'timing'; physicsMs: number; time: number }
   /** A preset finished loading and is now the running simulation. */
   | { type: 'loaded'; preset: string; particles: number }
-  /** About once a second (every SUMMARY_EVERY_FRAMES frames), and after each step. */
+  /** About once a second (every SUMMARY_INTERVAL_MS), and after each step. */
   | { type: 'statistics'; summary: StatisticsSummary }
   | { type: 'error'; message: string };

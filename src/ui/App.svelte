@@ -59,6 +59,7 @@
           2,
         )} ms/frame
       </p>
+      <p class="readout">{sim.simulatedPsPerSecond.toFixed(1)} ps simulated per second</p>
       <p class="readout">
         Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}
       </p>
