@@ -2,6 +2,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { presetCatalog } from '@boltzmann4d/engine/io/presets';
+  import { Button } from '@boltzmann4d/ui/button';
 
   const groups = [
     { title: '2D', presets: presetCatalog.filter((p) => p.dimensions === 2) },
@@ -11,46 +12,30 @@
 
 <svelte:head><title>Boltzmann 4D</title></svelte:head>
 
-<div class="page">
-  <h1>Boltzmann 4D</h1>
-  <p>A kinetic theory demonstrator: an event-driven hard-sphere gas in 2D and 3D.</p>
-  <nav class="actions" aria-label="Other tools">
-    <a href={resolve('/upload')}>Upload settings</a>
-    <a href={resolve('/editor')}>Simulation editor</a>
+<div class="mx-auto max-w-3xl space-y-6 px-4 py-6">
+  <div class="space-y-2">
+    <h1 class="text-2xl font-semibold">Boltzmann 4D</h1>
+    <p class="text-muted-foreground">
+      A kinetic theory demonstrator: an event-driven hard-sphere gas in 2D and 3D.
+    </p>
+  </div>
+  <nav class="flex flex-wrap gap-2" aria-label="Other tools">
+    <Button variant="outline" href={resolve('/upload')}>Upload settings</Button>
+    <Button variant="outline" href={resolve('/editor')}>Simulation editor</Button>
   </nav>
   {#each groups as group (group.title)}
-    <section>
-      <h2>{group.title}</h2>
-      <ul>
+    <section class="space-y-2">
+      <h2 class="text-lg font-semibold">{group.title}</h2>
+      <ul class="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2">
         {#each group.presets as preset (preset.name)}
           <li>
-            <a href={resolve('/simulate/[preset]', { preset: preset.name })}>{preset.label}</a>
+            <a
+              class="hover:bg-muted block rounded-md border px-3 py-2 text-sm"
+              href={resolve('/simulate/[preset]', { preset: preset.name })}>{preset.label}</a
+            >
           </li>
         {/each}
       </ul>
     </section>
   {/each}
 </div>
-
-<style>
-  .page {
-    max-width: 48rem;
-    margin: 0 auto;
-    padding: 1.5rem 1rem;
-  }
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-  ul {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-    gap: 0.5rem;
-    padding: 0;
-    list-style: none;
-  }
-  a {
-    color: var(--focus-ring);
-  }
-</style>

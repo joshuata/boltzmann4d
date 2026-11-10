@@ -1,8 +1,10 @@
-<!-- The simulation viewer: the arena plus its sidebar of controls, readouts and charts. -->
+<!-- The simulation viewer: the arena plus its sidebar of controls, readouts and charts.
+     It fills its container, so the page decides how big it is. -->
 <script lang="ts">
-  import { untrack, type Snippet } from 'svelte';
+  import { Button } from '@boltzmann4d/ui/button';
+  import StepForwardIcon from '@lucide/svelte/icons/step-forward';
+  import { untrack } from 'svelte';
   import PlayPauseButton from './ui/PlayPauseButton.svelte';
-  import PresetPicker from './ui/PresetPicker.svelte';
   import RateSlider from './ui/RateSlider.svelte';
   import { rotateView } from './ui/rotate-view';
   import { SimulationClient } from './ui/simulation.svelte';
@@ -13,16 +15,9 @@
   interface Props {
     /** Bundled preset to run (file name without `.set`). Changing it loads the new preset. */
     preset?: string;
-    /**
-     * Called when the user picks another preset. Without it the viewer loads the pick
-     * itself; with it the owner decides (e.g. navigates), then passes the new `preset`.
-     */
-    onPresetChange?: (name: string) => void;
-    /** Replaces the sidebar heading (e.g. with a link home). */
-    header?: Snippet;
   }
 
-  let { preset = 'default', onPresetChange, header }: Props = $props();
+  let { preset = 'default' }: Props = $props();
 
   let canvas: HTMLCanvasElement;
   let sim = $state<SimulationClient | null>(null);
@@ -46,46 +41,43 @@
   });
 </script>
 
-<main>
+<!-- Phones: the arena takes a fixed share of the top and the sidebar scrolls below it.
+     Wider screens: the arena on the left, a 320px sidebar on the right. -->
+<div
+  class="grid h-full min-h-0 grid-rows-[min(55dvh,90vw)_1fr] overflow-hidden md:grid-cols-[1fr_320px] md:grid-rows-1"
+>
   <canvas
     bind:this={canvas}
-    class:rotatable={sim?.dimension === 3}
+    class={[
+      'block size-full min-h-0 min-w-0',
+      sim?.dimension === 3 && 'cursor-grab touch-none active:cursor-grabbing',
+    ]}
     use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
     tabindex={sim?.dimension === 3 ? 0 : -1}
     aria-label={sim?.dimension === 3
       ? 'Simulation arena; drag or use the arrow keys to turn it'
       : 'Simulation arena'}
   ></canvas>
-  <aside>
-    {#if header}
-      {@render header()}
-    {:else}
-      <h1>Boltzmann 4D</h1>
-    {/if}
-    <PresetPicker
-      value={sim?.preset ?? 'default'}
-      disabled={!sim || sim.loading}
-      onChange={(name) => (onPresetChange ? onPresetChange(name) : sim?.loadPreset(name))}
-    />
-    <div class="transport" role="group" aria-label="Simulation controls">
+  <aside
+    class="bg-muted/40 min-h-0 overflow-y-auto overscroll-contain border-t p-4 md:border-t-0 md:border-l"
+  >
+    <div class="flex gap-2" role="group" aria-label="Simulation controls">
       <PlayPauseButton
         paused={sim?.paused ?? false}
         disabled={!sim}
         onToggle={(paused) => sim?.setPaused(paused)}
       />
       <!-- btnFrameStep in MainGuiFullView: enabled only while paused. -->
-      <button
-        type="button"
-        class="icon-button"
+      <Button
+        variant="outline"
+        size="icon-lg"
         disabled={!sim?.paused}
         aria-label="Step one frame"
         title="Step one frame"
         onclick={() => sim?.advanceOneFrame()}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 4.5v15l11-7.5zM16.5 4.5h3v15h-3z" />
-        </svg>
-      </button>
+        <StepForwardIcon aria-hidden="true" />
+      </Button>
     </div>
     <RateSlider
       value={sim?.rateScale ?? 1}
@@ -93,20 +85,18 @@
       onChange={(scale) => sim?.setRateScale(scale)}
     />
     {#if sim?.error}
-      <p class="error" role="alert">Simulation failed to start: {sim.error}</p>
+      <p class="text-destructive text-sm" role="alert">Simulation failed to start: {sim.error}</p>
     {:else if sim}
-      <p class="readout">
-        {sim.loading ? 'Loading…' : `${sim.particleCount} particles`}
-      </p>
-      <p class="readout">
-        {sim.simulationFps.toFixed(0)} fps ({sim.drawnFps.toFixed(0)} drawn) · physics {sim.physicsMs.toFixed(
-          2,
-        )} ms/frame
-      </p>
-      <p class="readout">{sim.simulatedPsPerSecond.toFixed(1)} ps simulated per second</p>
-      <p class="readout">
-        Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}
-      </p>
+      <div class="text-muted-foreground space-y-1 text-xs tabular-nums">
+        <p>{sim.loading ? 'Loading…' : `${sim.particleCount} particles`}</p>
+        <p>
+          {sim.simulationFps.toFixed(0)} fps ({sim.drawnFps.toFixed(0)} drawn) · physics {sim.physicsMs.toFixed(
+            2,
+          )} ms/frame
+        </p>
+        <p>{sim.simulatedPsPerSecond.toFixed(1)} ps simulated per second</p>
+        <p>Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}</p>
+      </div>
     {/if}
     {#if sim?.statistics}
       {#await statisticsPanel then { default: StatisticsPanel }}
@@ -114,65 +104,4 @@
       {/await}
     {/if}
   </aside>
-</main>
-
-<style>
-  /* The page never scrolls: the arena stays put and the sidebar scrolls on its own. */
-  main {
-    display: grid;
-    grid-template-columns: 1fr 320px;
-    height: 100dvh;
-    overflow: hidden;
-  }
-  canvas {
-    width: 100%;
-    height: 100%;
-    display: block;
-    min-width: 0;
-    min-height: 0;
-  }
-  /* 3D: drags turn the view, so touches mustn't scroll or zoom the page. */
-  canvas.rotatable {
-    touch-action: none;
-    cursor: grab;
-  }
-  canvas.rotatable:active {
-    cursor: grabbing;
-  }
-  aside {
-    background: var(--panel-bg);
-    border-left: 1px solid var(--panel-border);
-    padding: 1rem;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-  aside :global(h1) {
-    font-size: 1.25rem;
-    margin: 0 0 0.75rem;
-  }
-  .readout {
-    font-size: 0.8rem;
-    font-variant-numeric: tabular-nums;
-    opacity: 0.7;
-  }
-  .error {
-    color: #dc2626;
-  }
-  .transport {
-    display: flex;
-    gap: 0.5rem;
-  }
-  @media (max-width: 700px) {
-    /* Phones: the arena takes a fixed share of the top of the screen and the sidebar
-       scrolls in the space below it. */
-    main {
-      grid-template-columns: 1fr;
-      grid-template-rows: min(55dvh, 90vw) 1fr;
-    }
-    aside {
-      border-left: none;
-      border-top: 1px solid var(--panel-border);
-    }
-  }
-</style>
+</div>

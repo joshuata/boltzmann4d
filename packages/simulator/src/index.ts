@@ -1,2 +1,3 @@
-// The simulation viewer. Apps mount <Simulator> and import './app.css' once for its theme.
+// The simulation viewer. Apps mount <Simulator> inside a sized container and load the
+// shared theme (@boltzmann4d/ui/theme.css) once.
 export { default as Simulator } from './Simulator.svelte';

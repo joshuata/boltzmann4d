@@ -2,6 +2,9 @@
      histogram with its Maxwell–Boltzmann curve, and measured vs predicted averages. The
      prediction uses each type's temperature in the data shown (#23). -->
 <script lang="ts">
+  import { Checkbox } from '@boltzmann4d/ui/checkbox';
+  import { Label } from '@boltzmann4d/ui/label';
+  import * as Select from '@boltzmann4d/ui/select';
   import SpeedHistogram from '../charts/SpeedHistogram.svelte';
   import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 
@@ -24,45 +27,55 @@
   const distribution = $derived(
     statistic && (cumulative ? statistic.cumulative : statistic.current),
   );
+  const cumulativeId = $props.id();
   const fmt = (value: number) => value.toLocaleString('en-US', { maximumFractionDigits: 0 });
 </script>
 
 {#if statistic && distribution}
-  <section class="statistics" aria-label="Speed statistics">
-    <h2>{statistic.label}</h2>
-    <div class="controls">
+  <section class="mt-4 border-t pt-3" aria-label="Speed statistics">
+    <h2 class="mb-2 text-sm font-semibold">{statistic.label}</h2>
+    <div class="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
       {#if summary.statistics.length > 1}
-        <select
-          aria-label="Particle types"
+        <Select.Root
+          type="single"
           value={key(statistic.types)}
-          onchange={(event) => (selected = (event.currentTarget as HTMLSelectElement).value)}
+          onValueChange={(value) => (selected = value)}
         >
-          {#each summary.statistics as s (key(s.types))}
-            <option value={key(s.types)}>{label(s.types)}</option>
-          {/each}
-        </select>
+          <Select.Trigger size="sm" aria-label="Particle types">
+            {label(statistic.types)}
+          </Select.Trigger>
+          <Select.Content>
+            {#each summary.statistics as s (key(s.types))}
+              <Select.Item value={key(s.types)} label={label(s.types)} />
+            {/each}
+          </Select.Content>
+        </Select.Root>
       {/if}
-      <label class="toggle">
-        <input type="checkbox" bind:checked={cumulative} />
-        Cumulative
-      </label>
+      <div class="flex min-h-8 items-center gap-2">
+        <Checkbox id={cumulativeId} bind:checked={cumulative} />
+        <Label for={cumulativeId}>Cumulative</Label>
+      </div>
     </div>
 
     <SpeedHistogram {statistic} {cumulative} typeColors={summary.typeColors} />
 
-    <dl class="readouts">
-      <div>
-        <dt><span class="swatch measured"></span>Measured</dt>
+    <dl class="mt-2 grid gap-1 text-xs tabular-nums">
+      <div class="flex justify-between gap-2">
+        <dt class="flex items-center gap-1.5">
+          <span class="size-2.5 rounded-xs bg-green-500"></span>Measured
+        </dt>
         <dd>{fmt(distribution.average)} ± {fmt(distribution.width)} {statistic.unit}</dd>
       </div>
-      <div>
-        <dt><span class="swatch predicted"></span>Predicted</dt>
+      <div class="flex justify-between gap-2">
+        <dt class="flex items-center gap-1.5">
+          <span class="size-2.5 rounded-xs bg-amber-500"></span>Predicted
+        </dt>
         <dd>
           {fmt(distribution.prediction.average)} ± {fmt(distribution.prediction.width)}
           {statistic.unit}
         </dd>
       </div>
-      <div>
+      <div class="flex justify-between gap-2">
         <dt>Temperature</dt>
         <dd>
           {distribution.prediction.temperatures
@@ -76,76 +89,9 @@
       </div>
     </dl>
     {#if cumulative && !summary.forgotten}
-      <p class="note">Still equilibrating: early data will be dropped once.</p>
+      <p class="text-muted-foreground mt-1.5 text-xs">
+        Still equilibrating: early data will be dropped once.
+      </p>
     {/if}
   </section>
 {/if}
-
-<style>
-  .statistics {
-    margin-top: 1rem;
-    border-top: 1px solid var(--panel-border);
-    padding-top: 0.75rem;
-  }
-  h2 {
-    font-size: 0.95rem;
-    margin: 0 0 0.5rem;
-  }
-  .controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 0.75rem;
-    align-items: center;
-    margin-bottom: 0.5rem;
-    font-size: 0.85rem;
-  }
-  select {
-    font: inherit;
-    padding: 0.3rem 0.4rem;
-    border: 1px solid var(--panel-border);
-    border-radius: 0.375rem;
-    background: var(--button-bg);
-    color: inherit;
-    min-height: 2rem;
-  }
-  .toggle {
-    display: inline-flex;
-    gap: 0.35rem;
-    align-items: center;
-    min-height: 2rem;
-  }
-  .readouts {
-    display: grid;
-    gap: 0.2rem;
-    margin: 0.5rem 0 0;
-    font-size: 0.8rem;
-    font-variant-numeric: tabular-nums;
-  }
-  .readouts div {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-  dt,
-  dd {
-    margin: 0;
-  }
-  .swatch {
-    display: inline-block;
-    width: 0.6rem;
-    height: 0.6rem;
-    margin-right: 0.35rem;
-    border-radius: 2px;
-  }
-  .swatch.measured {
-    background: #22c55e;
-  }
-  .swatch.predicted {
-    background: #f59e0b;
-  }
-  .note {
-    font-size: 0.75rem;
-    opacity: 0.7;
-    margin: 0.35rem 0 0;
-  }
-</style>

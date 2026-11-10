@@ -5,15 +5,9 @@
   const presetCount = presetCatalog.length;
 </script>
 
-<section class="editor">
-  <h2>Simulation editor</h2>
-  <p>
+<section class="space-y-2">
+  <h1 class="text-2xl font-semibold">Simulation editor</h1>
+  <p class="text-muted-foreground">
     Coming soon: build your own simulation settings, starting from any of the {presetCount} bundled presets.
   </p>
 </section>
-
-<style>
-  .editor {
-    max-width: 40rem;
-  }
-</style>

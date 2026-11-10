@@ -32,9 +32,11 @@ export default ts.config(
   {
     // File names: kebab-case modules, PascalCase Svelte components. Suffixes such as
     // `.test`, `.worker` and `.svelte` (in `x.svelte.ts`) are ignored when checking.
-    // SvelteKit route files (`+page.svelte`, `+layout.ts`) are named by the framework.
+    // SvelteKit route files (`+page.svelte`, `+layout.ts`) are named by the framework, and
+    // shadcn-svelte components keep the CLI's kebab-case names so `shadcn-svelte add` can
+    // update them.
     files: ['packages/*/src/**/*.{ts,svelte}', 'apps/*/src/**/*.{ts,svelte}'],
-    ignores: ['apps/*/src/routes/**'],
+    ignores: ['apps/*/src/routes/**', 'packages/ui/src/components/ui/**'],
     plugins: { 'check-file': checkFile },
     rules: {
       'check-file/filename-naming-convention': [

@@ -24,6 +24,7 @@ It supports 1D, 2D and 3D arenas, pistons, thermostats, dividers and holes (effu
 | UI | Svelte 5 + Vite + TypeScript | The UI is mostly forms, dialogs and live readouts. |
 | Site | SvelteKit (adapter-static) | Routes for choosing a simulation, uploading settings and the simulation editor. Every page is prerendered and runs client-only (`ssr = false`), so it stays a static GitHub Pages site. |
 | Workspaces | pnpm workspaces, packages consumed as source | The engine is reusable without the UI; no package has its own build step, the app's Vite compiles them. |
+| Components | shadcn-svelte (Bits UI) + Tailwind v4 | Accessible dialogs, menus, selects, sliders and checkboxes that work with keyboard and touch. The components are copied into `packages/ui` (we own and restyle them), and shadcn-svelte's charts are built on LayerChart too. |
 | Charts | LayerChart | Svelte-native chart components (Svelte 5), so charts are built in Svelte rather than hand-drawn on a canvas. Replaces `StatPanel`'s drawing; the binning (`HistogramBins`, `History`) is ported in `packages/engine/src/stats`. |
 | Threading | Physics worker + render worker | Physics mirrors `ThreadController`. Three.js draws on an `OffscreenCanvas` in its own worker; frames go physics → renderer directly over a `MessageChannel` as transferable typed arrays, so the main thread only runs the UI. `?render=main` (and browsers without `OffscreenCanvas`) draw on the main thread instead. |
 | Tooling | mise, pnpm, hk, Vitest, ESLint, Prettier, markdownlint-cli2 | mise pins tool versions; hk runs every linter and the pre-commit hook. |
@@ -46,12 +47,13 @@ packages/
     src/ui/            sidebar Svelte components and SimulationClient
     src/charts/        statistics charts (LayerChart Svelte components)
   simulation-editor/   @boltzmann4d/simulation-editor: builds settings files (placeholder, plan 0008)
+  ui/                  @boltzmann4d/ui: shadcn-svelte components (src/components/ui) and the Tailwind theme (src/theme.css)
 apps/
-  web/                 @boltzmann4d/web: SvelteKit site — / (preset list), /simulate/[preset], /upload, /editor
+  web/                 @boltzmann4d/web: SvelteKit site — navbar (2D/3D simulation menus), / (preset list), /simulate/[preset], /upload, /editor
 scripts/, benchmarks/  Node-side profiling, benchmarks and reports (import the engine package)
 ```
 
-Dependencies only point down: `web → simulator, simulation-editor → engine`. Packages export their `src/` files directly (`exports` in each `package.json`); import the engine as `@boltzmann4d/engine/sim`, `@boltzmann4d/engine/io/presets` and so on, never by relative path across packages.
+Dependencies only point down: `web → simulator, simulation-editor → engine`, and the Svelte packages use `ui`. Packages export their `src/` files directly (`exports` in each `package.json`); import the engine as `@boltzmann4d/engine/sim`, `@boltzmann4d/engine/io/presets` and so on, never by relative path across packages.
 
 Java sources referenced above live in `vendor/boltzmann3d/src/edu/byu/chem/boltzmann/`. Presets (`*.set`) are in `resources/simsettingsfiles/presets/`. The rendering behaviours to preserve are listed in `vendor/boltzmann3d/docs/rendering-baseline.md`.
 
@@ -86,7 +88,8 @@ Production builds use the base path `/boltzmann4d/` (`paths.base` in `apps/web/v
 - The whole sidebar is Svelte: controls, readouts and charts are Svelte components (charts via LayerChart), with no hand-built DOM or canvas drawing.
 - Sidebar components get their data from the main visualization component, the `SimulationClient` that `Simulator.svelte` creates for the canvas (`packages/simulator/src/ui/simulation.svelte.ts`). They read its reactive state and call its methods; they never talk to the physics or render workers directly.
 - New data for the sidebar (statistics, timing, …) goes through `SimulationClient`: the worker sends it, the client exposes it as `$state`, and components receive it as props.
-- The site owns navigation and the URL: `<Simulator>` takes `preset` and reports picks through `onPresetChange`; the simulator package never touches `location` or `history` (except reading `?render=main`).
+- The site owns navigation and the URL: the navbar's 2D and 3D menus link to `/simulate/[preset]`, and `<Simulator>` just takes `preset` (it loads a new one in place when the prop changes). The simulator package never touches `location` or `history` (except reading `?render=main`).
+- Build controls from `@boltzmann4d/ui` (`import { Button } from '@boltzmann4d/ui/button'`) and style with Tailwind classes and the theme tokens (`bg-muted`, `text-muted-foreground`, `border`, …) rather than `<style>` blocks or hard-coded colours. Add components with `pnpm dlx shadcn-svelte@latest add <name>` run in `packages/ui` (its `components.json` sets the aliases); the generated files keep the CLI's kebab-case names. Dark mode follows the system setting. The site's `app.css` imports the theme and tells Tailwind to scan `packages/`, so classes used in any package are generated.
 - This keeps the UI ready for other devices: components only depend on reactive state, so the layout can change with screen size (phones, tablets, desktop) without touching data flow. Sidebar components must work at narrow widths and with touch input.
 
 ## Porting rules

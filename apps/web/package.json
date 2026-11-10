@@ -14,10 +14,13 @@
   "dependencies": {
     "@boltzmann4d/engine": "workspace:*",
     "@boltzmann4d/simulation-editor": "workspace:*",
-    "@boltzmann4d/simulator": "workspace:*"
+    "@boltzmann4d/simulator": "workspace:*",
+    "@boltzmann4d/ui": "workspace:*",
+    "@lucide/svelte": "^1.70.0"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^4.0.1",
-    "@sveltejs/kit": "^3.1.1"
+    "@sveltejs/kit": "^3.1.1",
+    "@tailwindcss/vite": "^4.3.5"
   }
 }

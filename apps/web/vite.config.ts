@@ -1,5 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig, searchForWorkspaceRoot } from 'vite';
 
@@ -8,6 +9,7 @@ const PAGES_BASE = '/boltzmann4d';
 
 export default defineConfig(({ command, isPreview }) => ({
   plugins: [
+    tailwindcss(),
     sveltekit({
       preprocess: vitePreprocess(),
       // Every page is prerendered to static files; there is no server.

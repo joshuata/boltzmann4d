@@ -11,8 +11,7 @@
       "types": "./src/index.ts",
       "svelte": "./src/index.ts",
       "default": "./src/index.ts"
-    },
-    "./app.css": "./src/app.css"
+    }
   },
   "scripts": {
     "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
@@ -20,6 +19,8 @@
   },
   "dependencies": {
     "@boltzmann4d/engine": "workspace:*",
+    "@boltzmann4d/ui": "workspace:*",
+    "@lucide/svelte": "^1.70.0",
     "layerchart": "^2.9.2",
     "three": "^0.187.0"
   },
