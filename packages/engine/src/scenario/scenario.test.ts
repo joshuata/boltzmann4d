@@ -11,7 +11,8 @@ import {
   validateScenario,
   type ScenarioInput,
 } from './schema';
-import { scenarioToSetFile, setFileToScenario } from './set-convert';
+import { scenarioToSetFile, setFileCompatibility, setFileToScenario } from './set-convert';
+import type { ScenarioV1Input } from './schema-v1';
 
 /** Same seeded generator as the loader tests, so runs are reproducible. */
 function seededRandom(seed: number): () => number {
@@ -34,6 +35,18 @@ describe.each(presetNames)('%s', (name) => {
     expect(scenarioToSetFile(setFileToScenario(rewritten).scenario)).toBe(rewritten);
   });
 
+  it('reads the same scenario from a version 1 JSON file', async () => {
+    const text = await loadPresetText(name);
+    const { scenario } = setFileToScenario(text);
+    const v1 = v1FromSet(text);
+    expect(parseScenarioJson(stringifyScenario(v1 as never))).toStrictEqual(scenario);
+  });
+
+  it('can be saved as .set', async () => {
+    const { scenario } = setFileToScenario(await loadPresetText(name));
+    expect(setFileCompatibility(scenario)).toEqual({ problems: [], warnings: [] });
+  });
+
   it('round-trips through JSON text', async () => {
     const { scenario } = setFileToScenario(await loadPresetText(name));
     expect(parseScenarioJson(stringifyScenario(scenario))).toStrictEqual(scenario);
@@ -49,6 +62,43 @@ describe.each(presetNames)('%s', (name) => {
   });
 });
 
+/** A `.set` file as a version 1 JSON scenario, written by hand from the v2 one. */
+function v1FromSet(text: string): ScenarioV1Input {
+  const v2 = setFileToScenario(text).scenario;
+  const color = (kind: string) => (kind === 'red' ? 'RED' : 'BLUE');
+  const massOf = new Map(v2.kinds.map((k) => [k.id, k]));
+  return {
+    format: 'boltzmann4d-scenario',
+    version: 1,
+    arena: v2.arena,
+    modes: { maxwellDemon: v2.modes.maxwellDemon, reaction: v2.reactions.length > 0 },
+    particleGroups: v2.populations.map((p) => ({
+      color: color(p.kind),
+      mass: massOf.get(p.kind)!.mass,
+      radius: massOf.get(p.kind)!.radius,
+      ...(p.temperature !== undefined && { temperature: p.temperature }),
+      randomlyPlaced: p.randomlyPlaced,
+      particles: p.particles,
+    })),
+    run: v2.run,
+    statistics: {
+      ...v2.statistics,
+      color: v2.statistics.kinds === 'all' ? 'BOTH' : color(v2.statistics.kinds[0]!),
+      abscissaLimits: Object.fromEntries(
+        Object.entries(v2.statistics.abscissaLimits).map(([name, l]) => [
+          name,
+          {
+            ...(l.all && { both: l.all }),
+            ...(l.kinds.red && { red: l.kinds.red }),
+            ...(l.kinds.blue && { blue: l.kinds.blue }),
+          },
+        ]),
+      ),
+    },
+    display: { ...v2.display, palette: undefined, markers: undefined } as never,
+  };
+}
+
 async function defaultScenario() {
   return setFileToScenario(await loadDefaultSetFileText()).scenario;
 }
@@ -56,11 +106,11 @@ async function defaultScenario() {
 describe('scenarioToSetFile', () => {
   it('writes exponents the way Java NumberFormat reads them (E, no +)', async () => {
     const scenario = await defaultScenario();
-    scenario.statistics.abscissaLimits = { KINETIC_ENERGY: { both: [1e-7, 1e21] } };
+    scenario.statistics.abscissaLimits = { KINETIC_ENERGY: { all: [1e-7, 1e21], kinds: {} } };
     const text = scenarioToSetFile(scenario);
     expect(text).toContain('both_limits 1E-7 1E21');
     expect(setFileToScenario(text).scenario.statistics.abscissaLimits).toEqual({
-      KINETIC_ENERGY: { both: [1e-7, 1e21] },
+      KINETIC_ENERGY: { all: [1e-7, 1e21], kinds: {} },
     });
   });
 
@@ -70,9 +120,8 @@ describe('scenarioToSetFile', () => {
       'color_scheme CUSTOM: 0xFF0000, 0x0000ff 0 0x808080 0x010203',
     );
     const { scenario } = setFileToScenario(text);
+    expect(scenario.kinds.map((k) => k.color)).toEqual(['#FF0000', '#0000FF']);
     expect(scenario.display.customColors).toEqual({
-      red: '#FF0000',
-      blue: '#0000FF',
       background: '#000000',
       divider: '#808080',
       walls3D: ['#010203'],
@@ -88,22 +137,17 @@ describe('scenarioToSetFile', () => {
 describe('validateScenario', () => {
   const minimal = (): ScenarioInput => ({
     format: 'boltzmann4d-scenario',
-    version: 1,
+    version: 2,
     arena: { dimensions: 2, size: [70, 50, 10], boundary: 'REFLECTING', holeSize: 8 },
-    modes: { maxwellDemon: false, reaction: false },
-    particleGroups: [
-      {
-        color: 'RED',
-        mass: 2,
-        radius: 1,
-        temperature: 300,
-        randomlyPlaced: [{ count: 50, averageVelocity: 0 }],
-      },
+    modes: { maxwellDemon: false },
+    kinds: [{ id: 'a', name: 'A', mass: 2, radius: 1 }],
+    populations: [
+      { kind: 'a', temperature: 300, randomlyPlaced: [{ count: 50, averageVelocity: 0 }] },
     ],
     run: { paused: false, speed: '1x' },
     statistics: {
       name: 'INSTANTANEOUS_SPEED',
-      color: 'BOTH',
+      kinds: 'all',
       cumulative: false,
       width: false,
       history: false,
@@ -124,8 +168,11 @@ describe('validateScenario', () => {
   it('fills in defaults for optional sections', () => {
     const scenario = parseScenario(minimal());
     expect(scenario.arena.dividerThermalMode).toBe('INSULATING');
-    expect(scenario.particleGroups[0]?.particles).toEqual([]);
+    expect(scenario.populations[0]?.particles).toEqual([]);
     expect(scenario.statistics.abscissaLimits).toEqual({});
+    expect(scenario.walls).toEqual([]);
+    expect(scenario.display.palette).toBe('okabe-ito');
+    expect(scenario.display.markers).toBe(true);
   });
 
   it('runs a hand-written file', () => {
@@ -139,13 +186,13 @@ describe('validateScenario', () => {
     const input = minimal() as unknown as Record<string, Record<string, unknown>>;
     input.arena!.dimensions = 4;
     input.arena!.size = [70, -1, 10];
-    (input.particleGroups as unknown as Record<string, unknown>[])[0]!.temperature = 2000;
+    (input.populations as unknown as Record<string, unknown>[])[0]!.temperature = 2000;
     const result = validateScenario(input);
     expect(result.success).toBe(false);
     expect(!result.success && result.problems).toEqual([
       'arena.dimensions: dimensions must be 1, 2 or 3, not 4',
       'arena.size[1]: Too small: expected number to be >0',
-      'particleGroups[0].temperature: Particle group temperature must be between 0 and 1500 K',
+      'populations[0].temperature: Particle group temperature must be between 0 and 1500 K',
     ]);
   });
 
@@ -167,5 +214,271 @@ describe('validateScenario', () => {
     const text = (await loadDefaultSetFileText()).replace('boundary REFLECTING', 'boundary BOUNCY');
     expect(() => setFileToScenario(text)).toThrow(SetFileError);
     expect(() => setFileToScenario(text)).toThrow(/Unknown boundary mode: BOUNCY/);
+  });
+});
+
+describe('version 2 scenarios', () => {
+  const base = async (): Promise<ScenarioInput> => {
+    const { scenario } = setFileToScenario(await loadDefaultSetFileText());
+    return structuredClone(scenario) as ScenarioInput;
+  };
+  const problemsOf = (input: ScenarioInput) => {
+    const result = validateScenario(input);
+    return result.success ? [] : result.problems;
+  };
+  const wall = (
+    points: [number, number][],
+    kind: NonNullable<ScenarioInput['walls']>[number]['kind'],
+  ) => ({
+    id: `w${points.length}`,
+    points,
+    kind,
+  });
+
+  it('migrates .set red and blue to kinds with the Classic palette', async () => {
+    const scenario = parseScenario(await base());
+    expect(scenario.kinds.map((k) => [k.id, k.name, k.mass, k.radius])).toEqual([
+      ['red', 'Red', 2, 1],
+      ['blue', 'Blue', 2, 1],
+    ]);
+    expect(scenario.display.palette).toBe('classic');
+    expect(scenario.reactions).toEqual([]);
+  });
+
+  it('turns reaction mode into the Red + Red → Blue + Blue rule', async () => {
+    const { scenario } = setFileToScenario(await loadPresetText('2Dequil'));
+    expect(scenario.reactions).toEqual([
+      {
+        reactants: ['red', 'red'],
+        products: ['blue', 'blue'],
+        forward: 8,
+        reverse: 4,
+        suppressReverse: false,
+      },
+    ]);
+    expect(resolveScenario(scenario).reaction).toEqual({
+      forward: 8,
+      reverse: 4,
+      suppressReverse: false,
+    });
+  });
+
+  it('checks references to kinds and regions', async () => {
+    const input = await base();
+    input.populations![0]!.kind = 'green';
+    input.populations![0]!.region = 'left';
+    input.statistics.kinds = ['purple'];
+    expect(problemsOf(input)).toEqual([
+      'populations[0].kind: No particle kind has the id green',
+      'statistics.kinds[0]: No particle kind has the id purple',
+      'populations[0].region: No spawn region has the id left',
+    ]);
+  });
+
+  it('keeps kind ids and names unique and fits the palette', async () => {
+    const input = await base();
+    input.kinds.push({ id: 'red', name: 'BLUE', mass: 1, radius: 1 });
+    input.kinds.push(...['c', 'd', 'e'].map((id) => ({ id, name: id, mass: 1, radius: 1 })));
+    expect(problemsOf(input)).toEqual([
+      'kinds[2].id: Another kind already has the id red',
+      'kinds[2].name: Another kind is already called BLUE',
+      'display.palette: The Classic (not colour-blind safe) palette has 5 colours, not enough for 6 kinds',
+    ]);
+  });
+
+  it('allows at most 10 kinds', async () => {
+    const input = await base();
+    input.kinds = Array.from({ length: 11 }, (_, i) => ({
+      id: `k${i}`,
+      name: `K${i}`,
+      mass: 1,
+      radius: 1,
+    }));
+    input.display.palette = 'muted';
+    input.populations = [];
+    input.statistics.kinds = 'all';
+    expect(problemsOf(input)).toContain('kinds: A scenario has at most 10 particle kinds');
+  });
+
+  it('checks walls: in the arena, 2D only, not periodic, and semipermeable to some kinds only', async () => {
+    const input = await base();
+    input.walls = [
+      wall(
+        [
+          [10, 10],
+          [80, 10],
+        ],
+        { type: 'reflecting' },
+      ),
+      wall(
+        [
+          [5, 5],
+          [5, 20],
+          [20, 20],
+        ],
+        { type: 'semipermeable', passes: ['red', 'blue'] },
+      ),
+    ];
+    expect(problemsOf(input)).toEqual([
+      'walls[1].kind.passes: A semipermeable wall must stop at least one kind',
+      'walls[0].points[1]: (80, 10) is outside the 70 × 50 nm arena',
+    ]);
+    input.walls = [
+      wall(
+        [
+          [10, 10],
+          [20, 10],
+        ],
+        { type: 'gate', open: false },
+      ),
+    ];
+    input.arena.boundary = 'PERIODIC';
+    expect(problemsOf(input)).toEqual([
+      "walls: Drawn walls can't be used with the periodic boundary yet",
+    ]);
+    input.arena.boundary = 'REFLECTING';
+    input.arena.dimensions = 3;
+    expect(problemsOf(input)).toEqual(['walls: Drawn walls are only available in 2D']);
+  });
+
+  it('checks spawn regions and closed walls', async () => {
+    const input = await base();
+    input.spawnRegions = [{ id: 'r', shape: { type: 'rectangle', min: [30, 10], max: [20, 40] } }];
+    input.walls = [
+      {
+        id: 'w',
+        points: [
+          [1, 1],
+          [2, 2],
+        ],
+        closed: true,
+        kind: { type: 'reflecting' },
+      },
+    ];
+    expect(problemsOf(input)).toEqual([
+      'walls[0].points: A closed wall needs at least 3 points',
+      'spawnRegions[0].shape: A rectangle needs min below and to the left of max',
+    ]);
+  });
+
+  it('allows one reaction per pair of kinds, counting reverse reactions (KIND-14)', async () => {
+    const input = await base();
+    input.kinds.push({ id: 'c', name: 'C', mass: 2, radius: 1 });
+    const rule = (a: string, b: string, suppressReverse = false) => ({
+      reactants: [a, a] as [string, string],
+      products: [b, b] as [string, string],
+      forward: 8,
+      reverse: 4,
+      suppressReverse,
+    });
+    input.reactions = [rule('red', 'blue'), rule('blue', 'c')];
+    expect(problemsOf(input)).toEqual(['reactions[1]: blue + blue already reacts by rule 1']);
+    input.reactions = [rule('red', 'blue', true), rule('blue', 'c', true)];
+    expect(problemsOf(input)).toEqual([]);
+  });
+
+  it("says why a scenario can't be saved as .set, and what .set would lose", async () => {
+    const scenario = parseScenario({
+      ...(await base()),
+      kinds: [
+        { id: 'red', name: 'Red', mass: 2, radius: 1 },
+        { id: 'blue', name: 'Blue', mass: 2, radius: 1 },
+        { id: 'c', name: 'C', mass: 2, radius: 1 },
+      ],
+      walls: [
+        {
+          id: 'w',
+          points: [
+            [1, 1],
+            [2, 2],
+          ],
+          kind: { type: 'reflecting' },
+        },
+      ],
+    });
+    expect(setFileCompatibility(scenario).problems).toEqual([
+      'it has 3 particle kinds (at most 2)',
+      'it has drawn walls',
+    ]);
+    expect(() => scenarioToSetFile(scenario)).toThrow(
+      "Can't save as .set: it has 3 particle kinds (at most 2)",
+    );
+
+    const renamed = parseScenario({
+      ...(await base()),
+      kinds: [
+        { id: 'a', name: 'Argon', mass: 40, radius: 1, color: '#123456' },
+        { id: 'b', name: 'Blue', mass: 2, radius: 1 },
+      ],
+      populations: [{ kind: 'a', randomlyPlaced: [{ count: 3, averageVelocity: 100 }] }],
+      statistics: { ...(await base()).statistics, kinds: 'all', abscissaLimits: {} },
+      display: { ...(await base()).display, palette: 'okabe-ito' },
+    });
+    expect(setFileCompatibility(renamed)).toEqual({
+      problems: [],
+      warnings: ['the colour palette', "the kinds' names", "the kinds' colours"],
+    });
+    // The first kind is written as Red, the second (with no particles) as an empty Blue group.
+    const text = scenarioToSetFile(renamed);
+    expect(text).toMatch(/color Red\s+radius 1\s+mass 40/);
+    expect(text).toMatch(/color Blue\s+radius 1\s+mass 2\s*}/);
+  });
+
+  it("refuses what the simulation can't run yet", async () => {
+    const scenario = parseScenario({
+      ...(await base()),
+      walls: [
+        {
+          id: 'w',
+          points: [
+            [1, 1],
+            [2, 2],
+          ],
+          kind: { type: 'reflecting' },
+        },
+      ],
+    });
+    expect(() => resolveScenario(scenario)).toThrow(ScenarioError);
+    expect(() => resolveScenario(scenario)).toThrow("Drawn walls can't be simulated yet");
+  });
+
+  it('colours kinds from the palette unless they have their own colour', () => {
+    const scenario = parseScenario({
+      ...{
+        format: 'boltzmann4d-scenario',
+        version: 2,
+        arena: { dimensions: 2, size: [70, 50, 10], boundary: 'REFLECTING', holeSize: 8 },
+        modes: { maxwellDemon: false },
+        run: { paused: false, speed: '1x' },
+        statistics: {
+          name: 'INSTANTANEOUS_SPEED',
+          kinds: 'all',
+          cumulative: false,
+          width: false,
+          history: false,
+          pressureAveragingTime: 60,
+          forgetTime: 4,
+          pressurePredictionMode: 'IDEAL',
+        },
+        display: {
+          colorScheme: 'DARK',
+          lighting: true,
+          viewingAngles: [0, 0],
+          coloringMode: 'NORMAL',
+          traceMode: false,
+          tracePointSize: 2,
+        },
+      },
+      kinds: [
+        { id: 'a', name: 'A', mass: 2, radius: 1 },
+        { id: 'b', name: 'B', mass: 2, radius: 1, color: '#ABCDEF' },
+      ],
+      populations: [
+        { kind: 'a', randomlyPlaced: [{ count: 1, averageVelocity: 1 }] },
+        { kind: 'b', randomlyPlaced: [{ count: 1, averageVelocity: 1 }] },
+      ],
+    } satisfies ScenarioInput);
+    const colors = resolveScenario(scenario).species.map((s) => s.type.defaultColor);
+    expect(colors).toEqual([0xd55e00, 0xabcdef]);
   });
 });

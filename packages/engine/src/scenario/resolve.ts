@@ -7,13 +7,22 @@
 // The physics-relevant results (arena size, hole diameter, particle types, positions,
 // velocities and temperature scaling) follow Java exactly, including the order in which
 // random numbers are drawn.
-import { ParticleType, DefaultParticleInfo } from '../sim/particle-type';
+//
+// Version 2 features the simulation can't run yet (plan 0010) are refused with a
+// ScenarioError: drawn walls and spawn regions (step 4), more than two kinds and reaction
+// rules other than Red + Red → Blue + Blue (step 3).
+import type { Reaction } from '../sim/particle-2d';
+import { ParticleType } from '../sim/particle-type';
 import { ArenaType } from '../sim/simulation-info';
 import type { DividerThermalMode } from '../sim/simulation-info';
 import { avgKineticEnergy, speed as speedFromEnergy } from '../stats/formulas';
 import { convert, Energy } from '../utils/units';
-import { parseHexColor } from './set-convert';
-import type { Boundary, ParticleGroup, Scenario } from './schema';
+import { ScenarioError, type Boundary } from './format';
+import { paletteColor } from './palettes';
+import type { Kind, Population, Scenario } from './schema';
+
+/** `#RRGGBB` as a number. */
+export const parseHexColor = (hex: string) => parseInt(hex.slice(1), 16);
 
 export type Dimension = 1 | 2 | 3;
 export type StatColor = 'RED' | 'BLUE' | 'BOTH';
@@ -58,7 +67,12 @@ export interface ResolvedScenario {
   holeDiameter: number;
   maxwellDemonMode: boolean;
   reactionMode: boolean;
-  /** Red first, then Blue; a colour with no particles is left out (as DummyMain did). */
+  /** The reaction's activation energies, when reactionMode is on. */
+  reaction: Reaction | null;
+  /**
+   * One per kind, in the scenario's order (Red then Blue for `.set` files); a kind with no
+   * particles is left out (as DummyMain did).
+   */
   species: ParticleSpecies[];
 
   // Run state and statistics
@@ -108,10 +122,19 @@ export function resolveScenario(
   scenario: Scenario,
   { random = Math.random }: ResolveOptions = {},
 ): ResolvedScenario {
-  const { arena: a, modes, run, statistics: st, display } = scenario;
+  checkSupported(scenario);
+  const { arena: a, modes, run, statistics: st, display, kinds } = scenario;
   const arena = { x: nmToM(a.size[0]), y: nmToM(a.size[1]), z: nmToM(a.size[2]) };
   const colors = display.customColors;
   const wallNames = ['left', 'right', 'top', 'bottom', 'front', 'back'] as const;
+  const [red, blue] = kinds;
+  const [rule] = scenario.reactions;
+  const kindColor = (index: number) => {
+    const kind = kinds[index];
+    return kind?.color !== undefined
+      ? parseHexColor(kind.color)
+      : (paletteColor(display.palette, index) ?? 0xffffff);
+  };
 
   return {
     dimension: a.dimensions,
@@ -122,8 +145,11 @@ export function resolveScenario(
     arenaZSize: arena.z,
     holeDiameter: nmToM(Math.round(a.holeSize)),
     maxwellDemonMode: modes.maxwellDemon,
-    reactionMode: modes.reaction,
-    species: resolveSpecies(scenario.particleGroups, a.dimensions, arena, random),
+    reactionMode: rule !== undefined,
+    reaction: rule
+      ? { forward: rule.forward, reverse: rule.reverse, suppressReverse: rule.suppressReverse }
+      : null,
+    species: resolveSpecies(scenario, kindColor, arena, random),
 
     paused: run.paused,
     simulationSpeed: run.speed,
@@ -131,20 +157,29 @@ export function resolveScenario(
     forgetMultiplier: st.forgetTime,
     pressurePredictionMode: st.pressurePredictionMode,
     statName: st.name,
-    statColor: st.color,
+    statColor:
+      st.kinds === 'all' || st.kinds.length > 1 ? 'BOTH' : st.kinds[0] === red?.id ? 'RED' : 'BLUE',
     cumulative: st.cumulative,
     width: st.width,
     history: st.history,
     abscissaLimits: new Map(
-      Object.entries(st.abscissaLimits).map(([name, limits]) => [name.toUpperCase(), limits]),
+      Object.entries(st.abscissaLimits).map(([name, limits]) => {
+        const byRole: AbscissaLimits = {};
+        if (limits.all) byRole.both = limits.all;
+        const redLimits = red && limits.kinds[red.id];
+        const blueLimits = blue && limits.kinds[blue.id];
+        if (redLimits) byRole.red = redLimits;
+        if (blueLimits) byRole.blue = blueLimits;
+        return [name.toUpperCase(), byRole];
+      }),
     ),
 
     colorScheme: display.colorScheme,
     customColors:
       display.colorScheme === 'CUSTOM' && colors
         ? {
-            red: parseHexColor(colors.red),
-            blue: parseHexColor(colors.blue),
+            red: kindColor(0),
+            blue: kindColor(1),
             background: parseHexColor(colors.background),
             divider: parseHexColor(colors.divider),
             walls3D: Object.fromEntries(
@@ -160,6 +195,26 @@ export function resolveScenario(
   };
 }
 
+/** Refuses what the simulation can't run yet (plan 0010 steps 3 and 4). */
+function checkSupported(scenario: Scenario): void {
+  const problems: string[] = [];
+  if (scenario.walls.length > 0) problems.push("Drawn walls can't be simulated yet");
+  if (scenario.spawnRegions.length > 0 || scenario.populations.some((p) => p.region)) {
+    problems.push("Spawn regions can't be simulated yet");
+  }
+  if (scenario.kinds.length > 2)
+    problems.push("More than two particle kinds can't be simulated yet");
+  const [red, blue] = scenario.kinds;
+  const javaRule = (r: Scenario['reactions'][number]) =>
+    r.reactants.every((k) => k === red?.id) && r.products.every((k) => k === blue?.id);
+  if (scenario.reactions.length > 1 || !scenario.reactions.every(javaRule)) {
+    problems.push(
+      `Only the reaction ${red?.name} + ${red?.name} → ${blue?.name} + ${blue?.name} can be simulated yet`,
+    );
+  }
+  if (problems.length > 0) throw new ScenarioError(problems);
+}
+
 interface SpeciesBuilder {
   type: ParticleType;
   initialTemperature: number;
@@ -168,69 +223,29 @@ interface SpeciesBuilder {
 }
 
 function resolveSpecies(
-  groups: ParticleGroup[],
-  dimension: Dimension,
+  scenario: Scenario,
+  kindColor: (index: number) => number,
   arena: { x: number; y: number; z: number },
   random: () => number,
 ): ParticleSpecies[] {
-  const red: SpeciesBuilder = {
-    type: new ParticleType(2.0, 1.0e-9, DefaultParticleInfo.RED, 'Red'),
-    initialTemperature: NaN,
-    positions: [],
-    velocities: [],
-  };
-  const blue: SpeciesBuilder = {
-    type: new ParticleType(2.0, 1.0e-9, DefaultParticleInfo.BLUE, 'Blue'),
-    initialTemperature: NaN,
-    positions: [],
-    velocities: [],
-  };
+  const dimension = scenario.arena.dimensions;
+  const builders = new Map<string, SpeciesBuilder>(
+    scenario.kinds.map((kind: Kind, index) => [
+      kind.id,
+      {
+        type: new ParticleType(kind.mass, nmToM(kind.radius), kindColor(index), kind.name),
+        initialTemperature: NaN,
+        positions: [],
+        velocities: [],
+      },
+    ]),
+  );
 
-  for (const pg of groups) {
-    const species = pg.color === 'RED' ? red : blue;
-    const radius = nmToM(pg.radius);
-    // As in Java, a later group of the same colour redefines that colour's mass and radius.
-    species.type = new ParticleType(
-      pg.mass,
-      radius,
-      species.type.defaultColor,
-      species.type.displayName,
-    );
-    const firstInGroup = species.velocities.length;
-
-    for (const block of pg.randomlyPlaced) {
-      for (let i = 0; i < block.count; i++) {
-        species.positions.push([
-          random() * (arena.x - 2 * radius) + radius,
-          random() * (arena.y - 2 * radius) + radius,
-          random() * (arena.z - 2 * radius) + radius,
-        ]);
-        species.velocities.push(randomVelocity(block.averageVelocity, dimension, random));
-      }
-    }
-
-    for (const p of pg.particles) {
-      species.positions.push(p.position.map(nmToM));
-      species.velocities.push(
-        p.angle
-          ? velocityFromAngles(p.speed, p.angle[0], p.angle[1], dimension)
-          : randomVelocity(p.speed, dimension, random),
-      );
-    }
-
-    if (pg.temperature !== undefined) {
-      scaleVelocitiesToTemperature(
-        species.velocities.slice(firstInGroup),
-        species.type,
-        pg.temperature,
-        dimension,
-        random,
-      );
-      species.initialTemperature = pg.temperature;
-    }
+  for (const population of scenario.populations) {
+    placePopulation(population, builders.get(population.kind)!, dimension, arena, random);
   }
 
-  return [red, blue]
+  return [...builders.values()]
     .filter((s) => s.positions.length > 0)
     .map((s) => ({
       type: s.type,
@@ -238,6 +253,49 @@ function resolveSpecies(
       positions: Float64Array.from(s.positions.flat()),
       velocities: Float64Array.from(s.velocities.flat()),
     }));
+}
+
+/** Places one population's particles, in the order (and with the random draws) Java used. */
+function placePopulation(
+  population: Population,
+  species: SpeciesBuilder,
+  dimension: Dimension,
+  arena: { x: number; y: number; z: number },
+  random: () => number,
+): void {
+  const radius = species.type.particleRadius;
+  const firstInGroup = species.velocities.length;
+
+  for (const block of population.randomlyPlaced) {
+    for (let i = 0; i < block.count; i++) {
+      species.positions.push([
+        random() * (arena.x - 2 * radius) + radius,
+        random() * (arena.y - 2 * radius) + radius,
+        random() * (arena.z - 2 * radius) + radius,
+      ]);
+      species.velocities.push(randomVelocity(block.averageVelocity, dimension, random));
+    }
+  }
+
+  for (const p of population.particles) {
+    species.positions.push(p.position.map(nmToM));
+    species.velocities.push(
+      p.angle
+        ? velocityFromAngles(p.speed, p.angle[0], p.angle[1], dimension)
+        : randomVelocity(p.speed, dimension, random),
+    );
+  }
+
+  if (population.temperature !== undefined) {
+    scaleVelocitiesToTemperature(
+      species.velocities.slice(firstInGroup),
+      species.type,
+      population.temperature,
+      dimension,
+      random,
+    );
+    species.initialTemperature = population.temperature;
+  }
 }
 
 /** theta is the azimuth, phi the polar angle; 1D keeps only the sign of cos(theta). */

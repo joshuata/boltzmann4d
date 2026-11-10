@@ -36,7 +36,6 @@ const post = (message: FromWorker) => scope.postMessage(message);
 const SUMMARY_INTERVAL_MS = 1000;
 
 /** The Reactions tab's defaults: forward and reverse activation energies, kJ/mol. */
-const DEFAULT_REACTIONS = { forward: 8.0, reverse: 4.0, suppressReverse: false };
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -128,14 +127,14 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
         : DividerThermalMode.INSULATING;
     }
     // Reactions (as Java's Reactions tab): one species plus a "Reacted" copy of it that
-    // particles turn into. Presets with reaction_mode TRUE get them by default, with the
-    // tab's default activation energies (Java ignored the key).
+    // particles turn into. Scenarios with a reaction rule get it with the rule's energies;
+    // `.set` files with reaction_mode TRUE get the tab's defaults (Java ignored the key).
     const canReact = scenario.dimension === 2 && scenario.species.length === 1;
     const reactions = canReact
       ? arena.reactions !== undefined
         ? arena.reactions
-        : scenario.reactionMode
-          ? { ...DEFAULT_REACTIONS }
+        : scenario.reaction
+          ? { ...scenario.reaction }
           : null
       : null;
     if (reactions) {

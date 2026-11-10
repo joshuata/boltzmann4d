@@ -1,6 +1,6 @@
 # 0010: WYSIWYG scenario editor, drawn walls and particle kinds
 
-_In progress: step 1 (spec) is done; next is step 2._ Replaces plan 0008 step 4 (the form-based editor); builds on plan 0008 steps 2 and 3 (the worker loads a scenario JSON, a route runs a stored scenario), which must land first or alongside step 3 here.
+_In progress: steps 1 (spec) and 2 (schema v2 and palettes) are done; next is step 3._ Replaces plan 0008 step 4 (the form-based editor); builds on plan 0008 steps 2 and 3 (the worker loads a scenario JSON, a route runs a stored scenario), which must land first or alongside step 3 here.
 
 ## Goal
 
@@ -33,7 +33,7 @@ Version 2 of the scenario format (`packages/engine/src/scenario/schema.ts`). Ver
 
 A palette module in the engine (pure data, used by the renderer and the editor):
 
-- **Okabe–Ito** (8 colours, the default for new scenarios), **Tol Muted** (10, the default once a scenario has more than 8 kinds), **Tol Bright** (7), and **Classic** (Java's red and blue first, then the remaining `DefaultParticleInfo` colours; used by migrated presets so they look unchanged).
+- **Okabe–Ito** (7 colours, without black; the default for new scenarios), **Muted** (Tol's muted without pale grey, plus a violet: 10, the default once a scenario has more than 7 kinds), **Tol Bright** (7), and **Classic** (Java's red and blue first, then the remaining `DefaultParticleInfo` colours; used by migrated presets so they look unchanged).
 - Colour is never the only cue: each kind also gets a **marker** in 2D (filled disk, ring, disk with a dot, cross, …), shown in the arena, the legend and the charts, so kinds stay distinguishable in greyscale and with more kinds than any palette separates well. Markers can be turned off in display settings.
 - A test checks every palette: simulate protanopia, deuteranopia and tritanopia (Machado et al. 2009 matrices), and require a minimum pairwise CIEDE2000 distance between the colours of the first _n_ kinds and against the light and dark arena backgrounds. Classic is exempt from the CVD check (it exists for fidelity) and the editor marks it as not colour-blind safe.
 - Users can override a kind's colour; the editor warns when an override falls below the same distance threshold against another kind.
@@ -66,7 +66,7 @@ A palette module in the engine (pure data, used by the renderer and the editor):
 Each step is one PR. Steps 2–4 are engine work and can start before plan 0008 step 2; steps 5 onward need it.
 
 1. **Spec (done).** `docs/specs/editor.md` with requirement IDs: `KIND-*` (kinds, palettes, reaction rules), `WALL-*` (drawn-wall physics) and `EDIT-*` (the editor), plus STORY-29–34 in `stories.md` (a chamber, osmosis, effusion through a gate, heat conduction, chained reactions, a colour-blind check). `particles.md` and `simulation.md` note where kinds and rules extend PART-5 and SIM-25–29.
-2. **Schema v2 and palettes.** The version 2 schema, the v1 → v2 migration, the `.set` compatibility check, the palette module and its CVD test. Round-trip tests over every bundled preset (`.set → v1 → v2 → .set`).
+2. **Schema v2 and palettes (done).** The version 2 schema, the v1 → v2 migration, the `.set` compatibility check, the palette module and its CVD test. Round-trip tests over every bundled preset (`.set → v1 → v2 → .set`).
 3. **N kinds and reaction rules in the engine.** Rule table in 2D and 3D, stats and predictions by kind, `ResolvedScenario` with kinds. Parity green; new tests for multi-kind rules.
 4. **Segment walls and spawn regions (reflecting walls only).** Face and endpoint events, cell-grid registration, spawn-region placement, conservation, reversal and corner tests, benchmarks.
 5. **Simulator.** Draw walls and kinds with palettes and markers; kind picker and legend in the sidebar; run a v2 scenario end to end.
