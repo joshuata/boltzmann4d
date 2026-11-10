@@ -37,8 +37,24 @@ description = "Run the Vitest benchmarks (*.bench.ts)"
 run = "pnpm exec vitest bench --run"
 
 [tasks.profile]
-description = "Profile the engine headless; writes a .cpuprofile to profiles/ (see scripts/profile.ts)"
+description = "Profile the engine headless: mise run profile [preset] [--events N] [--particles N --periodic]; writes profiles/*.cpuprofile"
 run = "node --import tsx --cpu-prof --cpu-prof-dir=profiles scripts/profile.ts"
+
+[tasks."bench:scaling"]
+description = "Web engine scaling benchmark (writes benchmarks/results/web-node.json)"
+run = "node --expose-gc --import tsx scripts/bench-scaling.ts"
+
+[tasks."bench:java"]
+description = "Java app scaling benchmark via boltzmann3d's `ant benchmark` (writes benchmarks/results/java.json)"
+run = 'cd "${BOLTZMANN3D_DIR:-../boltzmann3d}" && mise exec java@temurin-25 ant@1.10.18 -- ant benchmark -Dbenchmark.out="{{config_root}}/benchmarks/results/java.json"'
+
+[tasks."bench:report"]
+description = "Rebuild the tables in benchmarks/README.md from benchmarks/results/*.json"
+run = "node --import tsx scripts/bench-report.ts"
+
+[tasks."parity:fixtures"]
+description = "Regenerate src/sim/parity/*.json via boltzmann3d's `ant parity-dump`"
+run = 'cd "${BOLTZMANN3D_DIR:-../boltzmann3d}" && mise exec java@temurin-25 ant@1.10.18 -- ant parity-dump -Dparity.out="{{config_root}}/src/sim/parity"'
 
 [tasks.lint]
 description = "Run all hk checks on every file"

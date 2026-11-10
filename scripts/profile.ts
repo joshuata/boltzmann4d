@@ -1,45 +1,69 @@
-// Headless profiling run: loads a preset, advances the simulation, and prints throughput
-// and engine counters. Run it under the V8 profiler with `mise run profile`:
+// Headless profiling run: loads a preset (or a synthetic gas), runs the simulation, and
+// prints throughput and engine counters. Run it under the V8 profiler with
+// `mise run profile`:
 //
-//   mise run profile                         # 2Dmixture, 20 000 frames
-//   mise run profile 2Dbrownian --frames 1e5
-//   mise run profile --particles 1000        # synthetic scene instead of a preset
+//   mise run profile                              # 2Dmixture, 200 000 events
+//   mise run profile 2Dbrownian --events 1e6
+//   mise run profile --particles 1000 --periodic  # synthetic gas instead of a preset
 //
 // The .cpuprofile lands in profiles/; open it in Chrome DevTools (Performance tab) or
 // https://www.speedscope.app.
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { loadSettings } from '../src/io/load';
-import { Physics } from '../src/sim/physics';
+import { seededRandom, syntheticGas } from '../src/sim/scenes';
+import { Simulation, type InitialState } from '../src/sim/simulation';
+import { ArenaType } from '../src/sim/simulation-info';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
-    frames: { type: 'string', default: '20000' },
+    events: { type: 'string', default: '200000' },
     particles: { type: 'string' },
+    periodic: { type: 'boolean', default: false },
+    seed: { type: 'string', default: '1' },
   },
 });
 
+const events = Number(values.events);
+const seed = Number(values.seed);
 const preset = positionals[0] ?? '2Dmixture';
-const frames = Number(values.frames);
-const presetPath = new URL(`../src/io/simsettingsfiles/presets/${preset}.set`, import.meta.url);
 
-const particleCount = values.particles
-  ? Number(values.particles)
-  : loadSettings(readFileSync(presetPath, 'utf8')).settings.species.reduce(
-      (n, s) => n + s.positions.length / 3,
-      0,
-    );
-const label = values.particles ? `synthetic scene` : preset;
+let label: string;
+let init: InitialState;
+if (values.particles) {
+  const count = Number(values.particles);
+  const arenaType = values.periodic
+    ? ArenaType.PERIODIC_BOUNDARIES
+    : ArenaType.REFLECTING_BOUNDARIES;
+  init = syntheticGas({ count, arenaType, seed });
+  label = `synthetic gas (${values.periodic ? 'periodic' : 'reflecting'})`;
+} else {
+  const path = new URL(`../src/io/simsettingsfiles/presets/${preset}.set`, import.meta.url);
+  init = loadSettings(readFileSync(path, 'utf8'), { random: seededRandom(seed) }).settings;
+  label = preset;
+}
 
-// TODO(plan 0002): build the event-driven simulation from the preset's initial state.
-const physics = new Physics({ particleCount });
-physics.advanceToNextFrame();
+const setupStart = performance.now();
+const simulation = new Simulation(init);
+const setupMs = performance.now() - setupStart;
+const energyBefore = simulation.kineticEnergy();
 
 const start = performance.now();
-for (let i = 0; i < frames; i++) physics.advanceToNextFrame();
+let performed = 0;
+while (performed < events && simulation.step()) performed++;
 const seconds = (performance.now() - start) / 1000;
+const drift = Math.abs(simulation.kineticEnergy() / energyBefore - 1);
 
-console.log(`${label}: ${particleCount} particles, ${frames} frames in ${seconds.toFixed(3)} s`);
-console.log(`  ${Math.round(frames / seconds).toLocaleString('en-US')} frames/s`);
-console.table(physics.counters);
+const n = simulation.particles.count;
+console.log(`${label}: ${n} particles, setup ${setupMs.toFixed(1)} ms`);
+console.log(
+  `${performed.toLocaleString('en-US')} events in ${seconds.toFixed(3)} s: ` +
+    `${Math.round(performed / seconds).toLocaleString('en-US')} events/s`,
+);
+console.log(`relative kinetic-energy drift: ${drift.toExponential(2)}`);
+console.table({ ...simulation.counters, ...prefix('calendar.', simulation.calendar.counters) });
+
+function prefix(p: string, counters: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(counters).map(([k, v]) => [p + k, v]));
+}

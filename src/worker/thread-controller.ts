@@ -7,20 +7,23 @@ import type { RenderFrame } from '../sim';
 /** Duration of a displayed frame in milliseconds. */
 export const FRAME_DURATION = 37;
 
-/** The part of Physics that ThreadController drives. */
+/** The part of the simulation that ThreadController drives (see Simulation). */
 export interface FramePhysics {
   advanceToNextFrame(): void;
   getCurrentFrame(): RenderFrame;
   stopProcessingCurrentFrame(): void;
 }
 
+/** Receives each frame and the wall-clock milliseconds the physics took to produce it. */
+export type GiveFrame = (frame: RenderFrame, physicsMs: number) => void;
+
 export class ThreadController {
   private readonly physics: FramePhysics;
-  private readonly giveFrameToViewForDisplaying: (frame: RenderFrame) => void;
+  private readonly giveFrameToViewForDisplaying: GiveFrame;
   private frameRateTimer: ReturnType<typeof setInterval> | null = null;
   private paused = false;
 
-  constructor(physics: FramePhysics, giveFrameToView: (frame: RenderFrame) => void) {
+  constructor(physics: FramePhysics, giveFrameToView: GiveFrame) {
     this.physics = physics;
     this.giveFrameToViewForDisplaying = giveFrameToView;
   }
@@ -54,7 +57,9 @@ export class ThreadController {
   }
 
   private advancePhysicsToNextFrame(): void {
+    const start = performance.now();
     this.physics.advanceToNextFrame();
-    this.giveFrameToViewForDisplaying(this.physics.getCurrentFrame());
+    const physicsMs = performance.now() - start;
+    this.giveFrameToViewForDisplaying(this.physics.getCurrentFrame(), physicsMs);
   }
 }

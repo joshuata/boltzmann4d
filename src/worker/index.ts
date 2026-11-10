@@ -1,6 +1,11 @@
 // Main-thread <-> simulation-worker message protocol (mirrors ThreadController.java).
-import type { RenderFrame } from '../sim';
+import type { RenderFrame, SceneInfo } from '../sim';
 
 export type ToWorker = { type: 'play' } | { type: 'pause' } | { type: 'step' };
 
-export type FromWorker = { type: 'frame'; frame: RenderFrame };
+export type FromWorker =
+  /** Sent once the simulation is built, before any frame. */
+  | { type: 'scene'; scene: SceneInfo }
+  /** `physicsMs`: wall-clock time the physics took for this frame. */
+  | { type: 'frame'; frame: RenderFrame; physicsMs: number }
+  | { type: 'error'; message: string };
