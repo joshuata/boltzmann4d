@@ -11,7 +11,7 @@ Uploading settings (FILE-1), saved setups (FILE-2) and sharing belong to plan 00
 ## Steps, in priority order
 
 1. **Errors.** A site `+error.svelte` for unknown routes and presets (adapter-static already writes `404.html` as the fallback, so GitHub Pages shows it). In the simulator, a clear message over the arena when the browser can't run it (no Web Workers or WebGL 2) or when the physics or render worker crashes, with a Reload button.
-2. **About and Help (HELP-1).** Links to the manual, quick start guide and project page; version, GPL-3.0 licence and credits to the original BYU authors. A dialog, so the simulation keeps running while it's open.
+2. **About and Help (HELP-1).** _Done._ Docs are Markdown files in `apps/web/src/docs/*.md`, compiled by mdsvex; each becomes `/docs/<name>`, with its title, description and menu order in the frontmatter. A Quick start and an About page (credits to the original BYU authors, GPL-3.0, links to the original manual, quick start guide and worksheets, and the source). The navbar's Help menu lists the docs (in a new tab on a simulation page, so it keeps running) and opens About in a dialog with the build date and commit. Still to write: our own manual and classroom guides, ported from the original manual as the features land.
 3. **Navbar at phone width.** Show the current simulation's name; collapse the menus into a sheet on narrow screens; add Upload, About and the repository link.
 4. **Home page.** A one-line description of what each preset demonstrates, grouped by topic, linked to its `SCN-*` scenario where there is one.
 5. **Presentation mode.** Fullscreen and a hide-sidebar toggle for projectors.

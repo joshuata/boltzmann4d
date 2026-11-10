@@ -6,6 +6,8 @@
   import { Button } from '@boltzmann4d/ui/button';
   import * as DropdownMenu from '@boltzmann4d/ui/dropdown-menu';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+  import { docs } from './docs';
+  import AboutDialog from './AboutDialog.svelte';
 
   const menus = [
     { title: '2D', presets: presetCatalog.filter((p) => p.dimensions === 2) },
@@ -13,6 +15,9 @@
   ];
 
   const current = $derived(page.params.preset);
+  // On a simulation page, docs open in a new tab so the simulation keeps running (HELP-1).
+  const docsTarget = $derived(current ? '_blank' : undefined);
+  let aboutOpen = $state(false);
 </script>
 
 <header class="bg-background flex h-12 shrink-0 items-center gap-1 border-b px-3">
@@ -51,4 +56,38 @@
       </DropdownMenu.Root>
     {/each}
   </nav>
+  <DropdownMenu.Root>
+    <DropdownMenu.Trigger>
+      {#snippet child({ props })}
+        <Button {...props} variant="ghost" class="ml-auto">
+          Help
+          <ChevronDownIcon aria-hidden="true" />
+        </Button>
+      {/snippet}
+    </DropdownMenu.Trigger>
+    <DropdownMenu.Content align="end" class="w-56">
+      {#each docs.filter((d) => d.slug !== 'about') as doc (doc.slug)}
+        <DropdownMenu.Item>
+          {#snippet child({ props })}
+            <a
+              {...props}
+              href={resolve('/docs/[slug]', { slug: doc.slug })}
+              target={docsTarget}
+              rel={docsTarget && 'noopener'}>{doc.title}</a
+            >
+          {/snippet}
+        </DropdownMenu.Item>
+      {/each}
+      <DropdownMenu.Item>
+        {#snippet child({ props })}
+          <a {...props} href={resolve('/docs')} target={docsTarget} rel={docsTarget && 'noopener'}
+            >All documentation</a
+          >
+        {/snippet}
+      </DropdownMenu.Item>
+      <DropdownMenu.Separator />
+      <DropdownMenu.Item onSelect={() => (aboutOpen = true)}>About Boltzmann 4D</DropdownMenu.Item>
+    </DropdownMenu.Content>
+  </DropdownMenu.Root>
+  <AboutDialog bind:open={aboutOpen} />
 </header>
