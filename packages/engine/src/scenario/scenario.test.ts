@@ -254,6 +254,15 @@ describe('version 2 scenarios', () => {
     expect(scenario.reactions).toEqual([]);
   });
 
+  it('starts .set scenarios with markers off, so presets look as they did (KIND-7)', async () => {
+    const scenario = parseScenario(await base());
+    expect(scenario.display.markers).toBe(false);
+    expect(resolveScenario(scenario).markers).toBe(false);
+    // .set files can't store markers, so turning them on is lost on export.
+    const marked = { ...scenario, display: { ...scenario.display, markers: true } };
+    expect(setFileCompatibility(marked).warnings).toContain("the kinds' markers");
+  });
+
   it('turns reaction mode into the Red + Red → Blue + Blue rule', async () => {
     const { scenario } = setFileToScenario(await loadPresetText('2Dequil'));
     expect(scenario.reactions).toEqual([

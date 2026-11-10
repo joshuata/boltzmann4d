@@ -114,6 +114,8 @@ export function migrateV1(v1: ScenarioV1): ScenarioInput {
         },
       }),
       palette: 'classic',
+      // Presets look as they did (KIND-7): plain discs, until the user turns markers on.
+      markers: false,
       lighting: v1.display.lighting,
       viewingAngles: v1.display.viewingAngles,
       coloringMode: v1.display.coloringMode,
@@ -191,7 +193,7 @@ export function toV1(scenario: Scenario): V1Conversion {
     warnings.push("the kinds' names");
   const custom = display.colorScheme === 'CUSTOM' ? display.customColors : undefined;
   if (!custom && kinds.some((k) => k.color)) warnings.push("the kinds' colours");
-  if (!display.markers) warnings.push('turning markers off');
+  if (display.markers) warnings.push("the kinds' markers");
 
   const color = (kind: string) => colorOf.get(kind)!;
   const kindsWithParticles = new Set(scenario.populations.map((p) => p.kind));
