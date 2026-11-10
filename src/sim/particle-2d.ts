@@ -9,6 +9,7 @@
 // reads is deliberate: indices are always in range and it adds no runtime check.
 import { Collision, MAX_TIME, MIN_TIME, Wall, type EventInfo } from './event';
 import type { AttractiveWall } from './attractive-wall';
+import { convert } from '../utils/units';
 import type { Arena, Particles } from './particles';
 import type { Piston } from './piston';
 import { ArenaType } from './simulation-info';
@@ -85,6 +86,13 @@ export function predCol2D(
   if (rad < 0) return NEVER; // they pass each other
   const dt = -(B + Math.sqrt(rad)) / A;
   return dt >= 0 ? t0 + dt : t0;
+}
+
+/** Red↔blue reactions: activation energies in kJ/mol (ReactionRelationship). */
+export interface Reaction {
+  forward: number;
+  reverse: number;
+  suppressReverse: boolean;
 }
 
 /** When two approaching particles' centres first come within `wellRadius` (PredColEnterWell). */
@@ -417,6 +425,7 @@ export function collide2D(
   event: EventInfo,
   arena: Arena,
   wellEnergy = 0.0,
+  reaction: Reaction | null = null,
 ): number {
   const time = event.time;
   const dt1 = time - p.t0[i]!;
@@ -467,7 +476,39 @@ export function collide2D(
   let type = event.type as number;
   let nV1a: number;
   let nV2a: number;
-  if (type === PARTICLE) {
+
+  // Red↔blue reactions (collideWith): a red pair colliding with more than the forward
+  // activation energy along the line of centres turns blue, and a blue pair red above the
+  // reverse one (unless suppressed). The relative speed then changes so the kinetic energy
+  // changes by −ΔE, ΔE = Ef − Er (forward) or Er − Ef (reverse).
+  let deltaE = 0;
+  if (reaction && type === PARTICLE) {
+    const combinedMass = mass + targetMass;
+    const reducedMass = (mass * targetMass) / combinedMass;
+    const relativeVelocity = V1a - V2a;
+    const relativeEnergy = 0.5 * reducedMass * relativeVelocity * relativeVelocity;
+    const eRel = convert('amu·m^2/s^2', 'kJ/mol', relativeEnergy);
+    const ci = p.color[i]!;
+    const cj = p.color[j]!;
+    if (ci === 0 && cj === 0 && eRel > reaction.forward) {
+      deltaE = convert('kJ/mol', 'amu·m^2/s^2', reaction.forward - reaction.reverse);
+      p.color[i] = 1;
+      p.color[j] = 1;
+    } else if (ci === 1 && cj === 1 && eRel > reaction.reverse && !reaction.suppressReverse) {
+      deltaE = convert('kJ/mol', 'amu·m^2/s^2', reaction.reverse - reaction.forward);
+      p.color[i] = 0;
+      p.color[j] = 0;
+    }
+  }
+
+  if (deltaE !== 0) {
+    const reducedMass = (mass * targetMass) / (mass + targetMass);
+    const relativeVelocity = V1a - V2a;
+    const rootVal = Math.sqrt(relativeVelocity * relativeVelocity - (2 * deltaE) / reducedMass);
+    const t = mass * V1a + targetMass * V2a;
+    nV1a = (t - targetMass * rootVal) / (mass + targetMass);
+    nV2a = (t + mass * rootVal) / (mass + targetMass);
+  } else if (type === PARTICLE) {
     nV1a = (2 * targetMass * V2a + (mass - targetMass) * V1a) / (mass + targetMass);
     nV2a = (2 * mass * V1a + (targetMass - mass) * V2a) / (mass + targetMass);
   } else {

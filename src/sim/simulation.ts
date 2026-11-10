@@ -24,6 +24,7 @@ import {
   moveToTime2D,
   predictBoundary2D,
   predictPair2D,
+  type Reaction,
 } from './particle-2d';
 import {
   boundaryCollide3D,
@@ -124,6 +125,12 @@ export interface InitialState {
    * of its two species' `depths`. Java only uses them in non-periodic arenas.
    */
   wells?: { radiusMultiplier: number; depths: readonly number[] };
+  /**
+   * Red↔blue reactions between the first two species (the settings dialog's Reactions
+   * tab), activation energies in kJ/mol. A red pair (species 0) colliding hard enough
+   * turns blue (species 1's colour) and back; particles keep their own species. 2D only.
+   */
+  reactions?: Reaction;
   /** A square well along the bottom wall (non-periodic 2D arenas). */
   attractiveWall?: AttractiveWallOptions;
   species: readonly InitialSpecies[];
@@ -175,6 +182,8 @@ export class Simulation {
   readonly piston: Piston | null;
   /** The wall thermostat, switched on by isothermal piston moves. */
   readonly thermostat = new Thermostat();
+  /** Red↔blue reactions (null without them). */
+  readonly reaction: Reaction | null;
   /** The attractive wall (null without one). */
   readonly wall: AttractiveWall | null;
   /** Attractive wall: 1 for each particle inside its well. */
@@ -282,6 +291,8 @@ export class Simulation {
         ? wells.radiusMultiplier
         : 0;
     this.wellDepths = Float64Array.from(init.species, (_, t) => wells?.depths[t] ?? 0);
+    this.reaction =
+      init.reactions && init.dimension === 2 && init.species.length >= 2 ? init.reactions : null;
     this.wall =
       init.attractiveWall &&
       init.dimension === 2 && // 2D only so far
@@ -319,6 +330,7 @@ export class Simulation {
         p.radius[i] = species.type.particleRadius;
         p.mass[i] = species.type.particleMass;
         p.type[i] = typeIndex;
+        p.color[i] = typeIndex;
         motion.initPeriodicFlags(p, i, this.arena);
       }
     });
@@ -551,7 +563,7 @@ export class Simulation {
       dimension: this.dimension,
       time: this.time,
       positions,
-      types: p.type.slice(),
+      types: p.color.slice(), // what each particle shows (reactions recolour)
     };
     if (this.piston) frame.pistonY = this.piston.position();
     return frame;
@@ -680,7 +692,7 @@ export class Simulation {
               this.wellDepths[p.type[a]!]! + this.wellDepths[p.type[b]!]!,
             );
       // An exit without the energy to leave comes back as WELL_REFLECT.
-      const performed = this.collide(p, a, b, event, this.arena, wellEnergy);
+      const performed = this.collide(p, a, b, event, this.arena, wellEnergy, this.reaction);
       if (this.wellMultiplier > 0) {
         const key = a * p.count + b;
         this.lastPairType.set(key, performed as number); // wells are 2D-only

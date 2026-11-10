@@ -80,7 +80,8 @@ export class Statistics {
     const p = this.particles;
     for (const s of this.speed) s.clearCurrent();
     for (let i = 0; i < p.count; i++) {
-      const type = p.type[i]!;
+      // By the colour shown, as Java does (reactions recolour particles).
+      const type = p.color[i]!;
       const speed = speedOf(p, i);
       for (const s of this.speed) if (s.slotOfType[type]! >= 0) s.addCurrent(type, speed);
     }
@@ -127,7 +128,7 @@ export class Statistics {
   private recordInterval(i: number, time: number): void {
     const p = this.particles;
     const elapsed = time - this.lastCollisionTime[i]!;
-    const type = p.type[i]!;
+    const type = p.color[i]!; // the colour it showed over this interval
     const speed = speedOf(p, i);
     for (const s of this.speed) if (s.slotOfType[type]! >= 0) s.addCumulative(type, speed, elapsed);
     this.lastCollisionTime[i] = time;

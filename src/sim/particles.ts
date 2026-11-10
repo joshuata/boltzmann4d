@@ -100,6 +100,12 @@ export class Particles {
   /** Index into the particle-type table. */
   readonly type: Uint16Array;
   /**
+   * The type whose colour the particle shows (Particle.getDisplayColor): its own type, or
+   * the other one after a red↔blue reaction. Reactions recolour particles without
+   * changing their type (mass, radius, well depth), as in Java.
+   */
+  readonly color: Uint16Array;
+  /**
    * Periodic boundaries only: Wall.LEFT / Wall.BOTTOM / Wall.BACK set while the particle
    * overlaps that boundary (it is then kept on the low side, with x in [-radius, radius)).
    */
@@ -118,6 +124,7 @@ export class Particles {
     this.radius = new Float64Array(count);
     this.mass = new Float64Array(count);
     this.type = new Uint16Array(count);
+    this.color = new Uint16Array(count);
     this.bFlag = new Uint8Array(count);
   }
 }

@@ -30,6 +30,8 @@ interface ParityFixture {
   }[];
   /** Square-well scenarios. */
   wells?: { radiusMultiplier: number; depths: number[] };
+  /** Red↔blue reaction scenarios. */
+  reactions?: { forward: number; reverse: number; suppressReverse: boolean };
   frameDuration: number;
   frames: number;
   /** Run-time actions, applied just before the given frame (scenario fixtures). */
@@ -40,7 +42,15 @@ interface ParityFixture {
   /** [type, time, part1, part2, side] per event, in order. */
   events: [number, number, number, number, number][];
   /** z and vz only for 3D presets. */
-  final: { x: number[]; y: number[]; vx: number[]; vy: number[]; z?: number[]; vz?: number[] };
+  final: {
+    x: number[];
+    y: number[];
+    vx: number[];
+    vy: number[];
+    colors?: number[];
+    z?: number[];
+    vz?: number[];
+  };
 }
 
 const fixtures = import.meta.glob<ParityFixture>('./parity/*.json', { import: 'default' });
@@ -63,6 +73,7 @@ function initialState(f: ParityFixture): InitialState {
     maxwellDemonMode: f.maxwellDemonMode,
     dividerThermalMode: f.dividerThermalMode,
     wells: f.wells,
+    reactions: f.reactions,
     holeEdges: f.edgeY && f.edgeZ ? { y: f.edgeY, z: f.edgeZ } : undefined,
     species: f.species.map((s) => ({
       type: { particleMass: s.mass, particleRadius: s.radius },
@@ -114,6 +125,7 @@ describe('parity with the Java app', () => {
       expect(Array.from(p.y)).toEqual(f.final.y);
       expect(Array.from(p.vx)).toEqual(f.final.vx);
       expect(Array.from(p.vy)).toEqual(f.final.vy);
+      if (f.final.colors) expect(Array.from(p.color)).toEqual(f.final.colors);
       if (sim.piston && f.piston) {
         expect(sim.piston.curLevel).toBe(f.piston.curLevel);
         expect(sim.piston.targetLevel).toBe(f.piston.targetLevel);
