@@ -76,6 +76,13 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
     case 'restart':
       restart();
       break;
+    case 'setGate':
+      try {
+        running?.setGateOpen(message.index, message.open);
+      } catch (error) {
+        post({ type: 'error', message: `Gate: ${errorText(error)}` });
+      }
+      break;
     case 'setHoleOpen':
       // Takes effect at the start of the next frame (Physics.setArenaHoleOpen).
       running?.setHoleOpen(message.open);
@@ -211,6 +218,11 @@ async function load(
       canHaveWells,
       canReact,
       typeNames: scenario.species.map((s) => s.type.displayName),
+      gates: scenario.walls.flatMap((w, index) =>
+        w.physics?.type === 'gate'
+          ? [{ index, id: w.id, points: w.points.flat(), closed: w.closed ?? false }]
+          : [],
+      ),
       options: {
         piston: scenario.arenaType === ArenaType.MOVABLE_PISTON,
         conductingDivider: scenario.dividerThermalMode === DividerThermalMode.CONDUCTING,
@@ -328,6 +340,7 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
           ? { level: piston.curLevel, moving: piston.isMoving(simulation.time) }
           : undefined,
         holeOpen: simulation.arena.maxwellDemonMode ? simulation.holeOpen : undefined,
+        openGates: frame.openGates ? [...frame.openGates] : undefined,
       });
       const now = performance.now();
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
@@ -393,6 +406,8 @@ function sceneOf(simulation: Simulation, prepared: Prepared): SceneInfo {
       color: w.style.color,
       lineWidth: w.style.lineWidth,
       dash: w.style.dash,
+      gate: w.physics?.type === 'gate',
+      well: w.physics?.type === 'attractive' ? w.physics.width : undefined,
     })),
     viewingAngles,
     divider: divided

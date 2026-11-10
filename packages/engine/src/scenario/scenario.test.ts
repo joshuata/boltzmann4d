@@ -456,22 +456,31 @@ describe('version 2 scenarios', () => {
     expect(text).toMatch(/color Blue\s+radius 1\s+mass 2\s*}/);
   });
 
-  it("refuses what the simulation can't run yet", async () => {
+  it('resolves wall kinds into SI units and species (WALL-4)', async () => {
+    const input = await base();
+    const w = (id: string, kind: NonNullable<ScenarioInput['walls']>[number]['kind']) => ({
+      id,
+      points: [
+        [1, 1],
+        [2, 2],
+      ] as [number, number][],
+      kind,
+    });
     const scenario = parseScenario({
-      ...(await base()),
+      ...input,
       walls: [
-        {
-          id: 'w',
-          points: [
-            [1, 1],
-            [2, 2],
-          ],
-          kind: { type: 'thermal', temperature: 300 },
-        },
+        w('t', { type: 'thermal', temperature: 300 }),
+        w('s', { type: 'semipermeable', passes: ['red'] }),
+        w('a', { type: 'attractive', depth: 2, width: 3 }),
       ],
     });
-    expect(() => resolveScenario(scenario)).toThrow(ScenarioError);
-    expect(() => resolveScenario(scenario)).toThrow("Thermal walls can't be simulated yet");
+    const physics = resolveScenario(scenario).walls.map((wall) => wall.physics);
+    // Kind ids become species indices (red is species 0).
+    expect(physics).toEqual([
+      { type: 'thermal', temperature: 300 },
+      { type: 'semipermeable', passes: [0] },
+      { type: 'attractive', depth: 2, width: expect.closeTo(3e-9, 20) },
+    ]);
   });
 
   it('colours kinds from the palette unless they have their own colour', () => {

@@ -43,7 +43,7 @@ Three prefixes keep the IDs citable from tests and plans: **KIND** for particle 
 - **WALL-3** Drawn walls sit inside the arena's box walls. For now they need a non-periodic boundary (SIM-13–16) and can't be combined with the piston (SIM-17); the editor says so when the user tries.
 - **WALL-4** Each wall has one kind:
   - **Reflecting**: elastic, specular reflection about the wall (or, at an end or corner, about the line from the point to the particle's centre).
-  - **Thermal**: a wall held at a temperature (0–9999 K). A particle leaving it has a velocity drawn from that temperature, as the thermostat does (SIM-21), so the gas near it heats or cools toward that temperature.
+  - **Thermal**: a wall held at a temperature (0–9999 K). A particle leaving it has the normal speed √(2kT/m), the average for particles hitting a wall from a gas at that temperature, so energy in and out balance exactly at T and the gas near it heats or cools toward it. (Deterministic rather than a random draw, so runs stay reproducible, SIM-1.)
   - **Semipermeable**: kinds the user picks pass through as if it weren't there; other kinds reflect. The user can't pick every kind (that would be no wall).
   - **Gate**: a reflecting wall the user opens and closes while the simulation runs, by tapping it in the arena or from the sidebar, like the Maxwell demon's hole (SIM-24). It starts open or closed as the scenario says.
   - **Attractive**: a reflecting wall with a square well along it, with a depth (kJ/mol) and width (nm), like the attractive wall the Java app has on the top wall: a particle entering the well gains its depth in kinetic energy, and leaves only if it has enough.

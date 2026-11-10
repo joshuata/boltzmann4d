@@ -135,8 +135,8 @@ export interface InitialState {
   /** A square well along the bottom wall (non-periodic 2D arenas). */
   attractiveWall?: AttractiveWallOptions;
   /**
-   * Drawn walls (WALL-1; reflecting): polylines with points in meters. 2D only, and not in
-   * periodic or piston arenas (WALL-3).
+   * Drawn walls (WALL-1, WALL-4): polylines with points in meters and their kind. 2D
+   * only, and not in periodic or piston arenas (WALL-3).
    */
   walls?: readonly WallShape[];
   species: readonly InitialSpecies[];
@@ -197,7 +197,9 @@ export class Simulation {
   private readonly inWallWell: Uint8Array;
   /** Drawn walls (null without any). */
   readonly walls: SegmentWalls | null;
-  private readonly wallHit: WallHit = { time: 0, index: -1 };
+  private readonly wallHit: WallHit = { time: 0, kind: 0, index: -1 };
+  /** Gates to open (true) or close at the start of the next frame, by wall index. */
+  private readonly pendingGates = new Map<number, boolean>();
 
   /**
    * Each particle's boundary event as Java predicted it: at the particle's own events, and
@@ -439,6 +441,12 @@ export class Simulation {
       this.holeOpen = this.nextFrameHoleOpen;
       this.repredictAllBoundaries();
     }
+    if (this.pendingGates.size > 0) {
+      // Gates likewise: every particle may now hit, or pass, them.
+      for (const [w, open] of this.pendingGates) this.walls?.setOpen(w, open);
+      this.pendingGates.clear();
+      for (let k = 0; k < this.particles.count; k++) this.repredict(k);
+    }
     const heap = this.heap;
     for (;;) {
       const i = heap.peek();
@@ -539,14 +547,24 @@ export class Simulation {
     const p = this.particles;
     let maxRadius = 0;
     for (let k = 0; k < p.count; k++) maxRadius = Math.max(maxRadius, p.radius[k]!);
-    const walls = new SegmentWalls(init.walls!, this.grid, maxRadius);
+    const walls = new SegmentWalls(init.walls!, this.grid, maxRadius, p);
     for (let k = 0; k < p.count; k++) {
-      // A hair of slack, as placement leaves exactly one radius at best.
-      if (walls.distanceTo(p.x[k]!, p.y[k]!) < p.radius[k]! * (1 - 1e-9)) {
+      // A hair of slack, as placement leaves exactly one radius at best. Walls a particle
+      // passes through (semipermeable, open gates) don't count.
+      if (walls.distanceTo(p.x[k]!, p.y[k]!, p.color[k]!) < p.radius[k]! * (1 - 1e-9)) {
         throw new Error(`Particle ${k} starts overlapping a drawn wall`);
       }
     }
     return walls;
+  }
+
+  /**
+   * Opens or closes the gate that is drawn wall `index` (WALL-4), from the start of the next
+   * frame, as the demon's hole does.
+   */
+  setGateOpen(index: number, open: boolean): void {
+    if (!this.walls?.isGate(index)) throw new Error(`Drawn wall ${index} is not a gate`);
+    this.pendingGates.set(index, open);
   }
 
   /** Re-predicts every particle's boundary event from where it is now, then its events. */
@@ -611,6 +629,13 @@ export class Simulation {
     };
     if (this.piston) frame.pistonY = this.piston.position();
     if (this.arena.maxwellDemonMode) frame.holeOpen = this.holeOpen;
+    if (this.walls) {
+      const open: number[] = [];
+      for (let w = 0; w < this.walls.wallCount; w++) {
+        if (this.walls.isGate(w) && this.walls.isOpen(w)) open.push(w);
+      }
+      frame.openGates = open;
+    }
     return frame;
   }
 
@@ -622,7 +647,8 @@ export class Simulation {
    */
   potentialEnergy(): number {
     const p = this.particles;
-    let total = 0;
+    // Drawn attractive walls: −E per particle inside each one's well.
+    let total = this.walls ? this.walls.potentialEnergy() * AMU_JOULE : 0;
     if (this.wall) {
       // The attractive wall: −E per particle inside its well.
       for (let k = 0; k < p.count; k++)
@@ -752,7 +778,7 @@ export class Simulation {
       this.repredict(b);
     } else {
       if (type === DRAWN_WALL) {
-        this.walls!.collide(p, i, event.time, event.part2);
+        this.walls!.collide(p, i, event.time, event.side, event.part2);
         this.counters.wallCollisions++;
         this.collisionCount[i]!++;
         this.recordEventState(i);
@@ -895,7 +921,7 @@ export class Simulation {
         bestRow = 0;
         bestCol = i;
         bestType = DRAWN_WALL;
-        bestSide = 0;
+        bestSide = hit.kind; // bounce, or entering or leaving a well
         bestPartner = hit.index;
       }
     }

@@ -13,9 +13,8 @@
 // every particle placed before them. Scenarios without either, such as every `.set` file,
 // keep Java's placement and its random draws exactly.
 //
-// Wall kinds other than reflecting (plan 0010 step 7) are refused with a ScenarioError.
 import type { ReactionRule } from '../sim/reactions';
-import { distanceToSegment, type WallShape } from '../sim/segment-walls';
+import { distanceToSegment, type WallPhysics, type WallShape } from '../sim/segment-walls';
 import { ParticleType } from '../sim/particle-type';
 import { ARENA_DIVIDER_RADIUS, ArenaType } from '../sim/simulation-info';
 import type { DividerThermalMode } from '../sim/simulation-info';
@@ -24,7 +23,7 @@ import { convert, Energy } from '../utils/units';
 import { ScenarioError, type Boundary } from './format';
 import { MARKERS, paletteColor, type Marker } from './palettes';
 import { wallStyle, type ResolvedWallStyle, type WallKindType } from './wall-styles';
-import type { Kind, Population, Scenario } from './schema';
+import type { Kind, Population, Scenario, WallKind } from './schema';
 
 /** `#RRGGBB` as a number. */
 export const parseHexColor = (hex: string) => parseInt(hex.slice(1), 16);
@@ -140,7 +139,6 @@ export function resolveScenario(
   scenario: Scenario,
   { random = Math.random }: ResolveOptions = {},
 ): ResolvedScenario {
-  checkSupported(scenario);
   const { arena: a, modes, run, statistics: st, display, kinds } = scenario;
   const arena = { x: nmToM(a.size[0]), y: nmToM(a.size[1]), z: nmToM(a.size[2]) };
   const colors = display.customColors;
@@ -181,6 +179,7 @@ export function resolveScenario(
       points: w.points.map(([x, y]) => [nmToM(x), nmToM(y)] as const),
       closed: w.closed,
       kind: w.kind.type,
+      physics: wallPhysics(w.kind, speciesOf),
       style: wallStyle(w.kind.type, w.style),
     })),
 
@@ -226,15 +225,21 @@ export function resolveScenario(
   };
 }
 
-/** Refuses what the simulation can't run yet: wall kinds other than reflecting (step 7). */
-function checkSupported(scenario: Scenario): void {
-  const unsupported = new Set(
-    scenario.walls.map((w) => w.kind.type).filter((type) => type !== 'reflecting'),
-  );
-  const problems = [...unsupported].map(
-    (type) => `${type[0]!.toUpperCase()}${type.slice(1)} walls can't be simulated yet`,
-  );
-  if (problems.length > 0) throw new ScenarioError(problems);
+/** A wall's kind (WALL-4) as the simulation takes it: SI units, species indices. */
+function wallPhysics(kind: WallKind, speciesOf: (kind: string) => number): WallPhysics {
+  switch (kind.type) {
+    case 'reflecting':
+      return { type: 'reflecting' };
+    case 'thermal':
+      return { type: 'thermal', temperature: kind.temperature };
+    case 'semipermeable':
+      // Kinds with no particles (and no reaction making them) can't be there to pass.
+      return { type: 'semipermeable', passes: kind.passes.map(speciesOf).filter((t) => t >= 0) };
+    case 'gate':
+      return { type: 'gate', open: kind.open };
+    case 'attractive':
+      return { type: 'attractive', depth: kind.depth, width: nmToM(kind.width) };
+  }
 }
 
 interface SpeciesBuilder {

@@ -19,6 +19,7 @@
   import ScaleBar from './ui/ScaleBar.svelte';
   import ViewOptions from './ui/ViewOptions.svelte';
   import { missingBrowserFeatures } from './ui/browser-support';
+  import { arenaPoint, distanceToPolyline } from './ui/arena-point';
   import { rotateView } from './ui/rotate-view';
   import { SimulationClient } from './ui/simulation.svelte';
   import type { ScenarioSource } from './worker';
@@ -109,9 +110,28 @@
       aria-label={sim?.dimension === 3
         ? 'Simulation arena; drag or use the arrow keys to turn it'
         : 'Simulation arena'}
-      onclick={() => {
+      onclick={(event) => {
+        if (!sim || sim.dimension === 3) return;
+        // A drawn gate within a few pixels opens or closes (WALL-4).
+        if (sim.arena && sim.arena.gates.length > 0) {
+          const box = canvas.getBoundingClientRect();
+          const at = arenaPoint(
+            event.clientX - box.left,
+            event.clientY - box.top,
+            box,
+            sim.arenaSize,
+          );
+          const gate = sim.arena.gates.find(
+            (g) => distanceToPolyline(at.x, at.y, g.points, g.closed) <= 10 * at.metersPerPixel,
+          );
+          const state = gate && sim.gates.find((g) => g.index === gate.index);
+          if (state) {
+            sim.setGate(state.index, !state.open);
+            return;
+          }
+        }
         // Maxwell's demon (2D): clicking the arena opens or closes the hole, as in Java.
-        if (sim && sim.dimension !== 3 && sim.holeOpen !== null) sim.setHoleOpen(!sim.holeOpen);
+        if (sim.holeOpen !== null) sim.setHoleOpen(!sim.holeOpen);
       }}
     ></canvas>
     {#if sim && sim.dimension !== 3 && !sim.error}
@@ -187,7 +207,7 @@
         onChange={(options) => sim?.setArenaOptions(options)}
       />
     {/if}
-    <div class="flex gap-2" role="group" aria-label="Simulation controls">
+    <div class="flex flex-wrap gap-2" role="group" aria-label="Simulation controls">
       <PlayPauseButton
         paused={sim?.paused ?? false}
         disabled={!sim}
@@ -215,6 +235,18 @@
       >
         <RotateCcwIcon aria-hidden="true" />
       </Button>
+      {#each sim?.gates ?? [] as gate (gate.index)}
+        <Button
+          variant="outline"
+          size="lg"
+          aria-pressed={gate.open}
+          title="Or tap the gate in the arena"
+          onclick={() => sim?.setGate(gate.index, !gate.open)}
+        >
+          {gate.open ? 'Close' : 'Open'}
+          {sim && sim.gates.length > 1 ? `gate ${gate.id}` : 'gate'}
+        </Button>
+      {/each}
       {#if sim?.holeOpen !== null && sim?.holeOpen !== undefined}
         <Button
           variant="outline"

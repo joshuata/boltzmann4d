@@ -32,6 +32,10 @@ export interface SceneInfo {
     /** Screen pixels. */
     lineWidth: number;
     dash: 'solid' | 'dashed';
+    /** Gates are drawn faint while open (frames say which are). */
+    gate?: boolean;
+    /** Attractive walls: the well's width each side, meters. */
+    well?: number;
   }[];
   /** Divided arenas: the divider's faces, and the hole's edge particles if it has one. */
   divider?: {
@@ -82,6 +86,8 @@ export interface RenderFrame {
   holeOpen?: boolean;
   /** Piston arenas: y of the piston's underside, meters. */
   pistonY?: number;
+  /** Scenes with drawn walls: the indices of the gates open this frame (WALL-4). */
+  openGates?: number[];
 }
 
 export {

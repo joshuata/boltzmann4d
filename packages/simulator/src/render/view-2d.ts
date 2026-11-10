@@ -35,7 +35,7 @@ export function createView2D(info: SceneInfo): View {
     ),
   );
   const plug = info.divider ? addDivider(root, info.divider, arena.y) : null;
-  const wallMaterials = info.walls ? addWalls(root, info.walls, arena) : [];
+  const { materials: wallMaterials, gates } = addWalls(root, info.walls ?? [], arena);
   const placePiston = info.piston ? addPiston(root, info.piston, arena) : null;
   placePiston?.(arena.y);
 
@@ -95,6 +95,11 @@ export function createView2D(info: SceneInfo): View {
     display(frame: RenderFrame) {
       if (frame.pistonY !== undefined) placePiston?.(frame.pistonY * NM);
       if (plug && frame.holeOpen !== undefined) plug.visible = !frame.holeOpen;
+      // Open gates fade (WALL-4).
+      if (frame.openGates) {
+        for (const [w, material] of gates)
+          material.opacity = frame.openGates.includes(w) ? 0.25 : 1;
+      }
       // The simulation went back in time: it restarted, so start the trace afresh.
       if (frame.time < lastTime) trace.reset();
       lastTime = frame.time;
@@ -328,16 +333,19 @@ function addPiston(
 }
 
 /**
- * Drawn walls (WALL-5): each a line `lineWidth` pixels wide in its colour, dashed or solid.
- * Returns the materials, which need the drawing size to draw widths in pixels.
+ * Drawn walls (WALL-5): each a line `lineWidth` pixels wide in its colour, dashed or solid,
+ * and attractive walls' wells as a faint band of the well's width each side. Returns the
+ * materials (which need the drawing size to draw widths in pixels) and the gates'.
  */
 function addWalls(
   root: THREE.Group,
   walls: NonNullable<SceneInfo['walls']>,
   arena: { x: number; y: number },
-): LineMaterial[] {
+): { materials: LineMaterial[]; gates: Map<number, LineMaterial> } {
   const dash = 0.012 * Math.max(arena.x, arena.y); // nm
-  return walls.map((wall) => {
+  const materials: LineMaterial[] = [];
+  const gates = new Map<number, LineMaterial>();
+  walls.forEach((wall, w) => {
     const positions: number[] = [];
     const n = wall.points.length / 2;
     for (let k = 0; k <= (wall.closed ? n : n - 1); k++) {
@@ -346,6 +354,20 @@ function addWalls(
     }
     const geometry = new LineGeometry();
     geometry.setPositions(positions);
+    if (wall.well) {
+      const band = new LineMaterial({
+        color: wall.color,
+        linewidth: 2 * wall.well * NM,
+        worldUnits: true,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false,
+      });
+      const well = new Line2(geometry, band);
+      well.renderOrder = -0.5;
+      root.add(well);
+      materials.push(band);
+    }
     const material = new LineMaterial({
       color: wall.color,
       linewidth: wall.lineWidth,
@@ -353,13 +375,16 @@ function addWalls(
       dashed: wall.dash === 'dashed',
       dashSize: dash,
       gapSize: dash * 0.7,
+      transparent: wall.gate === true,
     });
     const line = new Line2(geometry, material);
     line.computeLineDistances();
     line.renderOrder = 1;
     root.add(line);
-    return material;
+    materials.push(material);
+    if (wall.gate) gates.set(w, material);
   });
+  return { materials, gates };
 }
 
 /**

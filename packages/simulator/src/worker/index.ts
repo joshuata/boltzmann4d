@@ -61,6 +61,8 @@ export interface ArenaInfo {
   canReact: boolean;
   /** Species names, for per-species settings. */
   typeNames: string[];
+  /** Drawn gates (WALL-4): wall index, id, and points (x, y pairs in m) for tapping them. */
+  gates: { index: number; id: string; points: number[]; closed: boolean }[];
   options: ArenaOptions;
 }
 
@@ -79,6 +81,8 @@ export type ToWorker =
   | { type: 'restart' }
   /** Maxwell's demon: open or close the hole (from the next frame). */
   | { type: 'setHoleOpen'; open: boolean }
+  /** Open or close the gate that is drawn wall `index` (from the next frame). */
+  | { type: 'setGate'; index: number; open: boolean }
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'step' }
@@ -112,6 +116,8 @@ export type FromWorker =
       piston?: { level: number; moving: boolean };
       /** Maxwell's demon: whether the hole is open this frame. */
       holeOpen?: boolean;
+      /** Drawn walls: the gates open this frame, by wall index. */
+      openGates?: number[];
     }
   /** A scenario finished loading and is now the running simulation. */
   | {

@@ -217,3 +217,109 @@ describe('drawn walls', () => {
     expect(() => new Simulation(periodic)).toThrow(/periodic boundaries or the piston/);
   });
 });
+
+describe('drawn wall kinds (WALL-4)', () => {
+  /** A wall across the whole box at x = 30 nm. */
+  const across = (physics: WallShape['physics']): WallShape => ({
+    points: nm([[30, 0], [30, 60]]), // prettier-ignore
+    physics,
+  });
+  const left = (sim: Simulation, k: number) => sim.particles.x[k]! < 30 * NM;
+
+  it('let the kinds a semipermeable wall passes through, and stop the rest', () => {
+    // Species 0 passes; species 1 doesn't. Both start on the left.
+    const init = scene([across({ type: 'semipermeable', passes: [0] })], gas(30, [3, 3, 27, 57], 11)); // prettier-ignore
+    const [a] = init.species;
+    const half = a!.positions.length / 6;
+    init.species = [
+      { ...a!, positions: a!.positions.slice(0, 3 * half), velocities: a!.velocities.slice(0, 3 * half) }, // prettier-ignore
+      { ...a!, positions: a!.positions.slice(3 * half), velocities: a!.velocities.slice(3 * half) }, // prettier-ignore
+    ];
+    const sim = new Simulation(init);
+    const energy = sim.kineticEnergy();
+    run(sim, 30_000);
+    expect(sim.kineticEnergy() / energy).toBeCloseTo(1, 12);
+    const p = sim.particles;
+    let crossed = 0;
+    for (let k = 0; k < p.count; k++) {
+      if (p.type[k] === 1) expect(left(sim, k)).toBe(true);
+      else if (!left(sim, k)) crossed++;
+    }
+    expect(crossed).toBeGreaterThan(3);
+  });
+
+  it('open and close gates from the next frame', () => {
+    const sim = new Simulation(scene([across({ type: 'gate', open: false })], gas(20, [3, 3, 27, 57], 12))); // prettier-ignore
+    const everyoneLeft = () => Array.from({ length: sim.particles.count }, (_, k) => left(sim, k)).every(Boolean); // prettier-ignore
+    for (let f = 0; f < 200; f++) sim.advanceToNextFrame();
+    expect(everyoneLeft()).toBe(true);
+    sim.setGateOpen(0, true);
+    for (let f = 0; f < 2000 && everyoneLeft(); f++) sim.advanceToNextFrame();
+    expect(everyoneLeft()).toBe(false);
+    // Closed again, nobody changes sides.
+    sim.setGateOpen(0, false);
+    sim.advanceToNextFrame();
+    const sides = Array.from({ length: sim.particles.count }, (_, k) => left(sim, k));
+    const energy = sim.kineticEnergy();
+    for (let f = 0; f < 300; f++) sim.advanceToNextFrame();
+    expect(Array.from({ length: sim.particles.count }, (_, k) => left(sim, k))).toEqual(sides);
+    expect(sim.kineticEnergy() / energy).toBeCloseTo(1, 12);
+    expect(() => new Simulation(scene([across({ type: 'reflecting' })], [])).setGateOpen(0, true)).toThrow(/not a gate/); // prettier-ignore
+  });
+
+  it('bring the gas to a thermal wall’s temperature', () => {
+    const kB = 1.3806504e-23;
+    const wall = 900;
+    const sim = new Simulation(scene([across({ type: 'thermal', temperature: wall })], gas(60, [3, 3, 57, 57], 13).filter((q) => Math.abs(q.x - 30) > 2))); // prettier-ignore
+    const n = sim.particles.count;
+    const temperature = () => sim.kineticEnergy() / n / kB; // 2D: mean KE = kT
+    expect(temperature()).toBeLessThan(wall / 2);
+    run(sim, 100_000);
+    let sum = 0;
+    for (let s = 0; s < 100; s++) {
+      run(sim, 500);
+      sum += temperature();
+    }
+    expect(sum / 100 / wall).toBeCloseTo(1, 1); // within 5%
+  });
+
+  describe('attractive', () => {
+    const well = (depth: number): WallShape => ({
+      points: nm([[15, 30], [45, 30], [45, 45]]), // prettier-ignore
+      physics: { type: 'attractive', depth, width: 3 * NM },
+    });
+
+    it('conserve kinetic + potential energy, with particles drawn into the well', () => {
+      const particles = gas(40, [3, 3, 57, 25], 14);
+      const sim = new Simulation(scene([well(2)], particles));
+      const total = () => sim.kineticEnergy() + sim.potentialEnergy();
+      const start = total();
+      let mostInside = 0;
+      for (let s = 0; s < 40; s++) {
+        run(sim, 1000);
+        expect(total() / start).toBeCloseTo(1, 9);
+        mostInside = Math.max(mostInside, -sim.potentialEnergy());
+      }
+      expect(mostInside).toBeGreaterThan(0);
+      // Particles inside the well are where the wall says they are.
+      const walls = sim.walls!;
+      for (let k = 0; k < sim.particles.count; k++) {
+        const d = walls.wallDistance(0, sim.particles.x[k]!, sim.particles.y[k]!);
+        if (walls.insideWell(k, 0)) expect(d).toBeLessThan(3 * NM * (1 + 1e-9));
+        else expect(d).toBeGreaterThan(3 * NM * (1 - 1e-9));
+      }
+    });
+
+    it("keep a particle that can't pay the depth to leave", () => {
+      // Slow, inside the well near the corner: 20 kJ/mol is far more than its energy.
+      const sim = new Simulation(scene([well(20)], [{ x: 43, y: 32, vx: 50, vy: 30 }]));
+      expect(sim.walls!.insideWell(0, 0)).toBe(true);
+      const energy = sim.kineticEnergy() + sim.potentialEnergy();
+      run(sim, 2000);
+      expect(sim.walls!.insideWell(0, 0)).toBe(true);
+      const d = sim.walls!.wallDistance(0, sim.particles.x[0]!, sim.particles.y[0]!);
+      expect(d).toBeLessThan(3 * NM * (1 + 1e-9));
+      expect((sim.kineticEnergy() + sim.potentialEnergy()) / energy).toBeCloseTo(1, 9);
+    });
+  });
+});

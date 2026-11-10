@@ -24,8 +24,6 @@
     gate: 'Gate (opens and closes)',
     attractive: 'Attractive (a well along it)',
   };
-  /** Wall kinds the simulation runs so far (plan 0010 step 7 adds the rest). */
-  const SIMULATED = new Set(['reflecting']);
 
   const scenario = $derived(editor.scenario);
   const walls = $derived(scenario.walls.filter((w) => ids.includes(w.id)));
@@ -71,9 +69,18 @@
         <option value={type}>{KIND_LABELS[type]}</option>
       {/each}
     </select>
-    {#if kindType && !SIMULATED.has(kindType)}
+    {#if kindType === 'thermal'}
       <p class="text-muted-foreground text-xs">
-        Saved with the scenario, but can't be simulated yet: running needs reflecting walls.
+        Particles leave it at the wall's temperature, so the gas near it heats or cools.
+      </p>
+    {:else if kindType === 'gate'}
+      <p class="text-muted-foreground text-xs">
+        Open and close it while the simulation runs: tap it, or use its button.
+      </p>
+    {:else if kindType === 'attractive'}
+      <p class="text-muted-foreground text-xs">
+        Particles within the well's width of the wall gain its depth in kinetic energy, and need
+        that much to leave.
       </p>
     {/if}
   </div>
