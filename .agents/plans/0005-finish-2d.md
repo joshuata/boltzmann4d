@@ -62,7 +62,7 @@ Decision (2026-11-09): replicate Java where its behaviour is defensible, and pro
 ## Steps
 
 1. **Conducting divider:** engine, `.set` support, parity fixture. _Done: bit-identical with Java on `2Dhotcold-conducting` (330 divider hits in 2,001 events); a test shows the two sides reach one temperature while an insulating divider keeps them apart. Each hit moves every particle (as Java does), which `Simulation` replays as an extra entry in `frameTimes`._
-2. **Thermostat, then piston:** engine, scripted parity fixtures (adiabatic, isothermal, instantaneous, stop), worker messages, piston panel and piston drawing.
+2. **Thermostat, then piston:** engine, scripted parity fixtures (adiabatic, isothermal, instantaneous, stop), worker messages, piston panel and piston drawing. _Done: `src/sim/piston.ts` and `src/sim/thermostat.ts`; `2Dpiston-adiabatic` and `2Dpiston-isothermal` scenario fixtures (scripted moves and a stop, about 900 piston hits each) match bit for bit. The instantaneous move re-predicts (#24) and only pulls the piston out, as Java's panel allows. Boundary events are now cached per particle as Java predicted them, so lazily re-predicted pairs don't re-predict against a piston that has moved since. The sidebar gets an Arena box (movable piston on reflecting presets, conducting divider on divided ones) and a Piston panel; the piston is drawn as Java draws it._
 3. **Pair energy wells:** engine (cell size, sparse last-event map) and parity fixture.
 4. **Attractive wall and heat reservoir:** engine with the bugs fixed, conservation tests, reservoir temperature control.
 5. **Reactions:** per-particle colour in the engine, frames and renderer, plus a parity fixture.

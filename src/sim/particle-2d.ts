@@ -1,23 +1,26 @@
 // 2D particle motion, event prediction and collisions (port of Particle2D.java).
 //
-// Scope: hard spheres in reflecting, periodic, divided and holed arenas (insulating
-// divider; Maxwell's demon gate). The piston, square wells, the attractive wall, the
-// thermostat and the conducting divider come in later steps.
+// Scope: hard spheres in reflecting, periodic, divided and holed arenas (Maxwell's demon
+// gate), and the movable piston with its wall thermostat. Square wells and the attractive
+// wall come in later steps; the conducting divider lives in Simulation.
 //
 // The arithmetic in prediction and collision code keeps Java's order of operations,
 // since parity with the Java app depends on bit-identical results. `!` on typed-array
 // reads is deliberate: indices are always in range and it adds no runtime check.
 import { Collision, MAX_TIME, Wall, type EventInfo } from './event';
 import type { Arena, Particles } from './particles';
+import type { Piston } from './piston';
 import { ArenaType } from './simulation-info';
+import { particleKE2D, type Thermostat } from './thermostat';
 
 // Local copies of imported constants for the hot paths (see plan 0002).
 const NEVER = MAX_TIME;
-const { PARTICLE, WALL: WALL_EVENT, BOUNDARY, EOB, BARRIER, EDGE } = Collision;
+const { PARTICLE, WALL: WALL_EVENT, BOUNDARY, EOB, BARRIER, EDGE, PISTON } = Collision;
 const { LEFT, RIGHT, BOTTOM, TOP } = Wall;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
 const DIVIDED = ArenaType.DIVIDED_ARENA;
 const WITH_HOLE = ArenaType.DIVIDED_ARENA_WITH_HOLE;
+const PISTON_ARENA = ArenaType.MOVABLE_PISTON;
 
 /**
  * Periodic arenas: wraps a newly placed particle into the arena and sets its boundary
@@ -163,6 +166,8 @@ export function predictPair2D(
  * (EDGE, `side` = edge index). Candidates are checked in Java's order (x wall, y wall,
  * edges, barrier) and the first wins ties. A velocity component of zero yields a
  * BOUNDARY event at MAX_TIME, as in Java. `holeOpen` only matters for Maxwell's demon.
+ * Piston arenas add the piston after the walls (the top wall is still predicted, and wins
+ * a tie with a piston at rest at the top).
  */
 export function predictBoundary2D(
   p: Particles,
@@ -170,6 +175,7 @@ export function predictBoundary2D(
   arena: Arena,
   out: EventInfo,
   holeOpen = false,
+  piston: Piston | null = null,
 ): EventInfo {
   const t0 = p.t0[i]!;
   const x = p.x[i]!;
@@ -245,7 +251,14 @@ export function predictBoundary2D(
   }
 
   const type = arena.type;
-  if (type === DIVIDED || type === WITH_HOLE) {
+  if (type === PISTON_ARENA && piston) {
+    const t = predictPiston2D(t0, y, yVel, radius, piston);
+    if (t < out.time) {
+      out.type = PISTON;
+      out.side = BOTTOM;
+      out.time = t;
+    }
+  } else if (type === DIVIDED || type === WITH_HOLE) {
     // Approaching the divider from either side? (`colTime` still holds the y wall's
     // relative time otherwise, as in Java; it's only used when `side` is set.)
     let side = -1;
@@ -289,6 +302,32 @@ export function predictBoundary2D(
 
   if (out.time < t0) throw new Error('Boundary collision predicted in the past');
   return out;
+}
+
+/**
+ * When a particle at height y (at t0) moving at yVel first touches the piston's underside
+ * (Particle2D.predPistonCol). If the piston is moving now but will have stopped by then,
+ * and the particle is heading up, it's predicted again against the stopped piston.
+ */
+function predictPiston2D(
+  t0: number,
+  y: number,
+  yVel: number,
+  radius: number,
+  piston: Piston,
+): number {
+  let colTime = predCol2D(
+    0.0,
+    y - piston.positionAtTime(t0),
+    0.0,
+    yVel - piston.velocityAtTime(t0),
+    radius,
+    t0,
+  );
+  if (piston.isMoving(t0) && !piston.isMoving(colTime) && yVel > 0) {
+    colTime = predCol2D(0.0, y - piston.stopPosition(), 0.0, yVel, radius, t0);
+  }
+  return colTime;
 }
 
 /**
@@ -365,14 +404,29 @@ export function collide2D(
 
 /**
  * Performs particle i's boundary event (Particle2D.boundaryCollide): reflection off a
- * wall, or entering/leaving a periodic overlap region (which moves the particle to the
- * matching position on the other side and updates its flags).
+ * wall, the divider or the piston, or entering/leaving a periodic overlap region (which
+ * moves the particle to the matching position on the other side and updates its flags).
+ *
+ * With an active thermostat, reflections off walls, the divider and a stopped piston
+ * scale the normal velocity, and the thermostat tracks every boundary event's change in
+ * kinetic energy. A moving piston reflects in its own frame: v' = 2·v_piston − v.
  */
-export function boundaryCollide2D(p: Particles, i: number, event: EventInfo, arena: Arena): void {
+export function boundaryCollide2D(
+  p: Particles,
+  i: number,
+  event: EventInfo,
+  arena: Arena,
+  piston: Piston | null = null,
+  thermostat: Thermostat | null = null,
+): void {
   const dt = event.time - p.t0[i]!;
   p.cumTime[i] = p.cumTime[i]! + dt;
   p.t0[i] = event.time;
   const radius = p.radius[i]!;
+  const tracking = thermostat !== null && thermostat.enabled;
+  const oldKE = tracking ? particleKE2D(p, i) : 0.0;
+  // 1.0 unless the thermostat is active; x · 1.0 is exact, so plain bounces are unchanged.
+  const velAdjust = tracking ? thermostat.calcModifier(event.type, event.side, p, i) : 1.0;
 
   switch (event.type) {
     case WALL_EVENT:
@@ -380,23 +434,23 @@ export function boundaryCollide2D(p: Particles, i: number, event: EventInfo, are
         case LEFT:
           p.x[i] = radius;
           p.y[i] = p.y[i]! + p.vy[i]! * dt;
-          p.vx[i] = -p.vx[i]!;
+          p.vx[i] = -p.vx[i]! * velAdjust;
           break;
         case RIGHT:
           p.x[i] = arena.xSize - radius;
           p.y[i] = p.y[i]! + p.vy[i]! * dt;
-          p.vx[i] = -p.vx[i]!;
+          p.vx[i] = -p.vx[i]! * velAdjust;
           break;
         case BOTTOM:
           p.y[i] = radius;
           p.x[i] = p.x[i]! + p.vx[i]! * dt;
-          p.vy[i] = -p.vy[i]!;
+          p.vy[i] = -p.vy[i]! * velAdjust;
           keepOutOfDivider(p, i, arena, radius);
           break;
         case TOP:
           p.y[i] = arena.ySize - radius;
           p.x[i] = p.x[i]! + p.vx[i]! * dt;
-          p.vy[i] = -p.vy[i]!;
+          p.vy[i] = -p.vy[i]! * velAdjust;
           keepOutOfDivider(p, i, arena, radius);
           break;
       }
@@ -405,11 +459,20 @@ export function boundaryCollide2D(p: Particles, i: number, event: EventInfo, are
       if (event.side === LEFT) {
         p.x[i] = arena.barrierLeftX - radius;
         p.y[i] = p.y[i]! + p.vy[i]! * dt;
-        p.vx[i] = -p.vx[i]!;
+        p.vx[i] = -p.vx[i]! * velAdjust;
       } else if (event.side === RIGHT) {
         p.x[i] = arena.barrierRightX + radius;
         p.y[i] = p.y[i]! + p.vy[i]! * dt;
-        p.vx[i] = -p.vx[i]!;
+        p.vx[i] = -p.vx[i]! * velAdjust;
+      }
+      break;
+    case PISTON:
+      p.y[i] = p.y[i]! + p.vy[i]! * dt;
+      p.x[i] = p.x[i]! + p.vx[i]! * dt;
+      if (piston!.isMoving(event.time)) {
+        p.vy[i] = 2.0 * piston!.velocity() - p.vy[i]!;
+      } else {
+        p.vy[i] = -p.vy[i]! * velAdjust;
       }
       break;
     case EDGE:
@@ -467,6 +530,11 @@ export function boundaryCollide2D(p: Particles, i: number, event: EventInfo, are
       break;
     default:
       throw new Error(`Unsupported boundary event type ${event.type} in 2D`);
+  }
+
+  if (tracking) {
+    const deltaKE = particleKE2D(p, i) - oldKE;
+    if (deltaKE !== 0.0) thermostat.adjustKE(deltaKE);
   }
 }
 

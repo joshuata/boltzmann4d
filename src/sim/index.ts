@@ -32,6 +32,8 @@ export interface SceneInfo {
     /** The hole's diameter in meters; absent without a hole. */
     holeDiameter?: number;
   };
+  /** Piston arenas: the piston's valve and shaft radii, meters (its height comes per frame). */
+  piston?: { valveRadius: number; shaftRadius: number };
   /** 3D: the starting view rotation about the x and y axes, in degrees. */
   viewingAngles?: readonly [number, number];
 }
@@ -44,6 +46,8 @@ export interface RenderFrame {
   positions: Float64Array;
   /** Per-particle type index into the particle-type table. */
   types: Uint16Array;
+  /** Piston arenas: y of the piston's underside, meters. */
+  pistonY?: number;
 }
 
 export {
@@ -55,6 +59,8 @@ export {
   type SimulationOptions,
 } from './simulation';
 
+export { compressionLimitPercent, DEFAULT_PISTON_SPEED, Piston, PistonMode } from './piston';
+export { Thermostat } from './thermostat';
 export { createCounters, resetCounters, type Counters } from './counters';
 export {
   CalendarUpdate,

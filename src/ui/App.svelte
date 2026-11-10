@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ArenaOptions from './ArenaOptions.svelte';
+  import PistonPanel from './PistonPanel.svelte';
   import PlayPauseButton from './PlayPauseButton.svelte';
   import PresetPicker from './PresetPicker.svelte';
   import RateSlider from './RateSlider.svelte';
@@ -38,6 +40,13 @@
       disabled={!sim || sim.loading}
       onChange={(name) => sim?.loadPreset(name)}
     />
+    {#if sim?.arena}
+      <ArenaOptions
+        arena={sim.arena}
+        disabled={sim.loading}
+        onChange={(options) => sim?.setArenaOptions(options)}
+      />
+    {/if}
     <div class="transport" role="group" aria-label="Simulation controls">
       <PlayPauseButton
         paused={sim?.paused ?? false}
@@ -64,7 +73,7 @@
       onChange={(scale) => sim?.setRateScale(scale)}
     />
     {#if sim?.error}
-      <p class="error" role="alert">Simulation failed to start: {sim.error}</p>
+      <p class="error" role="alert">{sim.error}</p>
     {:else if sim}
       <p class="readout">
         {sim.loading ? 'Loading…' : `${sim.particleCount} particles`}
@@ -78,6 +87,13 @@
       <p class="readout">
         Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}
       </p>
+    {/if}
+    {#if sim?.piston}
+      <PistonPanel
+        piston={sim.piston}
+        onMove={(level, mode, speed) => sim?.movePiston(level, mode, speed)}
+        onStop={() => sim?.stopPiston()}
+      />
     {/if}
     {#if sim?.statistics}
       {#await statisticsPanel then { default: StatisticsPanel }}

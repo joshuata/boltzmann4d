@@ -34,6 +34,8 @@ import {
   predictPair3D,
 } from './particle-3d';
 import { createArena, Particles, type Arena } from './particles';
+import { compressionLimitPercent, Piston, PistonMode } from './piston';
+import { Thermostat } from './thermostat';
 import { ArenaType, DividerThermalMode } from './simulation-info';
 
 /** The per-dimension particle functions (particle-2d.ts, particle-3d.ts). */
@@ -55,12 +57,14 @@ const MOTION = {
     initPeriodicFlags: initPeriodicFlags3D,
   },
 } as const;
-type Motion = (typeof MOTION)[2 | 3];
+// The 2D signatures are the widest (the piston and thermostat are 2D-only so far); the 3D
+// functions take a prefix of the same arguments.
+type Motion = (typeof MOTION)[2];
 
 // Local copies for the hot paths (see plan 0002).
 const NEVER = MAX_TIME;
 const PARTICLE = Collision.PARTICLE;
-const { BOUNDARY, EOB, WALL, BARRIER, EDGE } = Collision;
+const { BOUNDARY, EOB, WALL, BARRIER, EDGE, PISTON } = Collision;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
 const LEFT = Wall.LEFT;
 /** Next-event type for a cell crossing (internal; never reported). */
@@ -146,9 +150,22 @@ export class Simulation {
   /** Maxwell's demon: whether the hole is open (it starts closed). */
   holeOpen = false;
   private nextFrameHoleOpen = false;
-  /** When Maxwell's demon last opened or closed the hole (-1: never). */
-  private boundaryRepredictTime = -1;
   frameDuration: number;
+  /** Piston arenas: the piston (null otherwise). */
+  readonly piston: Piston | null;
+  /** The wall thermostat, switched on by isothermal piston moves. */
+  readonly thermostat = new Thermostat();
+
+  /**
+   * Each particle's boundary event as Java predicted it: at the particle's own events, and
+   * for every particle when the hole or the piston changes. Pair events are re-predicted
+   * lazily, but the boundary event is reused, since the piston it was predicted against
+   * may have moved on since.
+   */
+  private readonly boundaryTime: Float64Array;
+  private readonly boundaryType: Uint8Array;
+  private readonly boundarySide: Uint8Array;
+  private readonly boundaryValid: Uint8Array;
 
   private readonly onEvent: SimulationOptions['onEvent'];
   private readonly heap: EventHeap;
@@ -199,8 +216,8 @@ export class Simulation {
     if (init.dimension !== 2 && init.dimension !== 3) {
       throw new Error(`${init.dimension}D simulation is not supported yet`);
     }
-    if (init.arenaType === ArenaType.MOVABLE_PISTON) {
-      throw new Error(`Arena type ${init.arenaType} is not supported yet`);
+    if (init.dimension === 3 && init.arenaType === ArenaType.MOVABLE_PISTON) {
+      throw new Error('The movable piston is not supported in 3D yet');
     }
     if (init.dimension === 3 && init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
       throw new Error('Conducting dividers are not supported in 3D yet');
@@ -208,7 +225,7 @@ export class Simulation {
     const dimension = init.dimension;
     this.dimension = dimension;
     this.is3D = dimension === 3;
-    const motion = MOTION[dimension];
+    const motion: Motion = MOTION[dimension];
     this.predictPair = motion.predictPair;
     this.predictBoundary = motion.predictBoundary;
     this.collide = motion.collide;
@@ -227,6 +244,8 @@ export class Simulation {
       init.dividerThermalMode === DividerThermalMode.CONDUCTING &&
       (init.arenaType === ArenaType.DIVIDED_ARENA ||
         init.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE);
+    this.piston =
+      init.arenaType === ArenaType.MOVABLE_PISTON ? new Piston(0, 0.0, init.arenaYSize) : null;
     if (init.holeEdges) {
       if (init.holeEdges.y.length !== this.arena.edgeY.length) {
         throw new Error('holeEdges must have one entry per edge sphere');
@@ -271,6 +290,10 @@ export class Simulation {
     this.eventY = new Float64Array(count);
     this.eventZ = new Float64Array(count);
     this.eventT0 = new Float64Array(count);
+    this.boundaryTime = new Float64Array(count);
+    this.boundaryType = new Uint8Array(count);
+    this.boundarySide = new Uint8Array(count);
+    this.boundaryValid = new Uint8Array(count);
 
     // Cells must be at least the largest contact distance between two particles.
     let r1 = 0;
@@ -323,8 +346,7 @@ export class Simulation {
     if (this.nextFrameHoleOpen !== this.holeOpen) {
       // Applied at the start of a frame, re-predicting every boundary event (Physics).
       this.holeOpen = this.nextFrameHoleOpen;
-      this.boundaryRepredictTime = this.time;
-      for (let k = 0; k < this.particles.count; k++) this.repredict(k);
+      this.repredictAllBoundaries();
     }
     const heap = this.heap;
     for (;;) {
@@ -333,6 +355,7 @@ export class Simulation {
       if (this.isReal(i)) this.perform(i);
       else this.processInternal(i);
     }
+    this.piston?.moveToTime(maxTime);
     const p = this.particles;
     const moveToTime = this.moveToTime;
     for (let k = 0; k < p.count; k++) {
@@ -350,6 +373,83 @@ export class Simulation {
    */
   setHoleOpen(open: boolean): void {
     this.nextFrameHoleOpen = open;
+  }
+
+  /**
+   * Starts the piston towards `targetLevel` (fraction of the arena height pushed in) at
+   * `speed` m/s, from where it is now (Physics.AdjustPistonLevel). Isothermal moves turn
+   * the wall thermostat on; adiabatic ones turn it off. Instantaneous moves jump there and
+   * may only pull the piston out (Java's piston panel only allows that), since jumping in
+   * could land the piston on particles.
+   */
+  movePiston(targetLevel: number, mode: PistonMode, speed: number): void {
+    const piston = this.requirePiston();
+    if (!(targetLevel >= 0 && targetLevel <= this.maxPistonLevel())) {
+      throw new RangeError(`Piston level ${targetLevel} is outside 0..${this.maxPistonLevel()}`);
+    }
+    piston.speed = speed;
+    if (mode === PistonMode.INSTANTANEOUS) {
+      if (targetLevel > piston.curLevel) {
+        throw new RangeError('An instantaneous piston move can only pull the piston out');
+      }
+      piston.targetLevel = targetLevel;
+      piston.curLevel = targetLevel;
+      // Java doesn't re-predict here, so particles already heading for the old position
+      // bounce off it once more (joshuata/boltzmann4d#24). Re-predicting fixes that.
+      this.repredictAllBoundaries();
+      return;
+    }
+    piston.targetLevel = targetLevel;
+    this.repredictAllBoundaries();
+    if (mode === PistonMode.ISOTHERMAL) this.thermostat.enabled = true;
+    else this.thermostat.reset(false);
+  }
+
+  /** Stops the piston where it is now (Controller.stopPiston). The thermostat stays as it is. */
+  stopPiston(): void {
+    const piston = this.requirePiston();
+    piston.targetLevel = piston.curLevel;
+    this.repredictAllBoundaries();
+  }
+
+  /** Highest piston level that leaves the particles room (Physics.calculateCompressionLimit). */
+  maxPistonLevel(): number {
+    const p = this.particles;
+    const radius = p.radius;
+    const species = new Map<number, { radius: number; count: number }>();
+    for (let k = 0; k < p.count; k++) {
+      const entry = species.get(p.type[k]!) ?? { radius: radius[k]!, count: 0 };
+      entry.count++;
+      species.set(p.type[k]!, entry);
+    }
+    const limit = compressionLimitPercent(this.arena.xSize, this.arena.ySize, [
+      ...species.values(),
+    ]);
+    return (100.0 - limit) / 100.0;
+  }
+
+  private requirePiston(): Piston {
+    if (!this.piston) throw new Error('This arena has no piston');
+    return this.piston;
+  }
+
+  /** Re-predicts every particle's boundary event from where it is now, then its events. */
+  private repredictAllBoundaries(): void {
+    const n = this.particles.count;
+    for (let k = 0; k < n; k++) this.predictBoundaryAt(k, this.time, true);
+    for (let k = 0; k < n; k++) this.repredict(k);
+  }
+
+  /** Predicts and caches particle k's boundary event from its state at time `te`. */
+  private predictBoundaryAt(k: number, te: number, includeFrameAtTe: boolean): void {
+    this.predictionState(k, te, 0, includeFrameAtTe);
+    const out = this.prediction;
+    this.predictBoundary(this.scratch, 0, this.arena, out, this.holeOpen, this.piston);
+    this.counters.boundaryPredictions++;
+    this.boundaryTime[k] = out.time;
+    this.boundaryType[k] = out.type;
+    this.boundarySide[k] = out.side;
+    this.boundaryValid[k] = 1;
   }
 
   /** Frame API used by the worker's ThreadController (Physics.advanceToNextFrame). */
@@ -381,7 +481,14 @@ export class Simulation {
       positions[d * k + 1] = p.y[k]!;
       if (d === 3) positions[d * k + 2] = p.z[k]!;
     }
-    return { dimension: this.dimension, time: this.time, positions, types: p.type.slice() };
+    const frame: RenderFrame = {
+      dimension: this.dimension,
+      time: this.time,
+      positions,
+      types: p.type.slice(),
+    };
+    if (this.piston) frame.pistonY = this.piston.position();
+    return frame;
   }
 
   /** Total kinetic energy in joules (sum of Particle2D/3D.getKE). */
@@ -467,8 +574,8 @@ export class Simulation {
         this.conductAcrossDivider(i, event);
         return event;
       }
-      this.boundaryCollide(p, i, event, this.arena);
-      if (type === WALL) this.counters.wallCollisions++;
+      this.boundaryCollide(p, i, event, this.arena, this.piston, this.thermostat);
+      if (type === WALL || type === PISTON) this.counters.wallCollisions++;
       else if (type === BOUNDARY || type === EOB) this.counters.boundaryCrossings++;
       else if (type === BARRIER || type === EDGE) this.counters.dividerCollisions++;
       this.collisionCount[i]!++;
@@ -494,7 +601,7 @@ export class Simulation {
       partnerEnergy = 0.5 * p.mass[partner]! * v * v;
       partnerDirection = Math.sign(v);
     }
-    this.boundaryCollide(p, i, event, this.arena);
+    this.boundaryCollide(p, i, event, this.arena, this.piston, this.thermostat);
     this.counters.dividerCollisions++;
     this.collisionCount[i]!++;
     if (partner >= 0) {
@@ -570,22 +677,21 @@ export class Simulation {
     let bestSide = 0;
     const crossingCell = out.part1;
 
-    // Java predicts boundaries only at the particle's own events, from that state.
+    // Java predicts boundaries at the particle's own events (from that state), and for
+    // every particle when the hole or the piston changes; otherwise reuse that prediction.
     const scratch = this.scratch;
-    // Java predicts boundaries at the particle's own events, and for every particle when
-    // Maxwell's demon opens or closes the hole (from positions after that frame's move).
-    const boundaryAt = this.boundaryRepredictTime;
-    const boundaryFromToggle = boundaryAt > this.eventT0[i]!;
-    if (boundaryFromToggle) this.predictionState(i, boundaryAt, 0, true);
-    else this.predictionState(i, this.eventT0[i]!, 0);
-    this.predictBoundary(scratch, 0, arena, out, this.holeOpen);
-    counters.boundaryPredictions++;
-    if (out.time < bestTime || (out.time === bestTime && 0 < bestRow)) {
-      bestTime = out.time;
+    let loadedAt = NaN; // time scratch slot 0 currently holds i's state for
+    if (!this.boundaryValid[i]) {
+      this.predictBoundaryAt(i, this.eventT0[i]!, false);
+      loadedAt = this.eventT0[i]!;
+    }
+    const boundaryTime = this.boundaryTime[i]!;
+    if (boundaryTime < bestTime || (boundaryTime === bestTime && 0 < bestRow)) {
+      bestTime = boundaryTime;
       bestRow = 0;
       bestCol = i;
-      bestType = out.type;
-      bestSide = out.side;
+      bestType = this.boundaryType[i]!;
+      bestSide = this.boundarySide[i]!;
     }
 
     const neighbours = grid.neighbours;
@@ -594,7 +700,6 @@ export class Simulation {
     const countI = this.collisionCount[i]!;
     const eventT0 = this.eventT0;
     const tI = eventT0[i]!;
-    let loadedAt = boundaryFromToggle ? NaN : tI; // time slot 0 currently holds i's state for
     for (let m = 0; m < neighbourCount; m++) {
       const c = neighbours[firstNeighbour + m]!;
       if (c < 0) continue;
@@ -651,6 +756,7 @@ export class Simulation {
     this.eventY[i] = p.y[i]!;
     this.eventZ[i] = p.z[i]!;
     this.eventT0[i] = p.t0[i]!;
+    this.boundaryValid[i] = 0;
     this.resetWrap(i);
   }
 

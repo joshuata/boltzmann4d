@@ -7,6 +7,8 @@ import { disposeTree, NM, type View } from './view';
 
 /** Space around the arena, as a fraction of its larger side. */
 const MARGIN = 0.04;
+/** Piston fill (the palettes come with the rendering baseline, plan 0005 step 6). */
+const PISTON_COLOR = 0xb0b0b0;
 
 export function createView2D(info: SceneInfo): View {
   const arena = { x: info.arenaXSize * NM, y: info.arenaYSize * NM };
@@ -25,6 +27,8 @@ export function createView2D(info: SceneInfo): View {
     ),
   );
   if (info.divider) root.add(buildDivider(info.divider, arena.y));
+  const placePiston = info.piston ? addPiston(root, info.piston, arena) : null;
+  placePiston?.(arena.y);
 
   const count = info.radii.length;
   const radii = info.radii;
@@ -72,6 +76,7 @@ export function createView2D(info: SceneInfo): View {
       camera.updateProjectionMatrix();
     },
     display(frame: RenderFrame) {
+      if (frame.pistonY !== undefined) placePiston?.(frame.pistonY * NM);
       const d = frame.dimension;
       const n = Math.min(frame.types.length, count);
       let drawn = 0;
@@ -132,4 +137,31 @@ function buildDivider(info: NonNullable<SceneInfo['divider']>, arenaHeight: numb
     bar(0, arenaHeight);
   }
   return group;
+}
+
+/**
+ * The piston as Java draws it (CoreProfileRenderer.addPiston2D): a slab two valve radii
+ * thick under its face, and a shaft up from its middle, clipped to the arena. Returns a
+ * function that moves it to height `y` (nm).
+ */
+function addPiston(
+  root: THREE.Group,
+  piston: NonNullable<SceneInfo['piston']>,
+  arena: { x: number; y: number },
+): (y: number) => void {
+  const material = new THREE.MeshBasicMaterial({ color: PISTON_COLOR });
+  const square = new THREE.PlaneGeometry(1, 1);
+  const valve = new THREE.Mesh(square, material);
+  const shaft = new THREE.Mesh(square, material);
+  root.add(valve, shaft);
+  return (y) => {
+    const top = arena.y;
+    const valveTop = Math.min(y + 2 * piston.valveRadius * NM, top);
+    valve.visible = valveTop > y;
+    valve.scale.set(arena.x, valveTop - y, 1);
+    valve.position.set(arena.x / 2, (y + valveTop) / 2, 0);
+    shaft.visible = top > valveTop;
+    shaft.scale.set(2 * piston.shaftRadius * NM, top - valveTop, 1);
+    shaft.position.set(arena.x / 2, (valveTop + top) / 2, 0);
+  };
 }
