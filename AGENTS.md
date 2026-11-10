@@ -47,7 +47,7 @@ packages/
     src/render/        Three.js scene (1D/2D/3D views, color modes, periodic ghosts, trace) + render worker
     src/ui/            sidebar Svelte components and SimulationClient
     src/charts/        statistics charts (LayerChart Svelte components)
-  simulation-editor/   @boltzmann4d/simulation-editor: builds settings files (placeholder, plan 0008)
+  simulation-editor/   @boltzmann4d/simulation-editor: the scenario editor form, exported as <SimulationEditor> (plan 0008)
   ui/                  @boltzmann4d/ui: shadcn-svelte components (src/components/ui) and the Tailwind theme (src/theme.css)
 apps/
   web/                 @boltzmann4d/web: SvelteKit site — navbar (2D/3D simulation menus), / (preset list), /simulate/[preset], /upload, /editor
