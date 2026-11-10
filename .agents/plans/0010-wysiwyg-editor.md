@@ -1,6 +1,6 @@
 # 0010: WYSIWYG scenario editor, drawn walls and particle kinds
 
-_Proposed 2026-11-10, not started._ Replaces plan 0008 step 4 (the form-based editor); builds on plan 0008 steps 2 and 3 (the worker loads a scenario JSON, a route runs a stored scenario), which must land first or alongside step 3 here.
+_In progress: step 1 (spec) is done; next is step 2._ Replaces plan 0008 step 4 (the form-based editor); builds on plan 0008 steps 2 and 3 (the worker loads a scenario JSON, a route runs a stored scenario), which must land first or alongside step 3 here.
 
 ## Goal
 
@@ -65,7 +65,7 @@ A palette module in the engine (pure data, used by the renderer and the editor):
 
 Each step is one PR. Steps 2–4 are engine work and can start before plan 0008 step 2; steps 5 onward need it.
 
-1. **Spec.** Add `docs/specs/editor.md` with requirement IDs (`EDIT-*`) for drawing, selection, wall kinds, spawn regions, kinds and palettes, reactions, undo, validation, saving and accessibility, plus the stories (`STORY-*`) the editor should make possible (e.g. osmosis through a semipermeable wall, effusion through a gate, a heat-conduction channel between thermal walls). Note in `particles.md` and `simulation.md` where kinds and rules extend PART-5 and SIM-25–28.
+1. **Spec (done).** `docs/specs/editor.md` with requirement IDs: `KIND-*` (kinds, palettes, reaction rules), `WALL-*` (drawn-wall physics) and `EDIT-*` (the editor), plus STORY-29–34 in `stories.md` (a chamber, osmosis, effusion through a gate, heat conduction, chained reactions, a colour-blind check). `particles.md` and `simulation.md` note where kinds and rules extend PART-5 and SIM-25–29.
 2. **Schema v2 and palettes.** The version 2 schema, the v1 → v2 migration, the `.set` compatibility check, the palette module and its CVD test. Round-trip tests over every bundled preset (`.set → v1 → v2 → .set`).
 3. **N kinds and reaction rules in the engine.** Rule table in 2D and 3D, stats and predictions by kind, `ResolvedScenario` with kinds. Parity green; new tests for multi-kind rules.
 4. **Segment walls and spawn regions (reflecting walls only).** Face and endpoint events, cell-grid registration, spawn-region placement, conservation, reversal and corner tests, benchmarks.
