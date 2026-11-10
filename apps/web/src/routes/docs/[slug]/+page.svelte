@@ -10,7 +10,9 @@
   {#if data.info.description}<meta name="description" content={data.info.description} />{/if}
 </svelte:head>
 
-<article class="prose prose-neutral dark:prose-invert max-w-none">
+<article
+  class="prose prose-neutral dark:prose-invert prose-code:before:content-none prose-code:after:content-none max-w-none"
+>
   <h1>{data.info.title}</h1>
   <data.content />
 </article>

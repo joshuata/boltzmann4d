@@ -1,6 +1,6 @@
 # Scenario editor
 
-The web app's own scenario editor: the user draws a 2D simulation (walls, shapes, areas that spawn particles), defines particle kinds and reactions, then runs, saves and shares it. _Web port:_ none of this is in the Java app or its manual. It extends the Java app, so where it touches an existing requirement (PART-5, SIM-25–28, FILE-6, VIEW-1) this spec says how. Plan: `.agents/plans/0010-wysiwyg-editor.md`.
+The web app's own scenario editor: the user draws a 2D simulation (walls, shapes, areas that spawn particles), defines particle kinds and reactions, then runs, saves and shares it. _Web port:_ none of this is in the Java app or its manual. It extends the Java app, so where it touches an existing requirement (PART-5, SIM-25–28, FILE-6, VIEW-1) this spec says how. Plan: `.agents/archived-plans/0010-wysiwyg-editor.md`.
 
 Three prefixes keep the IDs citable from tests and plans: **KIND** for particle kinds and colours, **WALL** for the physics of drawn walls, **EDIT** for the editor itself.
 
