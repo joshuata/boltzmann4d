@@ -11,6 +11,9 @@ pnpm = "12"
 hk = "2.11.1"
 pkl = "0.33"
 markdownlint-cli2 = "0.24"
+# GitHub CLI: 2.103 is the first with `gh issue artifact` (plans attached to issues; see
+# the feature-plan skill).
+gh = "2.103"
 
 # Install node_modules whenever package.json or pnpm-lock.yaml changed. `auto` runs this
 # before every `mise run` / `mise exec`; it is skipped when node_modules is up to date.
