@@ -1,4 +1,6 @@
 dist
+build
+.svelte-kit
 node_modules
 coverage
 pnpm-lock.yaml
@@ -6,6 +8,6 @@ LICENSE
 .markdownlint-cli2.jsonc
 
 # Generated data: written by tools, compared exactly; keep it as the tools write it.
-src/sim/parity/*.json
+packages/engine/src/sim/parity/*.json
 benchmarks/results/*.json
 vendor/

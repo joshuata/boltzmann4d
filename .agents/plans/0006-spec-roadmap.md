@@ -18,7 +18,7 @@ Plan 0005 ports the remaining 2D physics modes (thermostat and piston, pair well
 - **Physics stays exact.** Anything that changes the equations (1D, piston, thermostat, reactions, wells) is still checked bit for bit against the Java app with `ParityDump` (fork branch `boltzmann4d-parity-tools`), as AGENTS.md requires. The flexibility is in UI, statistics presentation and workflow, not in the event engine.
 - **New runtime operations** with no Java parity hook (adding or removing particles mid-run, switching the arena mid-run, reverse) are tested with invariants: energy and momentum conservation, no overlaps, reproducibility from a seed.
 - **Numeric scenarios become tests.** Where a scenario gives a number (SCN-4, 8, 10, 14, 26; PRED-14), add a seeded headless long-run Vitest test, fast enough for CI or else opt-in like the benchmarks.
-- **UI rules hold:** new data flows worker → `SimulationClient` (`src/ui/simulation.svelte.ts`) → Svelte props, and every control works on touch and at narrow widths.
+- **UI rules hold:** new data flows worker → `SimulationClient` (`packages/simulator/src/ui/simulation.svelte.ts`) → Svelte props, and every control works on touch and at narrow widths.
 
 ## Phases
 
@@ -29,8 +29,8 @@ _Not started._ The core classroom loop.
 - **Requirements:** PART-1–9, 12, 14–16; CTRL-1, 3; SIM-6, 12–16, 24 (demon toggle), 30; FILE-1 (user file picker), FILE-3, 4; STAT-25; CTRL-7 (fit-to-view default).
 - **Unlocks:** SCN-1, 2, 8, 10, 14, 15, 16, 17, 18, 19, 20, 28 (except Color by KE, Phase 3).
 - **Work:**
-  - `src/sim`: random placement and velocities on restart (move the placement in `src/io/load.ts`, `loadSpecies`/`randomVelocity`, into `src/sim` so restart and add share it); add a particle at a point or at random without overlap; remove the newest; switch arena type mid-run (divided → hole or undivided keeps running; → divided restarts all on the left); zero total momentum (SIM-30).
-  - Worker protocol (`src/worker/index.ts`): restart, add, drop at a point, remove, set arena, open/close hole, load file text. Replies carry the clock, red/blue and left/right counts, and temperature.
+  - `packages/engine/src/sim`: random placement and velocities on restart (move the placement in `packages/engine/src/io/load.ts`, `loadSpecies`/`randomVelocity`, into `packages/engine/src/sim` so restart and add share it); add a particle at a point or at random without overlap; remove the newest; switch arena type mid-run (divided → hole or undivided keeps running; → divided restarts all on the left); zero total momentum (SIM-30).
+  - Worker protocol (`packages/simulator/src/worker/index.ts`): restart, add, drop at a point, remove, set arena, open/close hole, load file text. Replies carry the clock, red/blue and left/right counts, and temperature.
   - UI: a Particles panel (number, mass, radius, temperature for red and blue, with edited values marked pending until restart or add, PART-15), boundary-mode buttons, a demon open/close button, the clock, Restart, Load file, collapsible panels. Tapping the 2D arena drops a blue particle; 3D adds at random.
 - **Simplify:** PART-10 (number locked while Red is selected) becomes a number control that always edits the blue count, labelled as such.
 
@@ -40,7 +40,7 @@ _Not started._
 
 - **Requirements:** PRES-1–9; PRED-8, 9 (pressure part); OPT-1, 3; SIM-10, 18.
 - **Unlocks:** SCN-7, 9, 11, 12, 13.
-- **Work:** wall momentum transfer through `Simulation.onEvent` (port `WallPressure`/`Pressure`), virial pressure for periodic arenas (`VirialPressure`), partial pressures per type, left and right when divided; ideal and real predictions in `src/stats/formulas.ts`; an Ideal/Real toggle; an Options panel with arena size (restarts) and averaging time; a pressure readout marked as warming up for the first `T_avg`.
+- **Work:** wall momentum transfer through `Simulation.onEvent` (port `WallPressure`/`Pressure`), virial pressure for periodic arenas (`VirialPressure`), partial pressures per type, left and right when divided; ideal and real predictions in `packages/engine/src/stats/formulas.ts`; an Ideal/Real toggle; an Options panel with arena size (restarts) and averaging time; a pressure readout marked as warming up for the first `T_avg`.
 - **Simplify:** pressure history plots come with Phase 3's history view; this phase shows numbers.
 
 ### Phase 3: Complete statistics
@@ -58,7 +58,7 @@ _Not started._
 
 - **Requirements:** SIM-4, 32; CTRL-2 (doubling steps), CTRL-6; VIEW-5.
 - **Unlocks:** SCN-21, 22; the trace for SCN-15 and `2Dliquid`.
-- **Work:** `reverse()` in `Simulation` (flip velocities, re-predict); trace mode in `src/render` with dot size and Clear (2D from plan 0005 step 6; add dot sprites in 3D); a `2Dequal` test that the halves match and then diverge around 95–120 ps.
+- **Work:** `reverse()` in `Simulation` (flip velocities, re-predict); trace mode in `packages/simulator/src/render` with dot size and Clear (2D from plan 0005 step 6; add dot sprites in 3D); a `2Dequal` test that the halves match and then diverge around 95–120 ps.
 
 ### Phase 5: 1D
 
@@ -66,7 +66,7 @@ _Not started._
 
 - **Requirements:** SIM-7, 8; PRED-1, 3 (1D columns), PRED-10; PRES-3 (pN).
 - **Unlocks:** SCN-23; the 1D row of SCN-4.
-- **Work:** port `Particle1D.java` to `src/sim/particle-1d.ts` with parity fixtures (extend `ParityDump` with 1D scenes); a 1D view in `view-2d.ts`; a Dimension control that restarts; fix Java bug 4 (`avgRelativeVelocity` in 1D).
+- **Work:** port `Particle1D.java` to `packages/engine/src/sim/particle-1d.ts` with parity fixtures (extend `ParityDump` with 1D scenes); a 1D view in `view-2d.ts`; a Dimension control that restarts; fix Java bug 4 (`avgRelativeVelocity` in 1D).
 
 ### Phase 6: Piston and thermostat
 
@@ -91,8 +91,9 @@ _Not started._
 _Not started._
 
 - **Requirements:** FILE-2, 5, 6; OUT-1–4; VIEW-6 (save the view angle); STAT-11.
-- **Work:** a `.set` writer in `src/io` (basic and complete) with round-trip tests over every preset and Java-saved files; save as a download; a custom default kept in `localStorage`; a CSV recorder for averages, cumulative distributions and positions, collected in the worker and downloaded when stopped.
+- **Work:** a `.set` writer in `packages/engine/src/io` (basic and complete) with round-trip tests over every preset and Java-saved files; save as a download; a custom default kept in `localStorage`; a CSV recorder for averages, cumulative distributions and positions, collected in the worker and downloaded when stopped.
 - **Simplify:** one Export dialog; no streaming to disk.
+- **See also:** plan 0008 (simulation editor) adds a JSON settings format next to `.set` and shares this writer.
 
 ### Phase 9: Extras and polish
 

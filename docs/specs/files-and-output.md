@@ -1,6 +1,6 @@
 # Files and output
 
-Saved demonstrations and data export. Source: manual §I.E, §I.G, §XII, quick start guide. `.set` parsing lives in `src/io`.
+Saved demonstrations and data export. Source: manual §I.E, §I.G, §XII, quick start guide. `.set` parsing lives in `packages/engine/src/io`.
 
 ## Loading
 

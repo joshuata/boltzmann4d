@@ -1,0 +1,23 @@
+{
+  "name": "@boltzmann4d/web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "description": "The Boltzmann 4D site: choose a simulation, upload settings, open the editor.",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+  },
+  "dependencies": {
+    "@boltzmann4d/engine": "workspace:*",
+    "@boltzmann4d/simulation-editor": "workspace:*",
+    "@boltzmann4d/simulator": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^4.0.1",
+    "@sveltejs/kit": "^3.1.1"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  // No DOM lib: the engine runs in a Worker and in Node, so browser APIs must not creep in.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2022"],
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.ts", "*.config.ts"]
+}

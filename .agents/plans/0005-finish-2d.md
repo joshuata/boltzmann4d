@@ -52,8 +52,8 @@ Decision (2026-11-09): replicate Java where its behaviour is defensible, and pro
 - **Parity tooling:** extend the fork's `ParityDump` with scenarios that a `.set` file can't express:
   - settings set directly on `SimulationInfo` (wells, wall, reactions),
   - scripted actions at given frames (piston moves and stops, hole toggles).
-  - Fixtures go in `src/sim/parity/` next to the preset ones.
-- **Engine:** everything stays in `src/sim`, pure and synchronous.
+  - Fixtures go in `packages/engine/src/sim/parity/` next to the preset ones.
+- **Engine:** everything stays in `packages/engine/src/sim`, pure and synchronous.
   - New state goes in typed arrays: per-particle colour, per-type well depth, and a sparse per-pair last well event.
   - The piston and thermostat become small classes owned by `Simulation`.
 - **Run-time controls:** new worker messages, exposed through `SimulationClient` methods per the AGENTS.md UI rules. The sidebar gets Svelte controls that work at phone width.

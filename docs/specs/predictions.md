@@ -1,6 +1,6 @@
 # Predictions
 
-The theoretical values the app shows next to measured ones (orange lines, black curves, Predicted fields). Source: manual §IV, §V, §VII–XI. `src/stats/formulas.ts` implements these; the Java `Formulas` and `StatUtils` classes are the exact reference, especially where the PDF's equations didn't survive text extraction (marked _verify_).
+The theoretical values the app shows next to measured ones (orange lines, black curves, Predicted fields). Source: manual §IV, §V, §VII–XI. `packages/engine/src/stats/formulas.ts` implements these; the Java `Formulas` and `StatUtils` classes are the exact reference, especially where the PDF's equations didn't survive text extraction (marked _verify_).
 
 Notation: d = dimension, M = molar mass, R = gas constant, T = temperature, N = particle count, r = radius, σ = 2r, A = area (2D), V = volume (3D), L = length (1D).
 

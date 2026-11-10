@@ -42,7 +42,7 @@ The port predicts from each species' temperature **measured from the data shown*
 
 ## Approach
 
-- **Engine side** (`src/stats`, pure TS, runs in the physics worker):
+- **Engine side** (`packages/engine/src/stats`, pure TS, runs in the physics worker):
   - Statistics subscribe through `Simulation`'s `onEvent` hook and a new per-frame hook.
   - They read particle state from the `Particles` arrays: pre-collision velocity at the event, plus per-particle time of last particle collision.
   - Typed arrays throughout, and the per-type-subset structure kept.
@@ -59,9 +59,9 @@ The port predicts from each species' temperature **measured from the data shown*
 ## Steps
 
 1. `Formulas` and `StatUtils` predictions (averages, widths, distributions, collision rate and lifetime, gamma helpers), with tests. _Done (#19)._
-2. Statistics core: per-particle last-collision times, weighted trackers, histogram bins, the forget, type subsets, hooked into `Simulation`. Instantaneous Speed first. _Done for Instantaneous Speed: `src/stats/statistics.ts` and friends; a 200,000-event run matches the Maxwell–Boltzmann distribution to within 1% per bin._
-3. Worker → UI summary messages; speed histogram chart with the theoretical curve and markers in the sidebar; type-subset and cumulative/current toggles. _Done: summaries every 27 frames (and after each step while paused); `src/charts/SpeedHistogram.svelte` (LayerChart) in `src/ui/StatisticsPanel.svelte`. The chart's x axis spans the bins' shared range rather than each subset's own range, so subsets are directly comparable; the curve still covers the subset's own range, as in Java._
-4. Correctness tests against theory; benchmarks with statistics on. _Done: `src/stats/correctness.test.ts` checks a two-species mixture (each species and the mix against Maxwell–Boltzmann, equipartition), species starting at different temperatures settling to one, per-frame current samples against the theory, and 4-particle periodic and reflecting runs matching the finite-system corrections to 0.5% (the ideal-gas values are 3–4% off). `src/stats/statistics.bench.ts`: statistics cost about 4% of event throughput from 60 to 10,000 particles, and a summary takes under 0.3 ms._
+2. Statistics core: per-particle last-collision times, weighted trackers, histogram bins, the forget, type subsets, hooked into `Simulation`. Instantaneous Speed first. _Done for Instantaneous Speed: `packages/engine/src/stats/statistics.ts` and friends; a 200,000-event run matches the Maxwell–Boltzmann distribution to within 1% per bin._
+3. Worker → UI summary messages; speed histogram chart with the theoretical curve and markers in the sidebar; type-subset and cumulative/current toggles. _Done: summaries every 27 frames (and after each step while paused); `packages/simulator/src/charts/SpeedHistogram.svelte` (LayerChart) in `packages/simulator/src/ui/StatisticsPanel.svelte`. The chart's x axis spans the bins' shared range rather than each subset's own range, so subsets are directly comparable; the curve still covers the subset's own range, as in Java._
+4. Correctness tests against theory; benchmarks with statistics on. _Done: `packages/engine/src/stats/correctness.test.ts` checks a two-species mixture (each species and the mix against Maxwell–Boltzmann, equipartition), species starting at different temperatures settling to one, per-frame current samples against the theory, and 4-particle periodic and reflecting runs matching the finite-system corrections to 0.5% (the ideal-gas values are 3–4% off). `packages/engine/src/stats/statistics.bench.ts`: statistics cost about 4% of event throughput from 60 to 10,000 particles, and a summary takes under 0.3 ms._
 5. The remaining statistics (velocity components, kinetic energy, path, time per collision, the per-particle averages, collision rate, pressure) and the history plot, behind a statistic picker. _Scheduled in plan 0006, Phases 2 (pressure) and 3._
 
 ## Decisions (agreed 2026-11-09)

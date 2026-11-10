@@ -200,3 +200,6 @@ dist
 
 # CPU profiles from `mise run profile`
 profiles/
+
+# SvelteKit static output (apps/web)
+build/

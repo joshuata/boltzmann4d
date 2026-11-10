@@ -4,10 +4,19 @@ import svelte from 'eslint-plugin-svelte';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 import checkFile from 'eslint-plugin-check-file';
-import svelteConfig from './svelte.config.js';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 export default ts.config(
-  { ignores: ['dist/', 'node_modules/', 'coverage/', 'vendor/'] },
+  {
+    ignores: [
+      '**/dist/',
+      '**/node_modules/',
+      'coverage/',
+      'vendor/',
+      '**/.svelte-kit/',
+      'apps/web/build/',
+    ],
+  },
   js.configs.recommended,
   ...ts.configs.recommended,
   ...svelte.configs.recommended,
@@ -23,12 +32,14 @@ export default ts.config(
   {
     // File names: kebab-case modules, PascalCase Svelte components. Suffixes such as
     // `.test`, `.worker` and `.svelte` (in `x.svelte.ts`) are ignored when checking.
-    files: ['src/**/*.ts', 'src/**/*.svelte'],
+    // SvelteKit route files (`+page.svelte`, `+layout.ts`) are named by the framework.
+    files: ['packages/*/src/**/*.{ts,svelte}', 'apps/*/src/**/*.{ts,svelte}'],
+    ignores: ['apps/*/src/routes/**'],
     plugins: { 'check-file': checkFile },
     rules: {
       'check-file/filename-naming-convention': [
         'error',
-        { 'src/**/*.ts': 'KEBAB_CASE', 'src/**/*.svelte': 'PASCAL_CASE' },
+        { '**/src/**/*.ts': 'KEBAB_CASE', '**/src/**/*.svelte': 'PASCAL_CASE' },
         { ignoreMiddleExtensions: true },
       ],
     },
@@ -40,7 +51,7 @@ export default ts.config(
         projectService: true,
         extraFileExtensions: ['.svelte'],
         parser: ts.parser,
-        svelteConfig,
+        svelteConfig: { preprocess: vitePreprocess() },
       },
     },
   },

@@ -7,6 +7,8 @@ pnpm install
 pnpm dev
 ```
 
-Pick a preset from the sidebar; the choice is kept in the URL (`?preset=2Deffuse`), so links and reloads open the same preset. `?render=main` draws on the main thread instead of the render worker.
+The home page lists the bundled presets; each runs at its own URL (`/simulate/2Deffuse`), and picking another in the sidebar moves to its page. `?render=main` draws on the main thread instead of the render worker.
+
+The repo is a pnpm workspace: `packages/engine` (physics, statistics, settings files), `packages/simulator` (the viewer), `packages/simulation-editor` and the SvelteKit site in `apps/web`.
 
 See [AGENTS.md](AGENTS.md) for the architecture and contributor notes. Licensed under GPL-3.0.
