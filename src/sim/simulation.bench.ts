@@ -22,6 +22,8 @@ const scenes: [string, () => Promise<InitialState>][] = [
       dividerThermalMode: DividerThermalMode.CONDUCTING,
     }),
   ],
+  ['3Dmixture (60, reflecting)', () => preset('3Dmixture')],
+  ['3Dbrownian (200, periodic)', () => preset('3Dbrownian')],
   ['synthetic (1000, reflecting)', async () => syntheticGas({ count: 1000 })],
   [
     'synthetic (1000, periodic)',

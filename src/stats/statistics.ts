@@ -81,7 +81,7 @@ export class Statistics {
     for (const s of this.speed) s.clearCurrent();
     for (let i = 0; i < p.count; i++) {
       const type = p.type[i]!;
-      const speed = Math.sqrt(p.vx[i]! * p.vx[i]! + p.vy[i]! * p.vy[i]!);
+      const speed = speedOf(p, i);
       for (const s of this.speed) if (s.slotOfType[type]! >= 0) s.addCurrent(type, speed);
     }
   }
@@ -128,8 +128,16 @@ export class Statistics {
     const p = this.particles;
     const elapsed = time - this.lastCollisionTime[i]!;
     const type = p.type[i]!;
-    const speed = Math.sqrt(p.vx[i]! * p.vx[i]! + p.vy[i]! * p.vy[i]!);
+    const speed = speedOf(p, i);
     for (const s of this.speed) if (s.slotOfType[type]! >= 0) s.addCumulative(type, speed, elapsed);
     this.lastCollisionTime[i] = time;
   }
+}
+
+/** A particle's speed in m/s (vz is 0 in 1D and 2D). */
+function speedOf(p: Particles, i: number): number {
+  const vx = p.vx[i]!;
+  const vy = p.vy[i]!;
+  const vz = p.vz[i]!;
+  return Math.sqrt(vx * vx + vy * vy + vz * vz);
 }

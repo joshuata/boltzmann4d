@@ -13,7 +13,9 @@ export type ToRenderWorker =
       /** Receives the physics worker's RenderStream messages. */
       frames: MessagePort;
     }
-  | { type: 'resize'; size: ViewSize };
+  | { type: 'resize'; size: ViewSize }
+  /** 3D: turn the view by these angles, in degrees. */
+  | { type: 'rotate'; aboutX: number; aboutY: number };
 
 /** Physics worker -> renderer, over the MessagePort. */
 export type RenderStream =

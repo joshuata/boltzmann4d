@@ -15,16 +15,22 @@ export interface Arena {
   /** Divided arenas: the divider's faces (centre ± ARENA_DIVIDER_RADIUS). */
   barrierLeftX: number;
   barrierRightX: number;
-  /** Arenas with a hole: the hole's diameter, and the two edge discs that line it. */
+  /**
+   * Arenas with a hole: the hole's diameter, and the fixed edge particles that line it
+   * (two discs in 2D, a ring of spheres around the x axis in 3D), all at x = edgeX.
+   */
   holeDiameter: number;
+  /** 3D: the square of the hole's radius out to the edge spheres' centres (ArenaInfo). */
+  holeRadiusSquared: number;
   edgeX: number;
-  edgeY: readonly [number, number];
+  edgeY: Float64Array;
+  edgeZ: Float64Array;
   edgeRadius: number;
   /** Maxwell's demon: the hole only lets particles through while it's open. */
   maxwellDemonMode: boolean;
 }
 
-/** Fills in the divider and hole geometry the way Java's ArenaInfo and Particle2D do. */
+/** Fills in the divider and hole geometry the way Java's ArenaInfo does. */
 export function createArena(
   type: ArenaType,
   xSize: number,
@@ -32,11 +38,30 @@ export function createArena(
   zSize: number,
   holeDiameter = -1,
   maxwellDemonMode = false,
+  dimension: 2 | 3 = 2,
 ): Arena {
   const dividerRadius = ARENA_DIVIDER_RADIUS;
   const hasHole = type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
-  // ArenaInfo.holeRadius: the edge discs sit just outside the hole.
+  // ArenaInfo.holeRadius: the edge particles sit just outside the hole.
   const holeRadius = 0.5 * holeDiameter + dividerRadius;
+  let edgeY: Float64Array;
+  let edgeZ: Float64Array;
+  if (dimension === 2) {
+    edgeY = Float64Array.of(0.5 * ySize + holeRadius, 0.5 * ySize - holeRadius);
+    edgeZ = new Float64Array(2);
+  } else {
+    // A ring of spheres about one diameter apart; the angle accumulates as in Java.
+    const count = Math.max(0, Math.round((4 * Math.PI * holeRadius) / dividerRadius));
+    edgeY = new Float64Array(count);
+    edgeZ = new Float64Array(count);
+    const angStep = (2 * Math.PI) / count;
+    let ang = 0;
+    for (let i = 0; i < count; i++) {
+      edgeY[i] = holeRadius * Math.cos(ang) + 0.5 * ySize;
+      edgeZ[i] = holeRadius * Math.sin(ang) + 0.5 * zSize;
+      ang += angStep;
+    }
+  }
   return {
     type,
     xSize,
@@ -45,8 +70,10 @@ export function createArena(
     barrierLeftX: 0.5 * xSize - dividerRadius,
     barrierRightX: 0.5 * xSize + dividerRadius,
     holeDiameter: hasHole ? holeDiameter : -1,
+    holeRadiusSquared: holeRadius * holeRadius,
     edgeX: 0.5 * xSize,
-    edgeY: [0.5 * ySize + holeRadius, 0.5 * ySize - holeRadius],
+    edgeY,
+    edgeZ,
     edgeRadius: dividerRadius,
     maxwellDemonMode: hasHole && maxwellDemonMode,
   };

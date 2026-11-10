@@ -1,5 +1,4 @@
-<!-- Chooses one of the bundled presets (the Java app's Presets menu). 3D presets are listed
-     but disabled until 3D is ported. -->
+<!-- Chooses one of the bundled presets (the Java app's Presets menu). -->
 <script lang="ts">
   import { presetCatalog } from '../io/presets';
 
@@ -27,9 +26,9 @@
         <option value={preset.name}>{preset.label}</option>
       {/each}
     </optgroup>
-    <optgroup label="3D (not available yet)">
+    <optgroup label="3D">
       {#each threeD as preset (preset.name)}
-        <option value={preset.name} disabled>{preset.label}</option>
+        <option value={preset.name}>{preset.label}</option>
       {/each}
     </optgroup>
   </select>
