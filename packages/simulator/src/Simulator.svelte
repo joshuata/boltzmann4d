@@ -2,6 +2,8 @@
      It fills its container, so the page decides how big it is. -->
 <script lang="ts">
   import { Button } from '@boltzmann4d/ui/button';
+  import * as Collapsible from '@boltzmann4d/ui/collapsible';
+  import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import StepForwardIcon from '@lucide/svelte/icons/step-forward';
   import { untrack } from 'svelte';
   import PlayPauseButton from './ui/PlayPauseButton.svelte';
@@ -21,6 +23,8 @@
 
   let canvas: HTMLCanvasElement;
   let sim = $state<SimulationClient | null>(null);
+  /** The performance readouts under the particle count (frame rates, physics time, renderer). */
+  let detailsOpen = $state(true);
 
   $effect(() => {
     const client = new SimulationClient(
@@ -86,22 +90,34 @@
     />
     {#if sim?.error}
       <p class="text-destructive text-sm" role="alert">Simulation failed to start: {sim.error}</p>
-    {:else if sim}
-      <div class="text-muted-foreground space-y-1 text-xs tabular-nums">
-        <p>{sim.loading ? 'Loading…' : `${sim.particleCount} particles`}</p>
-        <p>
-          {sim.simulationFps.toFixed(0)} fps ({sim.drawnFps.toFixed(0)} drawn) · physics {sim.physicsMs.toFixed(
-            2,
-          )} ms/frame
-        </p>
-        <p>{sim.simulatedPsPerSecond.toFixed(1)} ps simulated per second</p>
-        <p>Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}</p>
-      </div>
     {/if}
     {#if sim?.statistics}
       {#await statisticsPanel then { default: StatisticsPanel }}
         <StatisticsPanel summary={sim.statistics} />
       {/await}
+    {/if}
+    <!-- Diagnostics last: particle count, frame rates and where drawing happens. -->
+    {#if sim && !sim.error}
+      <Collapsible.Root bind:open={detailsOpen} class="mt-4 border-t pt-2">
+        <Collapsible.Trigger
+          class="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 w-[calc(100%+0.5rem)] items-center justify-between rounded-md px-1 text-xs font-medium"
+        >
+          {sim.loading ? 'Loading…' : `${sim.particleCount} particles`}
+          <ChevronDownIcon
+            class={['size-4 transition-transform', detailsOpen && 'rotate-180']}
+            aria-hidden="true"
+          />
+        </Collapsible.Trigger>
+        <Collapsible.Content class="text-muted-foreground space-y-1 text-xs tabular-nums">
+          <p>
+            {sim.simulationFps.toFixed(0)} fps ({sim.drawnFps.toFixed(0)} drawn) · physics {sim.physicsMs.toFixed(
+              2,
+            )} ms/frame
+          </p>
+          <p>{sim.simulatedPsPerSecond.toFixed(1)} ps simulated per second</p>
+          <p>Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}</p>
+        </Collapsible.Content>
+      </Collapsible.Root>
     {/if}
   </aside>
 </div>
