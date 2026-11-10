@@ -3,6 +3,8 @@
   import PistonPanel from './PistonPanel.svelte';
   import PlayPauseButton from './PlayPauseButton.svelte';
   import PresetPicker from './PresetPicker.svelte';
+  import RateSlider from './RateSlider.svelte';
+  import { rotateView } from './rotate-view';
   import { SimulationClient } from './simulation.svelte';
 
   // LayerChart is most of the UI bundle, so the statistics panel loads after the arena.
@@ -22,7 +24,15 @@
 </script>
 
 <main>
-  <canvas bind:this={canvas}></canvas>
+  <canvas
+    bind:this={canvas}
+    class:rotatable={sim?.dimension === 3}
+    use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
+    tabindex={sim?.dimension === 3 ? 0 : -1}
+    aria-label={sim?.dimension === 3
+      ? 'Simulation arena; drag or use the arrow keys to turn it'
+      : 'Simulation arena'}
+  ></canvas>
   <aside>
     <h1>Boltzmann 4D</h1>
     <PresetPicker
@@ -57,6 +67,11 @@
         </svg>
       </button>
     </div>
+    <RateSlider
+      value={sim?.rateScale ?? 1}
+      disabled={!sim}
+      onChange={(scale) => sim?.setRateScale(scale)}
+    />
     {#if sim?.error}
       <p class="error" role="alert">{sim.error}</p>
     {:else if sim}
@@ -102,6 +117,14 @@
     display: block;
     min-width: 0;
     min-height: 0;
+  }
+  /* 3D: drags turn the view, so touches mustn't scroll or zoom the page. */
+  canvas.rotatable {
+    touch-action: none;
+    cursor: grab;
+  }
+  canvas.rotatable:active {
+    cursor: grabbing;
   }
   aside {
     background: var(--panel-bg);

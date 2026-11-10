@@ -18,6 +18,9 @@ interface ParityFixture {
   holeDiameter: number;
   maxwellDemonMode: boolean;
   dividerThermalMode: 'INSULATING' | 'CONDUCTING';
+  /** 3D arenas with a hole: Java's ring of edge spheres (its Math.sin/cos may differ). */
+  edgeY?: number[];
+  edgeZ?: number[];
   species: {
     name: string;
     mass: number;
@@ -34,7 +37,8 @@ interface ParityFixture {
   time: number;
   /** [type, time, part1, part2, side] per event, in order. */
   events: [number, number, number, number, number][];
-  final: { x: number[]; y: number[]; vx: number[]; vy: number[] };
+  /** z and vz only for 3D presets. */
+  final: { x: number[]; y: number[]; vx: number[]; vy: number[]; z?: number[]; vz?: number[] };
 }
 
 const fixtures = import.meta.glob<ParityFixture>('./parity/*.json', { import: 'default' });
@@ -56,6 +60,7 @@ function initialState(f: ParityFixture): InitialState {
     holeDiameter: f.holeDiameter,
     maxwellDemonMode: f.maxwellDemonMode,
     dividerThermalMode: f.dividerThermalMode,
+    holeEdges: f.edgeY && f.edgeZ ? { y: f.edgeY, z: f.edgeZ } : undefined,
     species: f.species.map((s) => ({
       type: { particleMass: s.mass, particleRadius: s.radius },
       positions: Float64Array.from(s.positions),
@@ -73,7 +78,11 @@ describe('parity with the Java app', () => {
 
     it(name, async (context) => {
       const f = await load();
-      if (!SUPPORTED.has(f.arenaType) || f.dimension !== 2) {
+      if (
+        !SUPPORTED.has(f.arenaType) ||
+        f.dimension === 1 ||
+        (f.dimension === 3 && f.dividerThermalMode === 'CONDUCTING')
+      ) {
         context.skip(`${f.dimension}D ${f.arenaType} is not ported yet`);
       }
       const events: number[][] = [];
@@ -107,6 +116,10 @@ describe('parity with the Java app', () => {
         expect(sim.piston.targetLevel).toBe(f.piston.targetLevel);
         expect(sim.thermostat.deltaKE).toBe(f.piston.deltaKE);
         expect(sim.thermostat.enabled).toBe(f.piston.thermostatEnabled);
+      }
+      if (f.dimension === 3) {
+        expect(Array.from(p.z)).toEqual(f.final.z);
+        expect(Array.from(p.vz)).toEqual(f.final.vz);
       }
     });
   }

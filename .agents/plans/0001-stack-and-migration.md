@@ -78,16 +78,16 @@ src/
 ## Migration order
 
 1. Scaffold the project: Vite + Svelte + TS, with Vitest, lint and CI. _Done; CI runs from `.github/workflows/ci.yml`._
-2. Port `sim/`, starting with 2D, then 1D and 3D. Use the Java structure as a starting point, but refactor where and when it makes sense; parity tests, not matching code layout, show the port is correct.
+2. Port `sim/`, starting with 2D, then 1D and 3D. Use the Java structure as a starting point, but refactor where and when it makes sense; parity tests, not matching code layout, show the port is correct. _2D and 3D done (plans 0002, 0003, 0005); 1D remains._
 3. Write a `.set` parser and load all 27 presets from `boltzmann3d/src/edu/byu/chem/boltzmann/resources/simsettingsfiles/presets/`.
 4. Build a headless parity harness:
    - Add a small Java runner to boltzmann3d that runs a fixed seed and preset for N events and writes positions and velocities.
    - Compare the TypeScript output against it within a set tolerance.
    - This is the main correctness gate.
 5. Port the statistics and Formulas, then test the histogram output against Maxwell–Boltzmann theory.
-6. Build the Worker and the Three.js renderer, following `docs/rendering-baseline.md` from boltzmann3d. _In progress: physics and rendering each run in their own worker (frames go physics → renderer directly); the 2D view draws the arena and particles. The rendering baseline (colour modes, periodic ghosts, trace, 3D) is still to do._
+6. Build the Worker and the Three.js renderer, following `docs/rendering-baseline.md` from boltzmann3d. _In progress: physics and rendering each run in their own worker (frames go physics → renderer directly); the 2D view draws the arena and particles. 2D and 3D views draw the arena, divider and particles, with periodic images; the 3D view turns by drag or arrow keys (plan 0005). Colour modes and trace are still to do._
 7. Port the Svelte UI: main panel controls, then the settings dialogs, then charts.
-8. Port the remaining modes: piston, Maxwell demon, reactions, thermostat and trace. _2D divided arenas, holes and the Maxwell demon gate are done (parity-checked; the demon has no UI toggle yet), and so is the conducting divider. Piston, reactions, thermostat, wells and trace remain._
+8. Port the remaining modes: piston, Maxwell demon, reactions, thermostat and trace. _2D and 3D divided arenas, holes and the Maxwell demon gate are done (parity-checked; the demon has no UI toggle yet), and so is the 2D conducting divider. Piston, reactions, thermostat, wells and trace remain._
 9. Deploy to GitHub Pages: set Vite's `base`, add a GitHub Actions workflow that builds, tests, lints and publishes `dist/`, and enable Pages for the repository. This can be set up early so every step above ships as it lands. _Done: the workflow and `base` are in place (`.github/workflows/ci.yml`), and Pages is enabled with GitHub Actions as its source._
 
 ## Verification
