@@ -6,6 +6,12 @@ export interface DistributionSummary {
   binsByType: number[][];
   average: number;
   width: number;
+  /**
+   * Maxwell–Boltzmann prediction at the temperature each recorded type has in this
+   * data (#23): its mean kinetic energy, so the comparison is about the distribution's
+   * shape. `temperatures` is per recorded type, K.
+   */
+  prediction: { average: number; width: number; curve: number[]; temperatures: number[] };
 }
 
 export interface StatisticSummary {
@@ -20,7 +26,6 @@ export interface StatisticSummary {
   binRange: [number, number];
   current: DistributionSummary;
   cumulative: DistributionSummary;
-  prediction: { average: number; width: number; curve: number[] };
 }
 
 export interface StatisticsSummary {

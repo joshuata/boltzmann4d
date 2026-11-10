@@ -22,6 +22,12 @@ From a survey of `vendor/boltzmann3d/src/edu/byu/chem/boltzmann/model/statistics
   - Orange markers show the predicted average ± width, and green markers the measured average ± width.
   - A history mode plots the last 300 sampled averages.
 
+### Which temperature the predictions use (joshuata/boltzmann4d#23, decided)
+
+Java predicts each species' distribution from its _initial_ temperature. Species that exchange energy settle at a shared temperature, and the prediction doesn't follow: with the heavy species started 4× hotter, both settled near 750 K while the predictions stayed at 300 K and 1,200 K. The same goes for the hot/cold and effusion presets, and any run with a thermostat or piston.
+
+The port predicts from each species' temperature **measured from the data shown**: the time-weighted ⟨v²⟩ for cumulative, the frame's ⟨v²⟩ for current. The comparison is then about the distribution's shape at the temperature the gas actually has. Before there is any data, a species keeps its initial temperature. The axis range is still fixed from the initial temperatures, as in Java.
+
 ### Java behaviour this port won't reproduce exactly
 
 - **Not reproducible in Java either.** Current values are sampled at wall-clock times. Several sums iterate `HashMap`s keyed by objects with identity hash codes (`Particle`, `ParticleType`), so their floating-point order changes between runs. Bit-identical parity like the physics' isn't possible.
@@ -47,18 +53,20 @@ From a survey of `vendor/boltzmann3d/src/edu/byu/chem/boltzmann/model/statistics
 - **Checking correctness:**
   - _Formulas_: unit tests against closed forms and known values (e.g. 2D mean speed `sqrt(π k T / (2 m))`).
   - _Distributions_: in long runs, the cumulative speed histogram must match the Maxwell–Boltzmann curve, by a goodness-of-fit test on a seeded large gas.
-  - _Java parity_ where it is deterministic: extend `ParityDump` to write cumulative bins and averages for presets after N events, with `Particle`-order-independent sums. Compare within a tight tolerance, since summation order differs.
+  - _Physics_: theory the measurements must satisfy, such as equipartition in mixtures and the finite-system corrections for small N.
+  - No Java parity for statistics (decided 2026-11-09): Java's statistics have too many bugs to serve as a reference, so correctness is checked against theory instead.
 
 ## Steps
 
 1. `Formulas` and `StatUtils` predictions (averages, widths, distributions, collision rate and lifetime, gamma helpers), with tests. _Done (#19)._
 2. Statistics core: per-particle last-collision times, weighted trackers, histogram bins, the forget, type subsets, hooked into `Simulation`. Instantaneous Speed first. _Done for Instantaneous Speed: `src/stats/statistics.ts` and friends; a 200,000-event run matches the Maxwell–Boltzmann distribution to within 1% per bin._
 3. Worker → UI summary messages; speed histogram chart with the theoretical curve and markers in the sidebar; type-subset and cumulative/current toggles. _Done: summaries every 27 frames (and after each step while paused); `src/charts/SpeedHistogram.svelte` (LayerChart) in `src/ui/StatisticsPanel.svelte`. The chart's x axis spans the bins' shared range rather than each subset's own range, so subsets are directly comparable; the curve still covers the subset's own range, as in Java._
-4. Distribution and Java parity tests; benchmarks with statistics on.
-5. The remaining statistics (velocity components, kinetic energy, path, time per collision, the per-particle averages, collision rate, pressure) and the history plot, behind a statistic picker.
+4. Correctness tests against theory; benchmarks with statistics on. _Done: `src/stats/correctness.test.ts` checks a two-species mixture (each species and the mix against Maxwell–Boltzmann, equipartition), species starting at different temperatures settling to one, per-frame current samples against the theory, and 4-particle periodic and reflecting runs matching the finite-system corrections to 0.5% (the ideal-gas values are 3–4% off). `src/stats/statistics.bench.ts`: statistics cost about 4% of event throughput from 60 to 10,000 particles, and a summary takes under 0.3 ms._
+5. The remaining statistics (velocity components, kinetic energy, path, time per collision, the per-particle averages, collision rate, pressure) and the history plot, behind a statistic picker. _Scheduled in plan 0006, Phases 2 (pressure) and 3._
 
 ## Decisions (agreed 2026-11-09)
 
 - **Chart library:** LayerChart (Svelte-native components, Svelte 5, actively maintained), on the main thread.
 - **Java bugs 1–4:** fixed in the port, each with a code comment describing Java's behaviour. Parity tests compare only values the bugs don't touch.
 - **Methodology quirks** (time weighting across wall bounces, per-particle averages over all types): kept as in Java for now, so numbers match the original; revisiting is joshuata/boltzmann4d#18.
+- **Prediction temperature** (decided 2026-11-10, joshuata/boltzmann4d#23): predict each species at its temperature measured from the data shown, not its initial one.
