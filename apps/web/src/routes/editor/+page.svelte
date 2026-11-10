@@ -1,14 +1,25 @@
 <!-- The simulation editor beside a preview of what it builds. Wide screens: the form on the
      left, the simulation on the right. Phones: the form, then the simulation under it. -->
 <script lang="ts">
+  import { replaceState } from '$app/navigation';
+  import { resolve } from '$app/paths';
+  import { page } from '$app/state';
   import type { Scenario } from '@boltzmann4d/engine/scenario';
-  import { SimulationEditor } from '@boltzmann4d/simulation-editor';
+  import { SimulationEditor, type SavedScenario } from '@boltzmann4d/simulation-editor';
   import { Simulator } from '@boltzmann4d/simulator';
   import { tick } from 'svelte';
 
   /** The scenario last run, as a new object each time so Run always restarts it. */
   let running = $state.raw<{ name: string; scenario: Scenario } | null>(null);
   let preview: HTMLElement;
+  /** `?id=`: a scenario kept in this browser to edit (read once; the editor owns it after). */
+  const startId = page.url.searchParams.get('id');
+
+  // After a save, the URL names what's being edited, so reloading keeps working on it.
+  function onSaved(saved: SavedScenario) {
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- the path is resolve()d; only a query is added
+    replaceState(`${resolve('/editor')}?id=${encodeURIComponent(saved.id)}`, {});
+  }
 
   async function run(scenario: Scenario, name: string) {
     running = { name, scenario };
@@ -30,7 +41,7 @@
         Set up the arena and particles, then run it here or download it.
       </p>
     </div>
-    <SimulationEditor onRun={run} />
+    <SimulationEditor onRun={run} {startId} {onSaved} />
   </div>
   <section
     bind:this={preview}

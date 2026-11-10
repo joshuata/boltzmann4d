@@ -21,5 +21,8 @@
     "@boltzmann4d/engine": "workspace:*",
     "@boltzmann4d/ui": "workspace:*",
     "@lucide/svelte": "^1.70.0"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.8"
   }
 }

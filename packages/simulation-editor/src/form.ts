@@ -225,3 +225,17 @@ export function checkForm(base: Scenario, form: EditorForm): FormCheck {
   problems.push(...scenarioProblems(result.scenario));
   return { scenario: problems.length > 0 ? null : result.scenario, fields, problems };
 }
+
+/** One line about a scenario for lists, e.g. "2D · Divided box · 30 red, 30 blue". */
+export function summarizeScenario(scenario: Scenario): string {
+  const counts = (['RED', 'BLUE'] as const)
+    .map((color) => {
+      const species = describeSpecies(scenario, color);
+      return species ? `${species.count} ${color === 'RED' ? 'red' : 'blue'}` : null;
+    })
+    .filter(Boolean)
+    .join(', ');
+  return [`${scenario.arena.dimensions}D`, BOUNDARY_LABELS[scenario.arena.boundary], counts]
+    .filter(Boolean)
+    .join(' · ');
+}

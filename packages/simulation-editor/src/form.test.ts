@@ -84,3 +84,12 @@ describe('editor form', () => {
     expect(formFromScenario(scenario).red.temperature).toBeCloseTo(form.red.temperature, 6);
   });
 });
+
+describe('summarizeScenario', () => {
+  it('names the dimension, walls and counts', async () => {
+    const { summarizeScenario } = await import('./form');
+    expect(summarizeScenario(await loadPresetScenario('2Dhotcold'))).toBe(
+      '2D · Divided box · 30 red, 30 blue',
+    );
+  });
+});

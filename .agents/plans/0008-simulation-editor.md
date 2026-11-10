@@ -1,6 +1,6 @@
 # 0008: Simulation editor and scenario JSON
 
-_In progress: steps 1–4 are done; next is step 5 (saved scenarios)._ Follows the workspace split (plan 0007), which left `packages/simulation-editor` and the `/editor` and `/upload` routes as placeholders.
+_In progress: steps 1–5 are done; what's left is under Open questions._ Follows the workspace split (plan 0007), which left `packages/simulation-editor` and the `/editor` and `/upload` routes as placeholders.
 
 ## Goal
 
@@ -35,9 +35,17 @@ Teachers and students can build their own simulation (arena, species, counts, te
 
    Fields are checked as you type, along with the Java dialog's "particles do not fit" check. Run previews it beside the form (below it on phones), and it downloads as `.json` or `.set` (FILE-5/6). Statistics, display options, abscissa limits and particles at given positions aren't editable yet: they're kept from the starting scenario. Positions are kept while the arena is unchanged; a new dimension, size or wall layout places every particle at random. Random placement now follows FILE-3 in divided arenas (red left, blue right; everything left with a hole), as the Java dialog does; no preset combines the two, so presets are unchanged.
 
-5. Saved scenarios: an IndexedDB store of named scenarios (JSON), including opened files, listed on `/upload` with a route to run one, and a user default (FILE-2).
+5. Saved scenarios (done): `packages/simulation-editor/src/scenario-store.ts` keeps named scenarios in IndexedDB (database `boltzmann4d`, stores `scenarios` and `app-settings`).
+   - The editor saves there ("Save" over the scenario it started from, "Save as new"), and lists kept scenarios under "Start from".
+   - Opened files are kept automatically; the same file opened again updates its entry rather than adding a copy.
+   - `/upload` ("Your scenarios") lists them with Run (`/upload?id=`), Edit (`/editor?id=`), Download, Make default and Delete.
+   - The user's default (FILE-2) is what the editor starts from; it's an app setting, stored in `app-settings`.
+   - Entries that no longer validate are listed with their problems so they can be deleted. If the browser won't store anything, files still open and run.
 
 ## Open questions
+
+- FILE-2 says the user's own default should load "at startup". The web app has no startup simulation (the home page lists presets), so for now the default is where the editor starts. A home-page "Run your default" link would fit plan 0009's home-page step.
+- The navbar and home page still say "Upload" / "Upload settings" for `/upload`, which is now "Your scenarios" (plan 0009 owns those labels).
 
 - Whether a `.set` file this app writes loads in the Java app (FILE-6) still needs one manual check.
 - PART-4 allows 0–9999 K, but the engine (from Java's `MAXIMUM_INITIAL_TEMPERATURE`) caps starting temperatures at 1500 K.
