@@ -32,6 +32,10 @@
       class:rotatable={sim?.dimension === 3}
       use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
       tabindex={sim?.dimension === 3 ? 0 : -1}
+      onclick={() => {
+        // Maxwell's demon (2D): clicking the arena opens or closes the hole, as in Java.
+        if (sim && sim.dimension !== 3 && sim.holeOpen !== null) sim.setHoleOpen(!sim.holeOpen);
+      }}
       aria-label={sim?.dimension === 3
         ? 'Simulation arena; drag or use the arrow keys to turn it'
         : 'Simulation arena'}
@@ -82,6 +86,29 @@
           <path d="M5 4.5v15l11-7.5zM16.5 4.5h3v15h-3z" />
         </svg>
       </button>
+      <!-- Restart (Physics.reset): the same starting positions and velocities again. -->
+      <button
+        type="button"
+        class="icon-button"
+        disabled={!sim || sim.loading}
+        aria-label="Restart"
+        title="Restart from the starting state"
+        onclick={() => sim?.restart()}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" />
+        </svg>
+      </button>
+      {#if sim?.holeOpen !== null && sim?.holeOpen !== undefined}
+        <button
+          type="button"
+          class="hole"
+          aria-pressed={sim.holeOpen}
+          onclick={() => sim?.setHoleOpen(!sim.holeOpen)}
+        >
+          {sim.holeOpen ? 'Close hole' : 'Open hole'}
+        </button>
+      {/if}
     </div>
     <RateSlider
       value={sim?.rateScale ?? 1}
@@ -166,6 +193,23 @@
   }
   .error {
     color: #dc2626;
+  }
+  .hole {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0 0.75rem;
+    min-height: 2.5rem;
+    border: 1px solid var(--panel-border);
+    border-radius: 0.375rem;
+    background: var(--button-bg);
+    color: inherit;
+  }
+  .hole:hover {
+    background: var(--button-hover-bg);
+  }
+  .hole:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
   .transport {
     display: flex;
