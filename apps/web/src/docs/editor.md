@@ -70,6 +70,7 @@ As you edit, the editor checks the scenario. Anything that stops it from running
 ## Run and share
 
 - **Run** starts the simulation with the scenario as it is now. **Back to the editor** returns to where you were.
+- **Save** keeps the scenario in this browser under its name, so it's in **Start from** and on the [Your scenarios](../upload) page next time. Once saved, **Save** writes over it and **Save as new** keeps a copy. Nothing leaves your computer.
 - **.json** downloads the scenario as a Boltzmann 4D file, which you can open again here or send to someone else to open on the [Upload](../upload) page.
 - **.set** downloads a file for the Boltzmann 3D desktop program, when the scenario fits it: no drawn walls or spawn regions, at most two kinds, and no reactions other than red turning blue.
 

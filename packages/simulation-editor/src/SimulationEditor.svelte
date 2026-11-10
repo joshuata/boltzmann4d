@@ -1,6 +1,6 @@
 <!-- The scenario editor (plan 0010): draw walls and spawn regions on the arena, set up kinds
-     and reactions, see problems as you edit, then run or download the scenario. Running is
-     the page's job: it gets the scenario through onRun.
+     and reactions, see problems as you edit, then run it, save it in this browser (plan 0008,
+     EDIT-19) or download it. Running is the page's job: it gets the scenario through onRun.
 
      Wide screens: the canvas with its toolbar on the left, the panels on the right. Narrow
      screens: the canvas on top and the panels below it, the toolbar always in view (EDIT-23). -->
@@ -19,6 +19,7 @@
   import { Input } from '@boltzmann4d/ui/input';
   import DownloadIcon from '@lucide/svelte/icons/download';
   import PlayIcon from '@lucide/svelte/icons/play';
+  import SaveIcon from '@lucide/svelte/icons/save';
   import ArenaPanel from './ArenaPanel.svelte';
   import Canvas from './Canvas.svelte';
   import { EditorState } from './editor.svelte';
@@ -26,6 +27,14 @@
   import ProblemsPanel from './ProblemsPanel.svelte';
   import ReactionsPanel from './ReactionsPanel.svelte';
   import RegionPanel from './RegionPanel.svelte';
+  import {
+    getDefaultScenario,
+    getScenario,
+    isReadable,
+    listScenarios,
+    saveScenario,
+    type SavedScenario,
+  } from './scenario-store';
   import { blankScenario, parseKey } from './scenario-ops';
   import { selectClass } from './styles';
   import Toolbar from './Toolbar.svelte';
@@ -34,14 +43,88 @@
   interface Props {
     /** Runs the scenario (EDIT-18); the page shows the simulator. */
     onRun: (scenario: Scenario, name: string) => void;
+    /**
+     * A scenario kept in this browser to start from, read once when the editor opens.
+     * Without it the editor starts from the user's default (FILE-2), else a blank arena.
+     */
+    startId?: string | null;
+    /** After a save, e.g. so the page can point its URL at the saved scenario. */
+    onSaved?: (saved: SavedScenario) => void;
   }
 
-  let { onRun }: Props = $props();
+  let { onRun, startId = null, onSaved }: Props = $props();
 
   const editor = new EditorState();
   /** Problems with the last file opened, or a preset that failed to load. */
   let loadProblems = $state.raw<string[]>([]);
   let fileInput: HTMLInputElement;
+  /** The kept scenario Save writes over, if the editor opened one or has saved. */
+  let savedId = $state<string | null>(null);
+  let kept = $state.raw<SavedScenario[]>([]);
+  let saveStatus = $state<string | null>(null);
+
+  const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+  /** Opens a scenario; `fromSaved` is the kept scenario it came from, if any. */
+  function open(scenario: Scenario, name: string, fromSaved: string | null = null) {
+    editor.open(scenario, name);
+    savedId = fromSaved;
+    saveStatus = null;
+    loadProblems = [];
+  }
+
+  function openSaved(entry: SavedScenario) {
+    open(entry.scenario, entry.name.replace(/\.(json|set)$/i, ''), entry.id);
+  }
+
+  async function refreshKept() {
+    try {
+      kept = (await listScenarios()).filter(isReadable);
+    } catch {
+      kept = [];
+    }
+  }
+
+  /** The startId scenario, else the user's default, else the blank arena already open. */
+  async function init() {
+    await refreshKept();
+    let problems: string[] = [];
+    try {
+      const wanted = startId ? await getScenario(startId) : null;
+      if (startId && !(wanted && isReadable(wanted))) {
+        problems = [
+          wanted
+            ? `Can't open ${wanted.name}: ${wanted.problems.join('; ')}`
+            : 'That scenario is no longer saved in this browser.',
+        ];
+      }
+      const entry = wanted && isReadable(wanted) ? wanted : await getDefaultScenario();
+      if (entry) openSaved(entry);
+    } catch {
+      // No storage in this browser: keep the blank arena.
+    }
+    loadProblems = problems;
+  }
+
+  void init();
+
+  /** Saves what's drawn; a scenario that fails the schema can't be stored. */
+  async function save(asNew: boolean) {
+    if (!editor.validation.success) return;
+    try {
+      const saved = await saveScenario({
+        id: asNew ? undefined : (savedId ?? undefined),
+        name: editor.name,
+        scenario: editor.validation.scenario,
+      });
+      savedId = saved.id;
+      await refreshKept();
+      saveStatus = `Saved “${saved.name}” in this browser.`;
+      onSaved?.(saved);
+    } catch (error) {
+      saveStatus = `Couldn't save: ${message(error)}`;
+    }
+  }
 
   // Particle placement is checked a moment after edits stop (it resolves the scenario).
   $effect(() => {
@@ -52,10 +135,9 @@
 
   async function startFromPreset(name: string) {
     try {
-      editor.open(await loadPresetScenario(name), name);
-      loadProblems = [];
+      open(await loadPresetScenario(name), name);
     } catch (error) {
-      loadProblems = [error instanceof Error ? error.message : String(error)];
+      loadProblems = [message(error)];
     }
   }
 
@@ -63,8 +145,7 @@
     if (!file) return;
     try {
       const { scenario } = readScenarioFile(file.name, await file.text());
-      editor.open(scenario, file.name.replace(/\.(json|set)$/i, ''));
-      loadProblems = [];
+      open(scenario, file.name.replace(/\.(json|set)$/i, ''));
     } catch (error) {
       loadProblems =
         error instanceof ScenarioError
@@ -75,10 +156,12 @@
 
   function startFrom(value: string) {
     if (value === 'blank') {
-      editor.open(blankScenario(), 'New scenario');
-      loadProblems = [];
+      open(blankScenario(), 'New scenario');
     } else if (value === 'file') {
       fileInput.click();
+    } else if (value.startsWith('saved:')) {
+      const entry = kept.find((e) => `saved:${e.id}` === value);
+      if (entry) openSaved(entry);
     } else {
       void startFromPreset(value);
     }
@@ -135,6 +218,13 @@
         <option value="" disabled>Choose…</option>
         <option value="blank">A blank 2D arena</option>
         <option value="file">A file on this computer…</option>
+        {#if kept.length > 0}
+          <optgroup label="Kept in this browser">
+            {#each kept as entry (entry.id)}
+              <option value="saved:{entry.id}">{entry.name}</option>
+            {/each}
+          </optgroup>
+        {/if}
         <optgroup label="Presets">
           {#each presetCatalog as preset (preset.name)}
             <option value={preset.name}>{preset.label} ({preset.dimensions}D)</option>
@@ -161,6 +251,24 @@
         Run
       </Button>
       <Button
+        variant="secondary"
+        disabled={!editor.validation.success}
+        title={savedId ? 'Save over the scenario kept in this browser' : 'Keep it in this browser'}
+        onclick={() => void save(false)}
+      >
+        <SaveIcon aria-hidden="true" />
+        Save
+      </Button>
+      {#if savedId}
+        <Button
+          variant="outline"
+          disabled={!editor.validation.success}
+          onclick={() => void save(true)}
+        >
+          Save as new
+        </Button>
+      {/if}
+      <Button
         variant="outline"
         disabled={!editor.validation.success}
         onclick={() =>
@@ -184,6 +292,9 @@
         .set
       </Button>
     </div>
+    {#if saveStatus}
+      <p class="text-muted-foreground w-full text-sm" role="status">{saveStatus}</p>
+    {/if}
     {#if loadProblems.length > 0}
       <ul class="text-destructive w-full list-none space-y-0.5 text-sm break-words" role="alert">
         {#each loadProblems as problem, i (i)}<li>{problem}</li>{/each}

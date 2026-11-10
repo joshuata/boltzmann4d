@@ -1,9 +1,20 @@
 <!-- Home: the bundled simulations grouped by topic, each with what it shows and a link per
-     dimension; plus upload, the editor and the quick start. -->
+     dimension; plus the quick start, your scenarios (and your default, FILE-2) and the editor. -->
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { getDefaultScenario } from '@boltzmann4d/simulation-editor';
   import { Button } from '@boltzmann4d/ui/button';
   import { presetGuide } from '../lib/preset-guide';
+  import { withQuery } from '../lib/with-query';
+
+  /** The scenario the user made their default (FILE-2), if any. */
+  let userDefault = $state.raw<{ id: string; name: string } | null>(null);
+  $effect(() => {
+    getDefaultScenario()
+      .then((entry) => (userDefault = entry && { id: entry.id, name: entry.name }))
+      // No storage in this browser: no default to offer.
+      .catch(() => (userDefault = null));
+  });
 </script>
 
 <svelte:head><title>Boltzmann 4D</title></svelte:head>
@@ -19,7 +30,12 @@
       <Button variant="outline" href={resolve('/docs/[slug]', { slug: 'quick-start' })}>
         Quick start
       </Button>
-      <Button variant="outline" href={resolve('/upload')}>Upload settings</Button>
+      {#if userDefault}
+        <Button href={withQuery(resolve('/upload'), { id: userDefault.id })}>
+          Run your default: {userDefault.name}
+        </Button>
+      {/if}
+      <Button variant="outline" href={resolve('/upload')}>Your scenarios</Button>
       <Button variant="outline" href={resolve('/editor')}>Simulation editor</Button>
     </nav>
   </div>

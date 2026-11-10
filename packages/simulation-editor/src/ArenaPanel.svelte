@@ -8,6 +8,7 @@
   import FillRows from './FillRows.svelte';
   import NumberField from './NumberField.svelte';
   import { headingClass, selectClass } from './styles';
+  import { BOUNDARY_LABELS } from './summary';
 
   interface Props {
     editor: EditorState;
@@ -16,13 +17,6 @@
   let { editor }: Props = $props();
 
   type Boundary = Scenario['arena']['boundary'];
-  const BOUNDARY_LABELS: Record<Boundary, string> = {
-    PERIODIC: 'Periodic (no walls)',
-    REFLECTING: 'Box with walls',
-    DIVIDED: 'Divided box',
-    HOLE: 'Divided box with a hole',
-    PISTON: 'Box with a movable piston',
-  };
 
   const scenario = $derived(editor.scenario);
   const arena = $derived(scenario.arena);
