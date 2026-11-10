@@ -102,6 +102,9 @@ export class SimulationClient {
         if (event.data.type === 'drawn') this.#drawnTotal = event.data.frames;
         else this.error = `Renderer: ${event.data.message}`;
       };
+      worker.onerror = (event) => {
+        this.error = `The renderer stopped unexpectedly${errorDetail(event)}.`;
+      };
       const init: ToRenderWorker = {
         type: 'init',
         canvas: offscreen,
@@ -142,6 +145,10 @@ export class SimulationClient {
     this.#resizeObserver.observe(canvas);
 
     this.#sim = new SimWorker();
+    this.#sim.onerror = (event) => {
+      this.error = `The simulation stopped unexpectedly${errorDetail(event)}.`;
+      this.loading = false;
+    };
     this.#sim.onmessage = (event: MessageEvent<FromWorker>) => {
       const message = event.data;
       switch (message.type) {
@@ -305,6 +312,11 @@ export class SimulationClient {
   #send(message: ToWorker, transfer: Transferable[] = []): void {
     this.#sim.postMessage(message, transfer);
   }
+}
+
+/** A worker's uncaught error as ": message", or nothing if the browser gives none. */
+function errorDetail(event: ErrorEvent): string {
+  return event.message ? `: ${event.message}` : '';
 }
 
 function viewSize(canvas: HTMLCanvasElement): ViewSize {

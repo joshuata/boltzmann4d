@@ -50,7 +50,8 @@ packages/
   simulation-editor/   @boltzmann4d/simulation-editor: builds settings files (placeholder, plan 0008)
   ui/                  @boltzmann4d/ui: shadcn-svelte components (src/components/ui) and the Tailwind theme (src/theme.css)
 apps/
-  web/                 @boltzmann4d/web: SvelteKit site — navbar (2D/3D simulation menus), / (preset list), /simulate/[preset], /upload, /editor
+  web/                 @boltzmann4d/web: SvelteKit site — navbar (2D/3D simulation menus, Help), / (preset list), /simulate/[preset], /upload, /editor, /docs
+    src/docs/          user documentation as Markdown (mdsvex); each file is a page at /docs/<name>
 scripts/, benchmarks/  Node-side profiling, benchmarks and reports (import the engine package)
 ```
 
@@ -90,6 +91,7 @@ Production builds use the base path `/boltzmann4d/` (`paths.base` in `apps/web/v
 - Sidebar components get their data from the main visualization component, the `SimulationClient` that `Simulator.svelte` creates for the canvas (`packages/simulator/src/ui/simulation.svelte.ts`). They read its reactive state and call its methods; they never talk to the physics or render workers directly.
 - New data for the sidebar (statistics, timing, …) goes through `SimulationClient`: the worker sends it, the client exposes it as `$state`, and components receive it as props.
 - The site owns navigation and the URL: the navbar's 2D and 3D menus link to `/simulate/[preset]`, and `<Simulator>` just takes `preset`, or a `scenario` object the page supplies (e.g. `/upload` from a file the user opened), and loads a new one in place when the prop changes. The simulator package never touches `location` or `history` (except reading `?render=main`).
+- User documentation lives in `apps/web/src/docs/*.md`, written in Markdown and compiled by mdsvex. Frontmatter sets `title` (the page heading, so don't add a `#` heading), `description` and `order`. Link between docs with relative links (`[About](about)`) so they work under the base path.
 - Build controls from `@boltzmann4d/ui` (`import { Button } from '@boltzmann4d/ui/button'`) and style with Tailwind classes and the theme tokens (`bg-muted`, `text-muted-foreground`, `border`, …) rather than `<style>` blocks or hard-coded colours. Add components with `pnpm dlx shadcn-svelte@latest add <name>` run in `packages/ui` (its `components.json` sets the aliases); the generated files keep the CLI's kebab-case names. Dark mode follows the system setting. The site's `app.css` imports the theme and tells Tailwind to scan `packages/`, so classes used in any package are generated.
 - This keeps the UI ready for other devices: components only depend on reactive state, so the layout can change with screen size (phones, tablets, desktop) without touching data flow. Sidebar components must work at narrow widths and with touch input.
 
