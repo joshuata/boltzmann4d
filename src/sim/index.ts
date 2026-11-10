@@ -10,6 +10,8 @@ export interface SceneInfo {
   arenaXSize: number;
   arenaYSize: number;
   arenaZSize: number;
+  /** Periodic boundaries: discs crossing an edge also show on the opposite side. */
+  periodic: boolean;
   /** Per particle, meters. */
   radii: Float64Array;
   /** Per particle, index into typeColors. */

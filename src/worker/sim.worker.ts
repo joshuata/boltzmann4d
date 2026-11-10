@@ -90,6 +90,7 @@ function sceneOf(simulation: Simulation, typeColors: number[]): SceneInfo {
     arenaXSize: arena.xSize,
     arenaYSize: arena.ySize,
     arenaZSize: arena.zSize,
+    periodic: arena.type === ArenaType.PERIODIC_BOUNDARIES,
     radii: p.radius.slice(),
     types: p.type.slice(),
     typeColors,

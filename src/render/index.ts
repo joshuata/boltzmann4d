@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { RenderFrame, SceneInfo } from '../sim';
+import { periodicImages } from './periodic-images';
 
 /** Drawing-buffer size: CSS pixels plus the device pixel ratio. */
 export interface ViewSize {
@@ -33,7 +34,7 @@ const requestDraw: (draw: () => void) => void =
 /**
  * 2D view: orthographic camera over the arena, one instanced circle per particle.
  * Will grow into the 1D/2D/3D renderer described in boltzmann3d docs/rendering-baseline.md
- * (periodic ghosts, colour modes, trace).
+ * (colour modes, trace). Periodic arenas draw each disc's wrapped images, clipped to the box.
  *
  * Uses no DOM APIs, so it runs on an OffscreenCanvas in the render worker as well as on
  * the main thread. It only draws when something changed (a frame, the scene or the size),
@@ -44,6 +45,7 @@ export function createRenderer(
   initialSize: ViewSize,
 ): Renderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.localClippingEnabled = true;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
@@ -57,13 +59,15 @@ export function createRenderer(
   let divider: THREE.Group | null = null;
   let particles: THREE.InstancedMesh | null = null;
   let radii: Float64Array = new Float64Array(0);
+  let colors: THREE.Color[] = [];
+  let periodic = false;
+  const images = new Float64Array(8);
   let arena = { x: 1, y: 1 };
   let nextFrame: RenderFrame | null = null;
   let size = initialSize;
   let drawScheduled = false;
   let disposed = false;
   const matrix = new THREE.Matrix4();
-  const color = new THREE.Color();
 
   const fitCamera = () => {
     const { width: w, height: h } = size;
@@ -113,11 +117,25 @@ export function createRenderer(
     }
     const count = info.radii.length;
     radii = info.radii;
-    particles = new THREE.InstancedMesh(circle, particleMaterial, count);
+    periodic = info.periodic && info.dimension === 2;
+    // Clip to the box so the wrapped images (and the discs they copy) stop at its edges.
+    particleMaterial.clippingPlanes = periodic
+      ? [
+          new THREE.Plane(new THREE.Vector3(1, 0, 0), 0),
+          new THREE.Plane(new THREE.Vector3(-1, 0, 0), arena.x),
+          new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
+          new THREE.Plane(new THREE.Vector3(0, -1, 0), arena.y),
+        ]
+      : null;
+    particleMaterial.needsUpdate = true;
+    // A disc has up to four images in a periodic box (itself, two edges, the corner).
+    particles = new THREE.InstancedMesh(circle, particleMaterial, periodic ? 4 * count : count);
     particles.count = 0; // nothing to draw until the first frame
-    for (let i = 0; i < count; i++) {
-      particles.setColorAt(i, color.setHex(info.typeColors[info.types[i] ?? 0] ?? 0xffffff));
-    }
+    colors = Array.from(
+      { length: count },
+      (_, i) => new THREE.Color(info.typeColors[info.types[i] ?? 0] ?? 0xffffff),
+    );
+    for (let i = 0; i < count; i++) particles.setColorAt(i, colors[i]!);
     scene.add(particles);
     fitCamera();
     scheduleDraw();
@@ -127,15 +145,26 @@ export function createRenderer(
     if (!particles) return;
     const d = frame.dimension;
     const count = Math.min(frame.types.length, radii.length);
+    let drawn = 0;
     for (let i = 0; i < count; i++) {
       const x = (frame.positions[i * d] ?? 0) * NM;
       const y = d > 1 ? (frame.positions[i * d + 1] ?? 0) * NM : 0;
       const r = (radii[i] ?? 0) * NM;
-      matrix.makeScale(r, r, 1).setPosition(x, y, 0);
-      particles.setMatrixAt(i, matrix);
+      if (!periodic) {
+        matrix.makeScale(r, r, 1).setPosition(x, y, 0);
+        particles.setMatrixAt(drawn++, matrix);
+        continue;
+      }
+      const n = periodicImages(x, y, r, arena.x, arena.y, images);
+      for (let k = 0; k < n; k++) {
+        matrix.makeScale(r, r, 1).setPosition(images[2 * k]!, images[2 * k + 1]!, 0);
+        particles.setColorAt(drawn, colors[i]!);
+        particles.setMatrixAt(drawn++, matrix);
+      }
     }
-    particles.count = count;
+    particles.count = drawn;
     particles.instanceMatrix.needsUpdate = true;
+    if (periodic && particles.instanceColor) particles.instanceColor.needsUpdate = true;
   };
 
   const draw = () => {
