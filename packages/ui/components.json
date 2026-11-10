@@ -1,0 +1,20 @@
+{
+  "$schema": "https://shadcn-svelte.com/schema.json",
+  "tailwind": {
+    "css": "src/theme.css",
+    "baseColor": "neutral"
+  },
+  "aliases": {
+    "components": "@boltzmann4d/ui/components",
+    "utils": "@boltzmann4d/ui/lib/utils",
+    "ui": "@boltzmann4d/ui/components/ui",
+    "hooks": "@boltzmann4d/ui/hooks",
+    "lib": "@boltzmann4d/ui/lib"
+  },
+  "typescript": true,
+  "registry": "https://shadcn-svelte.com/registry",
+  "style": "vega",
+  "iconLibrary": "lucide",
+  "menuColor": "default",
+  "menuAccent": "subtle"
+}

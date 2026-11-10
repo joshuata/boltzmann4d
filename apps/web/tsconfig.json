@@ -1,0 +1,9 @@
+{
+  "extends": ["../../tsconfig.base.json", "$app/tsconfig"],
+  "compilerOptions": {
+    "lib": ["es2022", "dom", "dom.iterable", "webworker"],
+    "types": ["$app/types", "vite/client"]
+  },
+  "include": ["src", "*"],
+  "exclude": ["src/service-worker"]
+}
