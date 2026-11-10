@@ -74,7 +74,7 @@ describe('scenario store', () => {
     });
     const [entry] = await listScenarios();
     expect(entry && !isReadable(entry) && entry.problems).toEqual([
-      'version: Unsupported scenario version (this app reads version 1)',
+      expect.stringMatching(/^version: Unsupported scenario version/),
     ]);
   });
 });

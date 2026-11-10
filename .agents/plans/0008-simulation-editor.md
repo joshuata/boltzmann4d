@@ -27,7 +27,7 @@ Teachers and students can build their own simulation (arena, species, counts, te
 1. Engine (first PR, done): JSON schema and types for scenarios, a validator with readable errors, and `.set ⇄ JSON` conversion with round-trip tests over every bundled preset.
 2. Worker protocol (done): `connect`/`load` take a `ScenarioSource`, a bundled preset or a scenario object, and `<Simulator>` takes a `scenario` prop. Presets are converted to scenarios when loaded (`loadPresetScenario`).
 3. Site (done): `/upload` opens a `.json` or `.set` file (FILE-1's file picker, or drag and drop), lists every problem if it can't, and runs it. Storing it moves to step 5.
-4. Simulation editor (done, first version): `/editor` starts from any preset or an opened file and edits:
+4. Simulation editor (done, first version; plan 0010 replaces it with a WYSIWYG editor with drawn walls, spawn regions and up to 10 particle kinds): `/editor` starts from any preset or an opened file and edits:
    - the arena: dimensions (SIM-7), size (SIM-10), walls (SIM-12–17, no hole in 1D), hole diameter, conducting divider;
    - red and blue particles: count, mass, radius, temperature, within the PART-1–4 limits;
    - Maxwell's demon (SIM-24, with a hole) and reactions (SIM-25, 2D with one species);
@@ -36,7 +36,7 @@ Teachers and students can build their own simulation (arena, species, counts, te
    Fields are checked as you type, along with the Java dialog's "particles do not fit" check. Run previews it beside the form (below it on phones), and it downloads as `.json` or `.set` (FILE-5/6). Statistics, display options, abscissa limits and particles at given positions aren't editable yet: they're kept from the starting scenario. Positions are kept while the arena is unchanged; a new dimension, size or wall layout places every particle at random. Random placement now follows FILE-3 in divided arenas (red left, blue right; everything left with a hole), as the Java dialog does; no preset combines the two, so presets are unchanged.
 
 5. Saved scenarios (done): `packages/simulation-editor/src/scenario-store.ts` keeps named scenarios in IndexedDB (database `boltzmann4d`, stores `scenarios` and `app-settings`).
-   - The editor saves there ("Save" over the scenario it started from, "Save as new"), and lists kept scenarios under "Start from".
+   - The scenario editor (plan 0010's drawing editor) saves there ("Save" over the scenario it opened, "Save as new"), and lists kept scenarios under "Start from".
    - Opened files are kept automatically; the same file opened again updates its entry rather than adding a copy.
    - `/upload` ("Your scenarios") lists them with Run (`/upload?id=`), Edit (`/editor?id=`), Download, Make default and Delete.
    - The user's default (FILE-2) is what the editor starts from; it's an app setting, stored in `app-settings`.
@@ -44,8 +44,6 @@ Teachers and students can build their own simulation (arena, species, counts, te
 
 ## Open questions
 
-- FILE-2 says the user's own default should load "at startup". The web app has no startup simulation (the home page lists presets), so for now the default is where the editor starts. A home-page "Run your default" link would fit plan 0009's home-page step.
-- The navbar and home page still say "Upload" / "Upload settings" for `/upload`, which is now "Your scenarios" (plan 0009 owns those labels).
-
+- FILE-2 says the user's own default should load "at startup". The web app has no startup simulation (the home page lists presets), so the default is where the editor starts, and the home page links to run it.
 - Whether a `.set` file this app writes loads in the Java app (FILE-6) still needs one manual check.
 - PART-4 allows 0–9999 K, but the engine (from Java's `MAXIMUM_INITIAL_TEMPERATURE`) caps starting temperatures at 1500 K.

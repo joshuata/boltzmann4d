@@ -1,7 +1,7 @@
-// The simulation editor: builds scenarios for the simulator (plan 0008), and the scenarios
-// the user keeps in this browser.
+// The scenario editor: draws scenarios for the simulator (plan 0010), and the scenarios the
+// user keeps in this browser (plan 0008).
 export { default as SimulationEditor } from './SimulationEditor.svelte';
-export { summarizeScenario } from './form';
+export { summarizeScenario } from './summary';
 export {
   deleteScenario,
   getDefaultScenario,

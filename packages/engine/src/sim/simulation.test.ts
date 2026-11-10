@@ -82,7 +82,8 @@ describe('Simulation', () => {
       expect(() => new Simulation(scenario)).toThrow(/not supported yet/);
       return;
     }
-    const sim = new Simulation(scenario);
+    // Reactions (2Dequil) trade kinetic for chemical energy; reactions.test.ts covers them.
+    const sim = new Simulation({ ...scenario, reactions: [] });
     const energy = sim.kineticEnergy();
     let last = 0;
     for (let k = 0; k < 2000; k++) {

@@ -433,3 +433,17 @@ export function allTypeSubsets(count: number): number[][] {
   }
   return subsets;
 }
+
+/** Above this many types, statistics track each type alone and all together (KIND-4). */
+export const MAX_TYPES_FOR_ALL_SUBSETS = 3;
+
+/**
+ * The type subsets statistics are kept for: every one with up to three types (Java's
+ * red, blue and both), else each type alone and all of them together, so the cost grows
+ * linearly with the number of kinds rather than as 2^N.
+ */
+export function statisticSubsets(count: number): number[][] {
+  if (count <= MAX_TYPES_FOR_ALL_SUBSETS) return allTypeSubsets(count);
+  const all = Array.from({ length: count }, (_, t) => t);
+  return [...all.map((t) => [t]), all];
+}

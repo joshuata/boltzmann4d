@@ -20,6 +20,11 @@ export const Collision = {
   ENTER_GRAVITY_WELL: 9,
   EXIT_GRAVITY_WELL: 10,
   WELL_REFLECT: 18,
+  /**
+   * A drawn wall (segment-walls.ts; a web-port addition). part2 is the segment, or
+   * −1 − the end point.
+   */
+  DRAWN_WALL: 19,
 } as const;
 export type CollisionType = (typeof Collision)[keyof typeof Collision];
 

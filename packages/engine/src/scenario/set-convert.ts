@@ -1,15 +1,19 @@
 // Converts between `.set` files (Boltzmann 3D's format, read by model/io/Load.java) and the
-// JSON scenarios in ./schema.ts. Both directions keep every setting the loader reads, so
+// JSON scenarios in ./schema.ts, by way of version 1 of the format (./schema-v1.ts), which
+// mirrors `.set`. Both directions keep every setting the loader reads, so
 // `.set → JSON → .set` loses nothing and the result still loads in the Java app (FILE-6).
+// Scenarios the `.set` format can't represent (drawn walls, more kinds, ...) can't be written
+// (EDIT-20); setFileCompatibility says why.
 import { parseSetFile, SetFileError, type SetGroup } from '../io/set-file';
+import { describeIssue, SCENARIO_FORMAT, ScenarioError } from './format';
+import { migrateV1, toV1 } from './migrate';
+import { ScenarioSchema, type Scenario } from './schema';
 import {
-  SCENARIO_FORMAT,
-  SCENARIO_VERSION,
-  validateScenario,
-  type ParticleGroup,
-  type Scenario,
-  type ScenarioInput,
-} from './schema';
+  ScenarioV1Schema,
+  type ParticleGroupV1,
+  type ScenarioV1,
+  type ScenarioV1Input,
+} from './schema-v1';
 
 export interface SetConversion {
   scenario: Scenario;
@@ -35,18 +39,18 @@ export function setFileToScenario(text: string): SetConversion {
   const colorSchemeValues = gs.values('color_scheme');
   const colorScheme = (colorSchemeValues[0] ?? '').toUpperCase().replace(/:$/, '');
 
-  const input: ScenarioInput = {
+  const input: ScenarioV1Input = {
     format: SCENARIO_FORMAT,
-    version: SCENARIO_VERSION,
+    version: 1,
     arena: {
       dimensions: gs.number('dimensions') as 1 | 2 | 3,
       size: [gs.number('size', 0), gs.number('size', 1), gs.number('size', 2)],
-      boundary: upper('boundary') as Scenario['arena']['boundary'],
+      boundary: upper('boundary') as ScenarioV1['arena']['boundary'],
       holeSize: gs.number('hole_size'),
       ...(gs.has('divider_thermal_mode') && {
         dividerThermalMode: upper(
           'divider_thermal_mode',
-        ) as Scenario['arena']['dividerThermalMode'],
+        ) as ScenarioV1['arena']['dividerThermalMode'],
       }),
       ...(gs.has('piston_speed') && { pistonSpeed: gs.number('piston_speed') }),
     },
@@ -61,7 +65,7 @@ export function setFileToScenario(text: string): SetConversion {
     },
     statistics: {
       name: gs.string('stat_name'),
-      color: upper('stat_color') as Scenario['statistics']['color'],
+      color: upper('stat_color') as ScenarioV1['statistics']['color'],
       cumulative: gs.boolean('cumulative'),
       width: gs.boolean('width'),
       history: gs.boolean('history'),
@@ -69,7 +73,7 @@ export function setFileToScenario(text: string): SetConversion {
       forgetTime: gs.number('forget_time'),
       pressurePredictionMode: upper(
         'pressure_prediction_mode',
-      ) as Scenario['statistics']['pressurePredictionMode'],
+      ) as ScenarioV1['statistics']['pressurePredictionMode'],
       abscissaLimits: readAbscissaLimits(file.root.optionalGroup('AbscissaLimits')),
     },
     display: {
@@ -83,14 +87,45 @@ export function setFileToScenario(text: string): SetConversion {
     },
   };
 
-  const result = validateScenario(input);
-  if (!result.success) throw new SetFileError(result.problems.join('\n'));
-  return { scenario: result.scenario, version: file.version, warnings };
+  const v1 = ScenarioV1Schema.safeParse(input);
+  if (!v1.success) throw new SetFileError(v1.error.issues.map(describeIssue).join('\n'));
+  warnings.push(...redefinedTypes(v1.data));
+  const v2 = ScenarioSchema.safeParse(migrateV1(v1.data));
+  if (!v2.success) throw new SetFileError(v2.error.issues.map(describeIssue).join('\n'));
+  return { scenario: v2.data, version: file.version, warnings };
 }
 
-function readParticleGroup(pg: SetGroup): ScenarioInput['particleGroups'][number] {
+/**
+ * In `.set` files a later group of a colour redefines that colour's mass and radius for all of
+ * its particles; scenarios give each kind one mass and radius, the last group's.
+ */
+function redefinedTypes(v1: ScenarioV1): string[] {
+  return (['RED', 'BLUE'] as const).flatMap((color) => {
+    const groups = v1.particleGroups.filter((g) => g.color === color);
+    const last = groups.at(-1);
+    const differs = groups.some((g) => g.mass !== last?.mass || g.radius !== last.radius);
+    return differs
+      ? [
+          `${color === 'RED' ? 'Red' : 'Blue'} particle groups have different masses or radii; all use the last group's (${last?.mass} amu, ${last?.radius} nm).`,
+        ]
+      : [];
+  });
+}
+
+/** Whether a scenario can be written as `.set` (EDIT-20). */
+export function setFileCompatibility(scenario: Scenario): {
+  /** Why it can't; empty when it can. */
+  problems: string[];
+  /** Settings a `.set` file would lose. */
+  warnings: string[];
+} {
+  const { problems, warnings } = toV1(scenario);
+  return { problems, warnings };
+}
+
+function readParticleGroup(pg: SetGroup): ScenarioV1Input['particleGroups'][number] {
   return {
-    color: pg.string('color').toUpperCase() as ParticleGroup['color'],
+    color: pg.string('color').toUpperCase() as ParticleGroupV1['color'],
     mass: pg.number('mass'),
     radius: pg.number('radius'),
     ...(pg.has('temperature') && { temperature: pg.number('temperature') }),
@@ -107,10 +142,12 @@ function readParticleGroup(pg: SetGroup): ScenarioInput['particleGroups'][number
   };
 }
 
-function readAbscissaLimits(group: SetGroup | undefined): Scenario['statistics']['abscissaLimits'] {
-  const limits: Scenario['statistics']['abscissaLimits'] = {};
+function readAbscissaLimits(
+  group: SetGroup | undefined,
+): ScenarioV1['statistics']['abscissaLimits'] {
+  const limits: ScenarioV1['statistics']['abscissaLimits'] = {};
   for (const st of group?.groups('StatLimits') ?? []) {
-    const entry: Scenario['statistics']['abscissaLimits'][string] = {};
+    const entry: ScenarioV1['statistics']['abscissaLimits'][string] = {};
     for (const key of ['both', 'red', 'blue'] as const) {
       const property = `${key}_limits`;
       // `+ 0` turns the files' `-0.00000` into 0, which JSON can represent (-0 it can't).
@@ -122,7 +159,7 @@ function readAbscissaLimits(group: SetGroup | undefined): Scenario['statistics']
 }
 
 /** `color_scheme CUSTOM: red blue background divider [left right top bottom front back]`. */
-function readCustomColors(values: string[]): NonNullable<Scenario['display']['customColors']> {
+function readCustomColors(values: string[]): NonNullable<ScenarioV1['display']['customColors']> {
   const colors = values
     .slice(1)
     .join(' ')
@@ -162,9 +199,6 @@ function decodeColor(word: string): number {
 
 const toHex = (rgb: number) => `#${rgb.toString(16).padStart(6, '0').toUpperCase()}`;
 
-/** `#RRGGBB` as a number. */
-export const parseHexColor = (hex: string) => parseInt(hex.slice(1), 16);
-
 /**
  * A number as Java's US NumberFormat parses it back exactly: shortest round-trip digits, with
  * an upper-case `E` and no `+` in the exponent (NumberFormat stops reading at `e` or `+`).
@@ -175,10 +209,19 @@ function formatNumber(value: number): string {
 }
 
 const formatBoolean = (value: boolean) => (value ? 'TRUE' : 'FALSE');
-const colorName = (color: ParticleGroup['color']) => (color === 'RED' ? 'Red' : 'Blue');
+const colorName = (color: ParticleGroupV1['color']) => (color === 'RED' ? 'Red' : 'Blue');
 
-/** Writes a scenario as a `.set` file in the layout of the bundled presets. */
+/**
+ * Writes a scenario as a `.set` file in the layout of the bundled presets. Throws a
+ * ScenarioError when the `.set` format can't represent it (see setFileCompatibility).
+ */
 export function scenarioToSetFile(scenario: Scenario): string {
+  const { scenario: v1, problems } = toV1(scenario);
+  if (!v1) throw new ScenarioError(problems.map((p) => `Can't save as .set: ${p}`));
+  return writeSetFile(ScenarioV1Schema.parse(v1));
+}
+
+function writeSetFile(scenario: ScenarioV1): string {
   const lines: string[] = [`#Boltzmann3D ${SET_FILE_VERSION}`, ''];
   let depth = 0;
   const line = (text: string) => lines.push(`${'  '.repeat(depth)}${text}`);

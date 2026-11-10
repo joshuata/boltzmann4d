@@ -8,6 +8,7 @@
 // since parity with the Java app depends on bit-identical results.
 import { Collision, MAX_TIME, Wall, type EventInfo } from './event';
 import type { Arena, Particles } from './particles';
+import { relativeEnergy, type ReactionTable } from './reactions';
 import { ArenaType } from './simulation-info';
 
 // Local copies of imported constants for the hot paths (see plan 0002).
@@ -373,6 +374,8 @@ export function collide3D(
   j: number,
   event: EventInfo,
   arena: Arena,
+  _wellEnergy = 0.0, // no wells in 3D yet; keeps collide2D's signature
+  reactions: ReactionTable | null = null,
 ): void {
   const time = event.time;
   const dt1 = time - p.t0[i]!;
@@ -440,8 +443,23 @@ export function collide3D(
 
   const mass = p.mass[i]!;
   const targetMass = p.mass[j]!;
-  const nV1a = (2 * targetMass * V2a + (mass - targetMass) * V1a) / (mass + targetMass);
-  const nV2a = (2 * mass * V1a + (targetMass - mass) * V2a) / (mass + targetMass);
+  // Reactions (a web-port addition: Java has none in 3D), as in collide2D.
+  const deltaE = reactions
+    ? reactions.react(p, i, j, relativeEnergy(mass, targetMass, V1a, V2a))
+    : 0;
+  let nV1a: number;
+  let nV2a: number;
+  if (deltaE !== 0) {
+    const reducedMass = (mass * targetMass) / (mass + targetMass);
+    const relativeVelocity = V1a - V2a;
+    const rootVal = Math.sqrt(relativeVelocity * relativeVelocity - (2 * deltaE) / reducedMass);
+    const t = mass * V1a + targetMass * V2a;
+    nV1a = (t - targetMass * rootVal) / (mass + targetMass);
+    nV2a = (t + mass * rootVal) / (mass + targetMass);
+  } else {
+    nV1a = (2 * targetMass * V2a + (mass - targetMass) * V1a) / (mass + targetMass);
+    nV2a = (2 * mass * V1a + (targetMass - mass) * V2a) / (mass + targetMass);
+  }
 
   p.vx[i] = Ax * nV1a + Bx * V1b + Cx * V1c;
   p.vy[i] = Ay * nV1a + By * V1b + Cy * V1c;

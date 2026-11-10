@@ -2,12 +2,14 @@
 // the page supplies), paces it with ThreadController, and streams frames to the renderer over the port it is given.
 import {
   loadPresetScenario,
+  MARKERS,
   parseScenario,
   resolveScenario,
   type ResolvedScenario,
 } from '@boltzmann4d/engine/scenario';
 import type { RenderStream } from '../render/protocol';
 import {
+  javaReaction,
   Simulation,
   type ColorMode,
   type InitialState,
@@ -40,7 +42,6 @@ const post = (message: FromWorker) => scope.postMessage(message);
 const SUMMARY_INTERVAL_MS = 1000;
 
 /** The Reactions tab's defaults: forward and reverse activation energies, kJ/mol. */
-const DEFAULT_REACTIONS = { forward: 8.0, reverse: 4.0, suppressReverse: false };
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -52,6 +53,15 @@ let paused = false;
 let rateScale = 1;
 /** Bumped per load request, so a slow load can't replace a newer one. */
 let loadGeneration = 0;
+/** The running simulation's statistics. */
+let runningStatistics: Statistics | null = null;
+/** Kinds the user picked for the statistics (KIND-4), if not a tracked set. */
+let statKinds: number[] | null = null;
+
+/** Sends the statistics, including the picked set of kinds. */
+function postSummary(statistics: Statistics, time: number): void {
+  post({ type: 'statistics', summary: statistics.summary(time, statKinds ? [statKinds] : []) });
+}
 
 scope.onmessage = (event: MessageEvent<ToWorker>) => {
   const message = event.data;
@@ -65,6 +75,13 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       break;
     case 'restart':
       restart();
+      break;
+    case 'setGate':
+      try {
+        running?.setGateOpen(message.index, message.open);
+      } catch (error) {
+        post({ type: 'error', message: `Gate: ${errorText(error)}` });
+      }
       break;
     case 'setHoleOpen':
       // Takes effect at the start of the next frame (Physics.setArenaHoleOpen).
@@ -97,6 +114,10 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       rateScale = message.scale;
       threadController?.setRateScale(rateScale);
       break;
+    case 'statKinds':
+      statKinds = message.types;
+      if (running && runningStatistics) postSummary(runningStatistics, running.time);
+      break;
   }
 };
 
@@ -118,9 +139,11 @@ async function load(
         ? await loadPresetScenario(source.name)
         : parseScenario(source.scenario),
     );
+    // Drawn walls can't be combined with the piston yet (WALL-3).
     const canHavePiston =
-      loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
-      loaded.arenaType === ArenaType.MOVABLE_PISTON;
+      loaded.walls.length === 0 &&
+      (loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
+        loaded.arenaType === ArenaType.MOVABLE_PISTON);
     const canConduct =
       loaded.arenaType === ArenaType.DIVIDED_ARENA ||
       loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
@@ -137,24 +160,38 @@ async function load(
         ? DividerThermalMode.CONDUCTING
         : DividerThermalMode.INSULATING;
     }
-    // Reactions (as Java's Reactions tab): one species plus a "Reacted" copy of it that
-    // particles turn into. Presets with reaction_mode TRUE get them by default, with the
-    // tab's default activation energies (Java ignored the key).
-    const canReact = scenario.dimension === 2 && scenario.species.length === 1;
-    const reactions = canReact
-      ? arena.reactions !== undefined
-        ? arena.reactions
-        : scenario.reactionMode
-          ? { ...DEFAULT_REACTIONS }
-          : null
+    // Reactions: the scenario's rules. The sidebar's switch (Java's Reactions tab) edits
+    // the Java rule, species 0 + 0 → 1 + 1, in 2D scenarios with a single species (a
+    // "Reacted" copy of it is added for particles to turn into) or with that rule already
+    // (`.set` files with reaction_mode TRUE, which get the tab's defaults).
+    const [rule, ...otherRules] = scenario.reactions;
+    const javaRule =
+      rule !== undefined &&
+      otherRules.length === 0 &&
+      scenario.species.length === 2 &&
+      rule.reactants.every((k) => k === 0) &&
+      rule.products.every((k) => k === 1);
+    const canReact =
+      scenario.dimension === 2 &&
+      ((scenario.species.length === 1 && rule === undefined) || javaRule);
+    let reactions: ArenaOptions['reactions'] = javaRule
+      ? { forward: rule.forward, reverse: rule.reverse, suppressReverse: rule.suppressReverse }
       : null;
-    if (reactions) {
+    if (canReact && arena.reactions !== undefined) {
+      reactions = arena.reactions;
+      scenario.reactions = reactions
+        ? [javaReaction(reactions.forward, reactions.reverse, reactions.suppressReverse)]
+        : [];
+    }
+    if (reactions && scenario.species.length === 1) {
       const red = scenario.species[0]!;
       const empty = new Float64Array(0);
       scenario.species = [
         red,
         {
           ...red,
+          kindId: 'reacted',
+          marker: MARKERS[1]!,
           type: new ParticleType(
             red.type.particleMass,
             red.type.particleRadius,
@@ -173,7 +210,6 @@ async function load(
       ...scenario,
       ...(wells ? { wells } : {}),
       ...(attractiveWall ? { attractiveWall } : {}),
-      ...(reactions ? { reactions } : {}),
     };
     const arenaInfo: ArenaInfo = {
       canHavePiston,
@@ -182,6 +218,11 @@ async function load(
       canHaveWells,
       canReact,
       typeNames: scenario.species.map((s) => s.type.displayName),
+      gates: scenario.walls.flatMap((w, index) =>
+        w.physics?.type === 'gate'
+          ? [{ index, id: w.id, points: w.points.flat(), closed: w.closed ?? false }]
+          : [],
+      ),
       options: {
         piston: scenario.arenaType === ArenaType.MOVABLE_PISTON,
         conductingDivider: scenario.dividerThermalMode === DividerThermalMode.CONDUCTING,
@@ -245,6 +286,7 @@ function build(prepared: Prepared): Built {
     forgetMultiplier: prepared.scenario.forgetMultiplier,
     typeNames: prepared.scenario.species.map((s) => s.type.displayName),
     typeColors: prepared.typeColors,
+    typeMarkers: prepared.scenario.species.map((s) => s.marker),
   }));
   return { simulation, statistics };
 }
@@ -275,7 +317,7 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
   send(
     {
       type: 'scene',
-      scene: sceneOf(simulation, prepared.typeColors, prepared.viewingAngles, prepared.view),
+      scene: sceneOf(simulation, prepared),
     },
     [],
   );
@@ -298,18 +340,21 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
           ? { level: piston.curLevel, moving: piston.isMoving(simulation.time) }
           : undefined,
         holeOpen: simulation.arena.maxwellDemonMode ? simulation.holeOpen : undefined,
+        openGates: frame.openGates ? [...frame.openGates] : undefined,
       });
       const now = performance.now();
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
         lastSummary = now;
         statistics.sampleCurrent();
-        post({ type: 'statistics', summary: statistics.summary(simulation.time) });
+        postSummary(statistics, simulation.time);
       }
     },
     { speed: prepared.speed, rateScale },
   );
   threadController = controller;
   running = simulation;
+  runningStatistics = statistics;
+  statKinds = null; // a new scenario has its own kinds
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
   threadController.showCurrentFrame();
@@ -322,7 +367,13 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
       ? { maxLevel: simulation.maxPistonLevel(), arenaHeight: simulation.arena.ySize }
       : undefined,
     dimension: simulation.dimension,
+    kinds: prepared.scenario.species.map((s, t) => ({
+      name: s.type.displayName,
+      color: prepared.typeColors[t]!,
+      marker: s.marker,
+    })),
     view: {
+      markers: prepared.scenario.markers,
       colorMode: prepared.view.colorMode,
       trace: prepared.view.trace,
       arenaWidth: simulation.arena.xSize,
@@ -331,12 +382,8 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
   });
 }
 
-function sceneOf(
-  simulation: Simulation,
-  typeColors: number[],
-  viewingAngles: [number, number],
-  view: ViewSettings,
-): SceneInfo {
+function sceneOf(simulation: Simulation, prepared: Prepared): SceneInfo {
+  const { typeColors, viewingAngles, view, scenario } = prepared;
   const p = simulation.particles;
   const arena = simulation.arena;
   const divided =
@@ -351,6 +398,17 @@ function sceneOf(
     radii: p.radius.slice(),
     types: p.type.slice(),
     typeColors,
+    // Always sent, so the View menu can turn them on; the scenario says whether they start on.
+    typeMarkers: scenario.species.map((s) => s.marker),
+    walls: scenario.walls.map((w) => ({
+      points: Float64Array.from(w.points.flat()),
+      closed: w.closed ?? false,
+      color: w.style.color,
+      lineWidth: w.style.lineWidth,
+      dash: w.style.dash,
+      gate: w.physics?.type === 'gate',
+      well: w.physics?.type === 'attractive' ? w.physics.width : undefined,
+    })),
     viewingAngles,
     divider: divided
       ? {

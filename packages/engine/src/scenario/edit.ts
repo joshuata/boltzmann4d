@@ -1,15 +1,15 @@
-// Editing a scenario the way the Java app's settings dialog does: one red and one blue
-// species, each with a count, mass, radius and temperature (PART-1–5). A scenario may hold
-// more detail than that (several groups per colour, explicitly placed particles); the
-// summary reads it, and writing a species back keeps its placed particles where it can.
+// Editing a scenario the way the Java app's settings dialog does: each kind as one species
+// with a count, mass, radius and temperature (PART-1–5). A scenario may hold more detail than
+// that (several populations per kind, explicitly placed particles); the summary reads it, and
+// writing a species back keeps its placed particles where it can.
 import { ARENA_DIVIDER_RADIUS } from '../sim/simulation-info';
 import { avgKineticEnergy, speed, temperature as temperatureFromEnergy } from '../stats/formulas';
 import { convert } from '../utils/units';
-import type { ParticleColor, ParticleGroup, Scenario } from './schema';
+import type { Kind, Population, Scenario } from './schema';
 
 /** Limits the Java app's dialog enforces (docs/specs/particles.md, PART-1–4). */
 export const SPECIES_LIMITS = {
-  /** Red and blue together. */
+  /** All kinds together. */
   totalCount: { min: 0, max: 999 },
   /** amu; 0 would never move. */
   mass: { min: 0.001, max: 999 },
@@ -21,7 +21,7 @@ export const SPECIES_LIMITS = {
 export const ARENA_SIZE_LIMITS = { min: 1, max: 500 } as const;
 
 export interface SpeciesSetup {
-  /** Particles of this colour, placed and random together. */
+  /** Particles of this kind, placed and random together. */
   count: number;
   /** amu. */
   mass: number;
@@ -36,64 +36,75 @@ export interface SpeciesSummary extends SpeciesSetup {
   placed: number;
 }
 
-const groupsOf = (scenario: Scenario, color: ParticleColor) =>
-  scenario.particleGroups.filter((g) => g.color === color);
+const populationsOf = (scenario: Scenario, kind: string) =>
+  scenario.populations.filter((p) => p.kind === kind);
 
 const massKg = (amu: number) => convert('amu', 'kg', amu);
 
-/** A colour's species as one count, mass, radius and temperature; null if it has none. */
-export function describeSpecies(scenario: Scenario, color: ParticleColor): SpeciesSummary | null {
-  const groups = groupsOf(scenario, color);
-  const last = groups.at(-1);
-  if (!last) return null;
+/** A kind's particles as one count, mass, radius and temperature; null if it has none. */
+export function describeSpecies(scenario: Scenario, kindId: string): SpeciesSummary | null {
+  const kind = scenario.kinds.find((k) => k.id === kindId);
+  if (!kind) return null;
+  const kg = massKg(kind.mass);
   const dimension = scenario.arena.dimensions;
   let count = 0;
   let placed = 0;
   let energy = 0;
   let explicitTemperature: number | undefined;
-  for (const g of groups) {
-    const kg = massKg(g.mass);
+  for (const p of populationsOf(scenario, kindId)) {
     const before = count;
-    for (const block of g.randomlyPlaced) {
+    for (const block of p.randomlyPlaced) {
       count += block.count;
       energy += block.count * 0.5 * kg * block.averageVelocity ** 2;
     }
-    for (const p of g.particles) {
+    for (const particle of p.particles) {
       count++;
       placed++;
-      energy += 0.5 * kg * p.speed ** 2;
+      energy += 0.5 * kg * particle.speed ** 2;
     }
-    if (g.temperature !== undefined && count > before) explicitTemperature = g.temperature;
+    if (p.temperature !== undefined && count > before) explicitTemperature = p.temperature;
   }
   if (count === 0) return null;
   const temperature = explicitTemperature ?? temperatureFromEnergy(energy / count, dimension);
-  return { count, placed, mass: last.mass, radius: last.radius, temperature };
+  return { count, placed, mass: kind.mass, radius: kind.radius, temperature };
 }
 
+const capitalized = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+
 /**
- * Replaces a colour's species. Particles the scenario places at given positions stay where
- * they are (the first `count` of them) unless `keepPlaced` is false; the rest of `count` are
- * placed at random. The species gets one temperature, so placed particles' speeds are
- * rescaled to it. A count of 0 or null removes the colour.
+ * Replaces a kind's particles, adding the kind (named after its id) if the scenario lacks it.
+ * Particles the scenario places at given positions stay where they are (the first `count` of
+ * them) unless `keepPlaced` is false; the rest of `count` are placed at random. The species
+ * gets one temperature, so placed particles' speeds are rescaled to it. A count of 0 or null
+ * removes the kind's particles; the kind itself stays.
  */
 export function withSpecies(
   scenario: Scenario,
-  color: ParticleColor,
+  kindId: string,
   setup: SpeciesSetup | null,
   { keepPlaced = true }: { keepPlaced?: boolean } = {},
 ): Scenario {
-  const others = scenario.particleGroups.filter((g) => g.color !== color);
-  if (!setup || setup.count <= 0) return { ...scenario, particleGroups: others };
+  const others = scenario.populations.filter((p) => p.kind !== kindId);
+  if (!setup || setup.count <= 0) return { ...scenario, populations: others };
+
+  const existing = scenario.kinds.find((k) => k.id === kindId);
+  const kind: Kind = {
+    ...(existing ?? { id: kindId, name: capitalized(kindId) }),
+    mass: setup.mass,
+    radius: setup.radius,
+  };
+  const kinds = existing
+    ? scenario.kinds.map((k) => (k.id === kindId ? kind : k))
+    : [...scenario.kinds, kind];
+
   const placed = keepPlaced
-    ? groupsOf(scenario, color)
-        .flatMap((g) => g.particles)
+    ? populationsOf(scenario, kindId)
+        .flatMap((p) => p.particles)
         .slice(0, setup.count)
     : [];
   const randomCount = setup.count - placed.length;
-  const group: ParticleGroup = {
-    color,
-    mass: setup.mass,
-    radius: setup.radius,
+  const population: Population = {
+    kind: kindId,
     temperature: setup.temperature,
     // Every particle starts at the speed for this temperature (SIM-6), as in Java's saves.
     randomlyPlaced:
@@ -110,9 +121,12 @@ export function withSpecies(
         : [],
     particles: placed,
   };
-  // Red before blue, as the simulation orders them.
-  const particleGroups = color === 'RED' ? [group, ...others] : [...others, group];
-  return { ...scenario, particleGroups };
+  // In kind order, as the simulation orders species (red before blue).
+  const order = new Map(kinds.map((k, i) => [k.id, i]));
+  const populations = [...others, population].sort(
+    (a, b) => order.get(a.kind)! - order.get(b.kind)!,
+  );
+  return { ...scenario, kinds, populations };
 }
 
 /**
@@ -122,8 +136,8 @@ export function withSpecies(
  */
 export function scenarioProblems(scenario: Scenario): string[] {
   const problems: string[] = [];
-  const species = (['RED', 'BLUE'] as const)
-    .map((c) => describeSpecies(scenario, c))
+  const species = scenario.kinds
+    .map((k) => describeSpecies(scenario, k.id))
     .filter((s): s is SpeciesSummary => s !== null);
   const total = species.reduce((n, s) => n + s.count, 0);
   if (total > SPECIES_LIMITS.totalCount.max) {
@@ -131,6 +145,8 @@ export function scenarioProblems(scenario: Scenario): string[] {
   }
   // Particles at given positions are where the file wants them (2Dliquid is packed tight).
   if (species.every((s) => s.placed === s.count)) return problems;
+  // With walls or spawn regions, placement itself says exactly what fits (EDIT-6).
+  if (scenario.walls.length > 0 || scenario.spawnRegions.length > 0) return problems;
 
   const d = scenario.arena.dimensions;
   const [x, y, z] = scenario.arena.size;

@@ -1,6 +1,6 @@
 # Feature specs
 
-What boltzmann4d must be able to do, extracted from the Boltzmann 3D user documentation. These describe behaviour, not code: they say what a user (teacher or student) must be able to see and do, and which numbers the app must produce. Plans in `.agents/plans/` say how and when we build it.
+What boltzmann4d must be able to do, extracted from the Boltzmann 3D user documentation, plus `editor.md` for what the web port adds. These describe behaviour, not code: they say what a user (teacher or student) must be able to see and do, and which numbers the app must produce. Plans in `.agents/plans/` say how and when we build it.
 
 ## Sources
 
@@ -23,6 +23,7 @@ The manual describes the 2009 program; the Java code in `vendor/boltzmann3d` is 
 | [predictions.md](predictions.md) | The theoretical values the app displays: formulas for 1D, 2D, 3D, mixtures, real gases, finite systems, reactions, adiabatic changes |
 | [display-and-controls.md](display-and-controls.md) | Clock, speed, zoom, restart / pause / advance / reverse, colouring, trajectory trace, 3D view, options |
 | [files-and-output.md](files-and-output.md) | Loading and saving `.set` files, the bundled presets, CSV output |
+| [editor.md](editor.md) | _Web port only:_ the scenario editor, drawn walls and their kinds, spawn regions, up to 10 particle kinds, colour-blind-safe palettes, reaction rules |
 | [stories.md](stories.md) | Classroom experiments from the manual and worksheets, written as end-to-end acceptance checks |
 
 ## Conventions

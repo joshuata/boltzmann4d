@@ -53,6 +53,9 @@ export class InstantaneousSpeed {
   cumulative: HistogramBins;
   readonly currentValues = new WeightedValueTracker();
   readonly cumulativeValues = new WeightedValueTracker();
+  /** The same, per recorded type (same order as `types`), to combine any subset of them. */
+  readonly currentByType: WeightedValueTracker[];
+  readonly cumulativeByType: WeightedValueTracker[];
 
   private readonly ctx: StatsContext;
 
@@ -61,6 +64,8 @@ export class InstantaneousSpeed {
     this.types = types;
     this.slotOfType = new Int32Array(ctx.types.length).fill(-1);
     types.forEach((type, slot) => (this.slotOfType[type] = slot));
+    this.currentByType = types.map(() => new WeightedValueTracker());
+    this.cumulativeByType = types.map(() => new WeightedValueTracker());
     // The axis is fixed from the starting temperatures, as in Java.
     this.range = { min: 0.0, max: this.predictedAverage() * 2.5 };
     this.current = new HistogramBins(this.range, CURRENT_BINS, types.length);
@@ -75,22 +80,28 @@ export class InstantaneousSpeed {
 
   /** A particle of `type` held `speed` for `duration` seconds. */
   addCumulative(type: number, speed: number, duration: number): void {
+    const slot = this.slotOfType[type]!;
     this.cumulativeValues.add(speed, duration);
-    this.cumulative.add(speed, duration, this.slotOfType[type]!);
+    this.cumulativeByType[slot]!.add(speed, duration);
+    this.cumulative.add(speed, duration, slot);
   }
 
   addCurrent(type: number, speed: number): void {
+    const slot = this.slotOfType[type]!;
     this.currentValues.add(speed, 1.0);
-    this.current.add(speed, 1.0, this.slotOfType[type]!);
+    this.currentByType[slot]!.add(speed, 1.0);
+    this.current.add(speed, 1.0, slot);
   }
 
   clearCurrent(): void {
     this.currentValues.clear();
+    for (const t of this.currentByType) t.clear();
     this.current.reset();
   }
 
   clearCumulative(): void {
     this.cumulativeValues.clear();
+    for (const t of this.cumulativeByType) t.clear();
     this.cumulative.reset();
   }
 
