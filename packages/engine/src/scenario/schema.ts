@@ -90,14 +90,22 @@ export const CustomColorsSchema = z.object({
   walls3D: z.array(hexColor).max(6).default([]),
 });
 
+const header = {
+  format: z.literal(SCENARIO_FORMAT, {
+    error: `Not a Boltzmann 4D scenario file (format must be "${SCENARIO_FORMAT}")`,
+  }),
+  version: z.literal(SCENARIO_VERSION, {
+    error: `Unsupported scenario version (this app reads version ${SCENARIO_VERSION})`,
+  }),
+};
+/** Just the fields that say what kind of document this is. */
+const HeaderSchema = z.object(header, {
+  error: 'Not a Boltzmann 4D scenario file (expected a JSON object)',
+});
+
 export const ScenarioSchema = z
   .object({
-    format: z.literal(SCENARIO_FORMAT, {
-      error: `Not a Boltzmann 4D scenario file (format must be "${SCENARIO_FORMAT}")`,
-    }),
-    version: z.literal(SCENARIO_VERSION, {
-      error: `Unsupported scenario version (this app reads version ${SCENARIO_VERSION})`,
-    }),
+    ...header,
     arena: z.object({
       dimensions: z.union([z.literal(1), z.literal(2), z.literal(3)], {
         error: (issue) => `dimensions must be 1, 2 or 3, not ${String(issue.input)}`,
@@ -182,6 +190,11 @@ export type ValidationResult =
 
 /** Checks a parsed JSON value against the schema, with one readable line per problem. */
 export function validateScenario(value: unknown): ValidationResult {
+  // Another kind of document, or another version: say only that, not every field it lacks.
+  const header = HeaderSchema.safeParse(value);
+  if (!header.success) {
+    return { success: false, problems: header.error.issues.map(describeIssue) };
+  }
   const result = ScenarioSchema.safeParse(value);
   if (result.success) return { success: true, scenario: result.data };
   return { success: false, problems: result.error.issues.map(describeIssue) };

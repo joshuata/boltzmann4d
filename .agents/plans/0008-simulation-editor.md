@@ -1,6 +1,6 @@
 # 0008: Simulation editor and scenario JSON
 
-_In progress: step 1 (engine schema and conversion) is done; next is step 2._ Follows the workspace split (plan 0007), which left `packages/simulation-editor` and the `/editor` and `/upload` routes as placeholders.
+_In progress: steps 1–3 are done; next is step 4 (the editor)._ Follows the workspace split (plan 0007), which left `packages/simulation-editor` and the `/editor` and `/upload` routes as placeholders.
 
 ## Goal
 
@@ -25,10 +25,10 @@ Teachers and students can build their own simulation (arena, species, counts, te
 ## Work
 
 1. Engine (first PR, done): JSON schema and types for scenarios, a validator with readable errors, and `.set ⇄ JSON` conversion with round-trip tests over every bundled preset.
-2. Worker protocol: load a scenario (JSON) instead of only a preset name; presets become scenarios produced from the bundled `.set` files.
-3. Site: `/upload` opens a `.json` or `.set` file (FILE-1's file picker), stores it, and runs it; a route to run a stored scenario.
+2. Worker protocol (done): `connect`/`load` take a `ScenarioSource`, a bundled preset or a scenario object, and `<Simulator>` takes a `scenario` prop. Presets are converted to scenarios when loaded (`loadPresetScenario`).
+3. Site (done): `/upload` opens a `.json` or `.set` file (FILE-1's file picker, or drag and drop), lists every problem if it can't, and runs it. Storing it moves to step 5.
 4. Simulation editor: a form-based editor over the schema (start from any preset), with live validation, run, and download as `.json` or `.set`. Works at narrow widths and with touch (AGENTS.md UI rules).
-5. Saved scenarios: an IndexedDB store of named scenarios (JSON), listed on `/upload`, with a user default (FILE-2).
+5. Saved scenarios: an IndexedDB store of named scenarios (JSON), including opened files, listed on `/upload` with a route to run one, and a user default (FILE-2).
 
 ## Open questions
 
