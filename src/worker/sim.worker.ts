@@ -104,7 +104,12 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
     }
     const canHaveWells = settings.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
     const wells = canHaveWells && arena.wells ? arena.wells : null;
-    const simulationSettings = wells ? { ...settings, wells } : settings;
+    const attractiveWall = canHaveWells && arena.attractiveWall ? arena.attractiveWall : null;
+    const simulationSettings = {
+      ...settings,
+      ...(wells ? { wells } : {}),
+      ...(attractiveWall ? { attractiveWall } : {}),
+    };
     arenaInfo = {
       canHavePiston,
       canConduct,
@@ -114,6 +119,7 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
         piston: settings.arenaType === ArenaType.MOVABLE_PISTON,
         conductingDivider: settings.dividerThermalMode === DividerThermalMode.CONDUCTING,
         wells,
+        attractiveWall,
       },
     };
     speed = parseSimulationSpeed(settings.simulationSpeed);

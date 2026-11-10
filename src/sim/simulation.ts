@@ -33,6 +33,11 @@ import {
   predictBoundary3D,
   predictPair3D,
 } from './particle-3d';
+import {
+  createAttractiveWall,
+  type AttractiveWall,
+  type AttractiveWallOptions,
+} from './attractive-wall';
 import { createArena, Particles, type Arena } from './particles';
 import { compressionLimitPercent, Piston, PistonMode } from './piston';
 import { Thermostat } from './thermostat';
@@ -119,6 +124,8 @@ export interface InitialState {
    * of its two species' `depths`. Java only uses them in non-periodic arenas.
    */
   wells?: { radiusMultiplier: number; depths: readonly number[] };
+  /** A square well along the bottom wall (non-periodic 2D arenas). */
+  attractiveWall?: AttractiveWallOptions;
   species: readonly InitialSpecies[];
 }
 
@@ -168,6 +175,10 @@ export class Simulation {
   readonly piston: Piston | null;
   /** The wall thermostat, switched on by isothermal piston moves. */
   readonly thermostat = new Thermostat();
+  /** The attractive wall (null without one). */
+  readonly wall: AttractiveWall | null;
+  /** Attractive wall: 1 for each particle inside its well. */
+  private readonly inWallWell: Uint8Array;
 
   /**
    * Each particle's boundary event as Java predicted it: at the particle's own events, and
@@ -271,6 +282,12 @@ export class Simulation {
         ? wells.radiusMultiplier
         : 0;
     this.wellDepths = Float64Array.from(init.species, (_, t) => wells?.depths[t] ?? 0);
+    this.wall =
+      init.attractiveWall &&
+      init.dimension === 2 && // 2D only so far
+      init.arenaType !== ArenaType.PERIODIC_BOUNDARIES
+        ? createAttractiveWall(init.attractiveWall)
+        : null;
     this.conductingDivider =
       init.dividerThermalMode === DividerThermalMode.CONDUCTING &&
       (init.arenaType === ArenaType.DIVIDED_ARENA ||
@@ -306,6 +323,17 @@ export class Simulation {
       }
     });
     this.particles = p;
+    this.inWallWell = new Uint8Array(count);
+    if (this.wall) {
+      let largest = 0;
+      for (let k = 0; k < count; k++) largest = Math.max(largest, p.radius[k]!);
+      // Its top must be above the lowest a particle's centre can go (one radius).
+      if (!(this.wall.width > largest)) {
+        throw new RangeError(`The attractive wall's well must be wider than ${largest} m`);
+      }
+    }
+    if (this.wall)
+      for (let k = 0; k < count; k++) this.inWallWell[k] = p.y[k]! < this.wall.width ? 1 : 0;
 
     this.heap = new EventHeap(count);
     this.nextType = new Uint8Array(count);
@@ -482,7 +510,7 @@ export class Simulation {
   private predictBoundaryAt(k: number, te: number, includeFrameAtTe: boolean): void {
     this.predictionState(k, te, 0, includeFrameAtTe);
     const out = this.prediction;
-    this.predictBoundary(this.scratch, 0, this.arena, out, this.holeOpen, this.piston);
+    this.predictBoundary(this.scratch, 0, this.arena, out, this.holeOpen, this.piston, this.wall);
     this.counters.boundaryPredictions++;
     this.boundaryTime[k] = out.time;
     this.boundaryType[k] = out.type;
@@ -536,9 +564,13 @@ export class Simulation {
    * energy (joshuata/boltzmann4d#24). 0 without wells.
    */
   potentialEnergy(): number {
-    if (this.wellMultiplier === 0) return 0;
     const p = this.particles;
     let total = 0;
+    if (this.wall) {
+      // The attractive wall: −E per particle inside its well.
+      for (let k = 0; k < p.count; k++)
+        if (this.inWallWell[k]) total -= this.wall.energy * AMU_JOULE;
+    }
     for (const [key, type] of this.lastPairType) {
       if (type === EXIT_WELL) continue; // every other recorded pair event leaves it inside
       const a = Math.floor(key / p.count);
@@ -547,6 +579,13 @@ export class Simulation {
       total -= (convert('kJ/mol', 'amu·m^2/s^2', depth) / 2) * AMU_JOULE;
     }
     return total;
+  }
+
+  /** Attractive wall: how many particles are inside its well. */
+  particlesInWallWell(): number {
+    let n = 0;
+    for (const inside of this.inWallWell) n += inside;
+    return n;
   }
 
   /** Pairs inside each other's square well, as [lower index, higher index]. */
@@ -659,7 +698,9 @@ export class Simulation {
         this.conductAcrossDivider(i, event);
         return event;
       }
-      this.boundaryCollide(p, i, event, this.arena, this.piston, this.thermostat);
+      this.boundaryCollide(p, i, event, this.arena, this.piston, this.thermostat, this.wall);
+      if (type === Collision.ENTER_GRAVITY_WELL) this.inWallWell[i] = 1;
+      else if (type === Collision.EXIT_GRAVITY_WELL) this.inWallWell[i] = p.vy[i]! < 0 ? 1 : 0;
       if (type === WALL || type === PISTON) this.counters.wallCollisions++;
       else if (type === BOUNDARY || type === EOB) this.counters.boundaryCrossings++;
       else if (type === BARRIER || type === EDGE) this.counters.dividerCollisions++;
@@ -686,7 +727,7 @@ export class Simulation {
       partnerEnergy = 0.5 * p.mass[partner]! * v * v;
       partnerDirection = Math.sign(v);
     }
-    this.boundaryCollide(p, i, event, this.arena, this.piston, this.thermostat);
+    this.boundaryCollide(p, i, event, this.arena, this.piston, this.thermostat, this.wall);
     this.counters.dividerCollisions++;
     this.collisionCount[i]!++;
     if (partner >= 0) {
