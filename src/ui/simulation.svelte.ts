@@ -35,6 +35,11 @@ export class SimulationClient {
   statistics = $state.raw<StatisticsSummary | null>(null);
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
+  /**
+   * Simulated picoseconds per real second, over the last second. Constant while running
+   * (the physics follows the wall clock), whatever the frame rate.
+   */
+  simulatedPsPerSecond = $state(0);
   /** Simulation frames the physics delivered per second, over the last second. */
   simulationFps = $state(0);
   /** Simulation frames the renderer drew per second (frames replaced before a refresh are skipped). */
@@ -42,6 +47,9 @@ export class SimulationClient {
 
   // Per-second rate measurement.
   #framesThisSecond = 0;
+  /** Simulation time of the latest frame, and simulated seconds advanced this second. */
+  #lastFrameTime = 0;
+  #simulatedThisSecond = 0;
   #drawnTotal = 0;
   #drawnAtLastTick = 0;
   #lastTick = performance.now();
@@ -112,6 +120,9 @@ export class SimulationClient {
         case 'timing':
           this.physicsMs += 0.05 * (message.physicsMs - this.physicsMs);
           this.#framesThisSecond++;
+          // A newly loaded preset starts again from 0: count only forward progress.
+          this.#simulatedThisSecond += Math.max(0, message.time - this.#lastFrameTime);
+          this.#lastFrameTime = message.time;
           break;
         case 'statistics':
           this.statistics = message.summary;
@@ -180,7 +191,9 @@ export class SimulationClient {
     if (this.#mainRenderer) this.#drawnTotal = this.#mainRenderer.framesDrawn();
     this.simulationFps = this.#framesThisSecond / seconds;
     this.drawnFps = Math.max(0, this.#drawnTotal - this.#drawnAtLastTick) / seconds;
+    this.simulatedPsPerSecond = (this.#simulatedThisSecond * 1e12) / seconds;
     this.#framesThisSecond = 0;
+    this.#simulatedThisSecond = 0;
     this.#drawnAtLastTick = this.#drawnTotal;
     this.#lastTick = now;
   }
