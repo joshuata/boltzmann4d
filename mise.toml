@@ -54,7 +54,7 @@ run = "node --import tsx --cpu-prof --cpu-prof-dir=profiles scripts/profile.ts"
 description = "Java app: write parity fixtures (src/sim/parity/*.json) with boltzmann3d's ParityDump"
 run = """
 set -eu
-inputs="src tests/edu/byu/chem/boltzmann/tools/ParityDump.java tests/edu/byu/chem/boltzmann/tools/JsonWriter.java build.xml"
+inputs="src tests/edu/byu/chem/boltzmann/tools/scenarios tests/edu/byu/chem/boltzmann/tools/ParityDump.java tests/edu/byu/chem/boltzmann/tools/JsonWriter.java build.xml"
 stamp=src/sim/parity/java-inputs.txt
 hash=$(scripts/java-inputs-hash.sh $inputs)
 if [ -z "${FORCE:-}" ] && [ "$hash" = "$(cat $stamp 2>/dev/null)" ]; then
