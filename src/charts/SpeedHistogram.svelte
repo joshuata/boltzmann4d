@@ -5,7 +5,7 @@
   the predicted average ± width, green the measured average ± width.
 -->
 <script lang="ts">
-  import { Axis, Chart, Layer, Rect, Rule, Spline } from 'layerchart';
+  import { Axis, Chart, Layer, Rect, Rule, Spline } from 'layerchart/svg';
   import type { StatisticSummary } from '../stats/summary';
 
   interface Props {
@@ -62,7 +62,7 @@
     yDomain={[0, 1.25]}
     padding={{ left: 8, right: 12, top: 4, bottom: 22 }}
   >
-    <Layer type="svg">
+    <Layer>
       {#each bars as series, slot (slot)}
         <Rect
           data={series.rects}
