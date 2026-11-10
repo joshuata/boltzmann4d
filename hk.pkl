@@ -12,10 +12,11 @@ local linters = new Mapping<String, Step> {
         check = "pnpm exec eslint {{ files }}"
         fix = "pnpm exec eslint --fix {{ files }}"
     }
-    // Type-check the whole project: .ts and .svelte files together (tsc can't read .svelte).
+    // Type-check every workspace (each one's `check` script: svelte-check, or tsc for the
+    // engine) plus the root scripts. tsc can't read .svelte, hence svelte-check.
     ["svelte-check"] {
-        glob = List("**/*.ts", "**/*.svelte", "tsconfig.json")
-        check = "pnpm exec svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+        glob = List("**/*.ts", "**/*.svelte", "**/tsconfig*.json")
+        check = "pnpm run check"
     }
     // Formatting. Respects .prettierignore and .prettierrc.
     ["prettier"] {

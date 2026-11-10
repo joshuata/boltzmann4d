@@ -7,8 +7,8 @@
 import { writeFileSync } from 'node:fs';
 import { cpus, platform, release, arch } from 'node:os';
 import { parseArgs } from 'node:util';
-import { syntheticGas } from '../src/sim/scenes';
-import { DEFAULT_FRAME_DURATION, Simulation } from '../src/sim/simulation';
+import { syntheticGas } from '@boltzmann4d/engine/sim/scenes';
+import { DEFAULT_FRAME_DURATION, Simulation } from '@boltzmann4d/engine/sim/simulation';
 
 const { values } = parseArgs({
   options: {
