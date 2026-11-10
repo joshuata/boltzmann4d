@@ -30,6 +30,22 @@
       arena.options.wells.radiusMultiplier !== multiplier ||
       arena.options.wells.depths.some((d, t) => d !== depths[t]),
   );
+  // The attractive wall: Java's defaults, 10 nm wide and 2.5 kJ/mol deep.
+  let wallWidth = $state(10);
+  let wallDepth = $state(2.5);
+  $effect.pre(() => {
+    wallWidth = (arena.options.attractiveWall?.width ?? 10e-9) * 1e9;
+    wallDepth = arena.options.attractiveWall?.depth ?? 2.5;
+  });
+  const wallOn = $derived(Boolean(arena.options.attractiveWall));
+  const wallValid = $derived(wallWidth > 0 && wallDepth >= 0);
+  const wallChanged = $derived(
+    !arena.options.attractiveWall ||
+      arena.options.attractiveWall.width !== wallWidth * 1e-9 ||
+      arena.options.attractiveWall.depth !== wallDepth,
+  );
+  const applyWall = () =>
+    onChange({ attractiveWall: { width: wallWidth * 1e-9, depth: wallDepth } });
   const applyWells = () =>
     onChange({ wells: { radiusMultiplier: multiplier, depths: [...depths] } });
 </script>
@@ -89,6 +105,35 @@
             </label>
           {/each}
           <button type="button" disabled={disabled || !valid || !changed} onclick={applyWells}>
+            Apply
+          </button>
+        </div>
+      {/if}
+      <label>
+        <input
+          type="checkbox"
+          checked={wallOn}
+          {disabled}
+          onchange={(e) =>
+            e.currentTarget.checked ? applyWall() : onChange({ attractiveWall: null })}
+        />
+        Attractive bottom wall
+      </label>
+      {#if wallOn}
+        <div class="wells">
+          <label class="field">
+            <span>Width (nm)</span>
+            <input type="number" min="0.5" max="100" step="0.5" bind:value={wallWidth} {disabled} />
+          </label>
+          <label class="field">
+            <span>Depth (kJ/mol)</span>
+            <input type="number" min="0" max="50" step="0.5" bind:value={wallDepth} {disabled} />
+          </label>
+          <button
+            type="button"
+            disabled={disabled || !wallValid || !wallChanged}
+            onclick={applyWall}
+          >
             Apply
           </button>
         </div>
