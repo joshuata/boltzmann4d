@@ -6,6 +6,7 @@
 // only runs the UI. Browsers that can't hand a canvas to a worker draw on the main
 // thread instead, fed through the same channel.
 import type { Renderer, ViewSize } from '../render';
+import type { Dimension } from '../sim';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '../stats/summary';
@@ -20,18 +21,27 @@ export class SimulationClient {
    * (browsers time to about 0.1 ms here, so single frames are too coarse to show).
    */
   physicsMs = $state(0);
+  /** The user's multiplier on the preset's simulation speed (1 = as the preset sets it). */
+  rateScale = $state(1);
   /** Set if the simulation or the renderer failed, or a preset couldn't be loaded. */
   error = $state<string | null>(null);
   /** The preset running now (or being loaded), by file name without `.set`. */
   preset = $state('default');
   /** Particles in the running simulation (0 until it has loaded). */
   particleCount = $state(0);
+  /** Dimension of the running simulation (3D views can be turned). */
+  dimension = $state<Dimension>(2);
   /** True while a preset is loading. */
   loading = $state(true);
   /** Latest statistics from the physics worker (about once a second); null until the first. */
   statistics = $state.raw<StatisticsSummary | null>(null);
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
+  /**
+   * Simulated picoseconds per real second, over the last second. Constant while running
+   * (the physics follows the wall clock), whatever the frame rate.
+   */
+  simulatedPsPerSecond = $state(0);
   /** Simulation frames the physics delivered per second, over the last second. */
   simulationFps = $state(0);
   /** Simulation frames the renderer drew per second (frames replaced before a refresh are skipped). */
@@ -39,6 +49,9 @@ export class SimulationClient {
 
   // Per-second rate measurement.
   #framesThisSecond = 0;
+  /** Simulation time of the latest frame, and simulated seconds advanced this second. */
+  #lastFrameTime = 0;
+  #simulatedThisSecond = 0;
   #drawnTotal = 0;
   #drawnAtLastTick = 0;
   #lastTick = performance.now();
@@ -109,6 +122,9 @@ export class SimulationClient {
         case 'timing':
           this.physicsMs += 0.05 * (message.physicsMs - this.physicsMs);
           this.#framesThisSecond++;
+          // A newly loaded preset starts again from 0: count only forward progress.
+          this.#simulatedThisSecond += Math.max(0, message.time - this.#lastFrameTime);
+          this.#lastFrameTime = message.time;
           break;
         case 'statistics':
           this.statistics = message.summary;
@@ -116,6 +132,7 @@ export class SimulationClient {
         case 'loaded':
           this.preset = message.preset;
           this.particleCount = message.particles;
+          this.dimension = message.dimension;
           this.loading = false;
           this.error = null;
           break;
@@ -150,9 +167,26 @@ export class SimulationClient {
     );
   }
 
+  /** 3D: turns the view by these angles about the x and y axes, in degrees. */
+  rotate(aboutX: number, aboutY: number): void {
+    if (this.#renderWorker) {
+      const message: ToRenderWorker = { type: 'rotate', aboutX, aboutY };
+      this.#renderWorker.postMessage(message);
+    } else {
+      this.#mainRenderer?.rotate(aboutX, aboutY);
+    }
+  }
+
   setPaused(paused: boolean): void {
     this.paused = paused;
     this.#send({ type: paused ? 'pause' : 'play' });
+  }
+
+  /** Speeds the simulation up or slows it down relative to the preset's speed. */
+  setRateScale(scale: number): void {
+    if (!Number.isFinite(scale) || scale <= 0) return;
+    this.rateScale = scale;
+    this.#send({ type: 'rate', scale });
   }
 
   advanceOneFrame(): void {
@@ -166,7 +200,9 @@ export class SimulationClient {
     if (this.#mainRenderer) this.#drawnTotal = this.#mainRenderer.framesDrawn();
     this.simulationFps = this.#framesThisSecond / seconds;
     this.drawnFps = Math.max(0, this.#drawnTotal - this.#drawnAtLastTick) / seconds;
+    this.simulatedPsPerSecond = (this.#simulatedThisSecond * 1e12) / seconds;
     this.#framesThisSecond = 0;
+    this.#simulatedThisSecond = 0;
     this.#drawnAtLastTick = this.#drawnTotal;
     this.#lastTick = now;
   }

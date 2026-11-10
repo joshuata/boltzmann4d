@@ -42,7 +42,8 @@ function momentumScale(sim: Simulation): number {
 
 function expectNoOverlapsInside(sim: Simulation): void {
   const p = sim.particles;
-  const { xSize, ySize } = sim.arena;
+  const { xSize, ySize, zSize } = sim.arena;
+  const is3D = sim.dimension === 3;
   const reflecting = sim.arena.type === ArenaType.REFLECTING_BOUNDARIES;
   const slack = 1e-12 * Math.max(xSize, ySize);
   for (let i = 0; i < p.count; i++) {
@@ -52,24 +53,30 @@ function expectNoOverlapsInside(sim: Simulation): void {
       expect(p.x[i]).toBeLessThanOrEqual(xSize - r + slack);
       expect(p.y[i]).toBeGreaterThanOrEqual(r - slack);
       expect(p.y[i]).toBeLessThanOrEqual(ySize - r + slack);
+      if (is3D) {
+        expect(p.z[i]).toBeGreaterThanOrEqual(r - slack);
+        expect(p.z[i]).toBeLessThanOrEqual(zSize - r + slack);
+      }
     }
     for (let j = i + 1; j < p.count; j++) {
       // nearest image in periodic arenas
       let dx = Math.abs(p.x[i]! - p.x[j]!);
       let dy = Math.abs(p.y[i]! - p.y[j]!);
+      let dz = is3D ? Math.abs(p.z[i]! - p.z[j]!) : 0;
       if (!reflecting) {
         dx = Math.min(dx, xSize - dx);
         dy = Math.min(dy, ySize - dy);
+        if (is3D) dz = Math.min(dz, zSize - dz);
       }
-      expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(r + p.radius[j]! - slack);
+      expect(Math.hypot(dx, dy, dz)).toBeGreaterThanOrEqual(r + p.radius[j]! - slack);
     }
   }
 }
 
 describe('Simulation', () => {
-  const presets2D = presetNames.filter((name) => name.startsWith('2D') || name === 'default');
+  const presets = presetNames.filter((name) => !name.startsWith('1D'));
 
-  it.each(presets2D)('runs %s (if supported) conserving energy, without overlaps', async (name) => {
+  it.each(presets)('runs %s (if supported) conserving energy, without overlaps', async (name) => {
     const { settings } = loadSettings(await loadPresetText(name), { random: seededRandom(3) });
     if (!SUPPORTED.has(settings.arenaType)) {
       expect(() => new Simulation(settings)).toThrow(/not supported yet/);
@@ -147,18 +154,10 @@ describe('Simulation', () => {
 
   it('rejects arenas and dimensions not ported yet', () => {
     const init = syntheticGas({ count: 4 });
-    expect(() => new Simulation({ ...init, dimension: 3 })).toThrow(/3D/);
+    expect(() => new Simulation({ ...init, dimension: 1 })).toThrow(/1D/);
     expect(() => new Simulation({ ...init, arenaType: ArenaType.MOVABLE_PISTON })).toThrow(
       /not supported yet/,
     );
-    expect(
-      () =>
-        new Simulation({
-          ...init,
-          arenaType: ArenaType.DIVIDED_ARENA,
-          dividerThermalMode: DividerThermalMode.CONDUCTING,
-        }),
-    ).toThrow(/Conducting/);
   });
 
   it.each([ArenaType.REFLECTING_BOUNDARIES, ArenaType.PERIODIC_BOUNDARIES])(
@@ -243,5 +242,59 @@ describe("Maxwell's demon", () => {
     // Through the hole, the next thing it meets is the right-hand wall.
     expect(sim.step()).toMatchObject({ type: Collision.WALL, side: 2 /* RIGHT */ });
     expect(sim.particles.x[0]).toBeCloseTo(40e-9 - 0.5e-9, 18);
+  });
+});
+
+describe('conducting divider', () => {
+  /** Mean kinetic energy (amu·m²/s²) of the particles left and right of the divider. */
+  function sideEnergies(sim: Simulation): [number, number] {
+    const p = sim.particles;
+    const centre = sim.arena.xSize / 2;
+    const sum = [0, 0];
+    const count = [0, 0];
+    for (let i = 0; i < p.count; i++) {
+      const side = p.x[i]! > centre ? 1 : 0;
+      sum[side]! += 0.5 * p.mass[i]! * (p.vx[i]! ** 2 + p.vy[i]! ** 2);
+      count[side]!++;
+    }
+    return [sum[0]! / count[0]!, sum[1]! / count[1]!];
+  }
+
+  it('conserves energy and carries heat from the hot side to the cold side', async () => {
+    const { settings } = loadSettings(await loadPresetText('2Dhotcold'), {
+      random: seededRandom(3),
+    });
+    const conducting = { ...settings, dividerThermalMode: DividerThermalMode.CONDUCTING };
+    const insulating = new Simulation(settings);
+    const sim = new Simulation(conducting);
+    const energy = sim.kineticEnergy();
+    const [hot, cold] = sideEnergies(sim);
+    expect(hot / cold).toBeGreaterThan(1.5); // the preset starts at 500 K and 300 K
+
+    // Let heat flow, then average each side over many snapshots (30 particles a side
+    // fluctuate by about ±18% at any one moment).
+    const averages = (run: Simulation) => {
+      // step() leaves sim.time at the last frame, so move everyone to the last event.
+      let last = 0;
+      const step = () => (last = run.step()!.time);
+      for (let k = 0; k < 40_000; k++) step();
+      let left = 0;
+      let right = 0;
+      for (let n = 0; n < 400; n++) {
+        for (let k = 0; k < 100; k++) step();
+        run.advanceToTime(last);
+        const [l, r] = sideEnergies(run);
+        left += l;
+        right += r;
+      }
+      return left / right;
+    };
+    const conductingRatio = averages(sim);
+    const insulatingRatio = averages(insulating);
+    expect(sim.kineticEnergy() / energy).toBeCloseTo(1, 12);
+    expectNoOverlapsInside(sim);
+    // The sides end up at one temperature; without conduction they stay apart.
+    expect(conductingRatio).toBeCloseTo(1, 1);
+    expect(insulatingRatio / (hot / cold)).toBeCloseTo(1, 1);
   });
 });

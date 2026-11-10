@@ -106,7 +106,7 @@ export class Statistics {
     this.currentWeight.fill(0);
     for (let i = 0; i < p.count; i++) {
       const type = p.type[i]!;
-      const squared = p.vx[i]! * p.vx[i]! + p.vy[i]! * p.vy[i]!;
+      const squared = squaredSpeedOf(p, i);
       const speed = Math.sqrt(squared);
       for (const s of this.speed) if (s.slotOfType[type]! >= 0) s.addCurrent(type, speed);
       this.currentSquares[type] = this.currentSquares[type]! + squared;
@@ -177,11 +177,19 @@ export class Statistics {
     const p = this.particles;
     const elapsed = time - this.lastCollisionTime[i]!;
     const type = p.type[i]!;
-    const squared = p.vx[i]! * p.vx[i]! + p.vy[i]! * p.vy[i]!;
+    const squared = squaredSpeedOf(p, i);
     const speed = Math.sqrt(squared);
     for (const s of this.speed) if (s.slotOfType[type]! >= 0) s.addCumulative(type, speed, elapsed);
     this.cumulativeSquares[type] = this.cumulativeSquares[type]! + squared * elapsed;
     this.cumulativeWeight[type] = this.cumulativeWeight[type]! + elapsed;
     this.lastCollisionTime[i] = time;
   }
+}
+
+/** A particle's squared speed in m²/s² (vz is 0 in 1D and 2D). */
+function squaredSpeedOf(p: Particles, i: number): number {
+  const vx = p.vx[i]!;
+  const vy = p.vy[i]!;
+  const vz = p.vz[i]!;
+  return vx * vx + vy * vy + vz * vz;
 }

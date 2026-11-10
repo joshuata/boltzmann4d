@@ -1,7 +1,8 @@
 // The event-driven simulation (the core of Physics.java): owns the particles, performs
 // events in time order, and re-predicts what each event changed.
 //
-// Scope (plan 0002): 2D hard spheres in reflecting and periodic arenas.
+// Scope: 2D (plan 0002) and 3D (plan 0005) hard spheres in reflecting, periodic, divided
+// and holed arenas.
 //
 // Scheduling (plan 0003) differs from Java's N² event table but performs the same events
 // in the same order with the same arithmetic (checked against Java by parity.test.ts):
@@ -13,7 +14,7 @@
 //   was predicted is stale, and its particle is simply re-predicted.
 import { CellGrid } from './cell-grid';
 import { createCounters } from './counters';
-import { Collision, MAX_TIME, createEvent, type EventInfo } from './event';
+import { Collision, MAX_TIME, Wall, createEvent, type EventInfo } from './event';
 import { EventHeap, INTERNAL_ROW } from './event-heap';
 import type { Dimension, RenderFrame } from './index';
 import {
@@ -24,19 +25,44 @@ import {
   predictBoundary2D,
   predictPair2D,
 } from './particle-2d';
+import {
+  boundaryCollide3D,
+  collide3D,
+  initPeriodicFlags3D,
+  moveToTime3D,
+  predictBoundary3D,
+  predictPair3D,
+} from './particle-3d';
 import { createArena, Particles, type Arena } from './particles';
 import { ArenaType, DividerThermalMode } from './simulation-info';
 
+/** The per-dimension particle functions (particle-2d.ts, particle-3d.ts). */
+const MOTION = {
+  2: {
+    predictPair: predictPair2D,
+    predictBoundary: predictBoundary2D,
+    collide: collide2D,
+    boundaryCollide: boundaryCollide2D,
+    moveToTime: moveToTime2D,
+    initPeriodicFlags: initPeriodicFlags2D,
+  },
+  3: {
+    predictPair: predictPair3D,
+    predictBoundary: predictBoundary3D,
+    collide: collide3D,
+    boundaryCollide: boundaryCollide3D,
+    moveToTime: moveToTime3D,
+    initPeriodicFlags: initPeriodicFlags3D,
+  },
+} as const;
+type Motion = (typeof MOTION)[2 | 3];
+
 // Local copies for the hot paths (see plan 0002).
-const predictPair = predictPair2D;
-const predictBoundary = predictBoundary2D;
-const collide = collide2D;
-const boundaryCollide = boundaryCollide2D;
-const moveToTime = moveToTime2D;
 const NEVER = MAX_TIME;
 const PARTICLE = Collision.PARTICLE;
 const { BOUNDARY, EOB, WALL, BARRIER, EDGE } = Collision;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
+const LEFT = Wall.LEFT;
 /** Next-event type for a cell crossing (internal; never reported). */
 const CROSSING = 255;
 
@@ -69,6 +95,11 @@ export interface InitialState {
   holeDiameter?: number;
   /** Maxwell's demon: the hole starts closed; open it with setHoleOpen(). */
   maxwellDemonMode?: boolean;
+  /**
+   * 3D arenas with a hole: positions of the ring of edge spheres, replacing the computed
+   * ones. Parity tests pass Java's, since Math.sin/cos may differ from Java's in the last bit.
+   */
+  holeEdges?: { y: ArrayLike<number>; z: ArrayLike<number> };
   /** Divided arenas: only INSULATING is supported so far. */
   dividerThermalMode?: DividerThermalMode;
   species: readonly InitialSpecies[];
@@ -86,6 +117,13 @@ export class Simulation {
   readonly arena: Arena;
   readonly particles: Particles;
   readonly grid: CellGrid;
+  private readonly is3D: boolean;
+  // The per-dimension particle functions, as fields so calls stay monomorphic per run.
+  private readonly predictPair: Motion['predictPair'];
+  private readonly predictBoundary: Motion['predictBoundary'];
+  private readonly collide: Motion['collide'];
+  private readonly boundaryCollide: Motion['boundaryCollide'];
+  private readonly moveToTime: Motion['moveToTime'];
 
   /**
    * Work done so far. `events` counts every physical event performed; the others break
@@ -130,6 +168,7 @@ export class Simulation {
    */
   private readonly wrapX: Int32Array;
   private readonly wrapY: Int32Array;
+  private readonly wrapZ: Int32Array;
   /** Number of state-changing events each particle has had (for staleness). */
   private readonly collisionCount: Uint32Array;
 
@@ -137,8 +176,17 @@ export class Simulation {
   // event, and the times at which a frame moved every particle.
   private readonly eventX: Float64Array;
   private readonly eventY: Float64Array;
+  private readonly eventZ: Float64Array;
   private readonly eventT0: Float64Array;
+  /**
+   * Times at which Java moved every particle: frame ends, and (conducting divider) each
+   * divider hit. A frame end comes after events at exactly that time; a divider hit's move
+   * comes before the predictions it triggers, so it counts for predictions at that time.
+   */
   private frameTimes: number[] = [];
+  private frameCountsAtOwnTime: boolean[] = [];
+  /** Divided arenas whose divider exchanges energy between the two sides. */
+  private readonly conductingDivider: boolean;
   /** Two-particle scratch store holding reconstructed states for predictions. */
   private readonly scratch = new Particles(2);
 
@@ -148,16 +196,24 @@ export class Simulation {
   private currentFrame: RenderFrame | null = null;
 
   constructor(init: InitialState, options: SimulationOptions = {}) {
-    if (init.dimension !== 2) {
+    if (init.dimension !== 2 && init.dimension !== 3) {
       throw new Error(`${init.dimension}D simulation is not supported yet`);
     }
     if (init.arenaType === ArenaType.MOVABLE_PISTON) {
       throw new Error(`Arena type ${init.arenaType} is not supported yet`);
     }
-    if (init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
-      throw new Error('Conducting dividers are not supported yet');
+    if (init.dimension === 3 && init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
+      throw new Error('Conducting dividers are not supported in 3D yet');
     }
-    this.dimension = init.dimension;
+    const dimension = init.dimension;
+    this.dimension = dimension;
+    this.is3D = dimension === 3;
+    const motion = MOTION[dimension];
+    this.predictPair = motion.predictPair;
+    this.predictBoundary = motion.predictBoundary;
+    this.collide = motion.collide;
+    this.boundaryCollide = motion.boundaryCollide;
+    this.moveToTime = motion.moveToTime;
     this.arena = createArena(
       init.arenaType,
       init.arenaXSize,
@@ -165,7 +221,19 @@ export class Simulation {
       init.arenaZSize,
       init.holeDiameter,
       init.maxwellDemonMode,
+      dimension,
     );
+    this.conductingDivider =
+      init.dividerThermalMode === DividerThermalMode.CONDUCTING &&
+      (init.arenaType === ArenaType.DIVIDED_ARENA ||
+        init.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE);
+    if (init.holeEdges) {
+      if (init.holeEdges.y.length !== this.arena.edgeY.length) {
+        throw new Error('holeEdges must have one entry per edge sphere');
+      }
+      this.arena.edgeY.set(init.holeEdges.y);
+      this.arena.edgeZ.set(init.holeEdges.z);
+    }
     this.frameDuration = options.frameDuration ?? DEFAULT_FRAME_DURATION;
     this.onEvent = options.onEvent;
 
@@ -184,7 +252,7 @@ export class Simulation {
         p.radius[i] = species.type.particleRadius;
         p.mass[i] = species.type.particleMass;
         p.type[i] = typeIndex;
-        initPeriodicFlags2D(p, i, this.arena);
+        motion.initPeriodicFlags(p, i, this.arena);
       }
     });
     this.particles = p;
@@ -197,9 +265,11 @@ export class Simulation {
     this.nextCell = new Int32Array(count);
     this.wrapX = new Int32Array(count);
     this.wrapY = new Int32Array(count);
+    this.wrapZ = new Int32Array(count);
     this.collisionCount = new Uint32Array(count);
     this.eventX = new Float64Array(count);
     this.eventY = new Float64Array(count);
+    this.eventZ = new Float64Array(count);
     this.eventT0 = new Float64Array(count);
 
     // Cells must be at least the largest contact distance between two particles.
@@ -214,14 +284,13 @@ export class Simulation {
         r2 = r;
       }
     }
-    this.grid = new CellGrid(this.arena, count, r1 + r2);
-    for (let k = 0; k < count; k++) {
-      this.grid.insert(k, this.grid.rowOf(p.y[k]!) * this.grid.nx + this.grid.columnOf(p.x[k]!));
-    }
+    this.grid = new CellGrid(this.arena, count, r1 + r2, dimension);
+    for (let k = 0; k < count; k++)
+      this.grid.insert(k, this.grid.cellAt(p.x[k]!, p.y[k]!, p.z[k]!));
 
     // Java predicts everything, then (periodic) zeroes the momentum and predicts
     // everything again; only the second prediction matters, so adjust first.
-    if (this.arena.type === PERIODIC) this.setTotalMomentum(0, 0);
+    if (this.arena.type === PERIODIC) this.setTotalMomentum(0, 0, 0);
     for (let k = 0; k < count; k++) this.recordEventState(k);
     for (let k = 0; k < count; k++) this.repredict(k);
   }
@@ -265,11 +334,13 @@ export class Simulation {
       else this.processInternal(i);
     }
     const p = this.particles;
+    const moveToTime = this.moveToTime;
     for (let k = 0; k < p.count; k++) {
       moveToTime(p, k, maxTime);
       this.resetWrap(k);
     }
     this.frameTimes.push(maxTime);
+    this.frameCountsAtOwnTime.push(false);
     this.time = maxTime;
   }
 
@@ -303,15 +374,17 @@ export class Simulation {
   /** Current positions (dimension-strided, meters) and types, in fresh transferable arrays. */
   snapshot(): RenderFrame {
     const p = this.particles;
-    const positions = new Float64Array(p.count * 2);
+    const d = this.dimension;
+    const positions = new Float64Array(p.count * d);
     for (let k = 0; k < p.count; k++) {
-      positions[2 * k] = p.x[k]!;
-      positions[2 * k + 1] = p.y[k]!;
+      positions[d * k] = p.x[k]!;
+      positions[d * k + 1] = p.y[k]!;
+      if (d === 3) positions[d * k + 2] = p.z[k]!;
     }
     return { dimension: this.dimension, time: this.time, positions, types: p.type.slice() };
   }
 
-  /** Total kinetic energy in joules (sum of Particle2D.getKE). */
+  /** Total kinetic energy in joules (sum of Particle2D/3D.getKE). */
   kineticEnergy(): number {
     let total = 0;
     for (let k = 0; k < this.particles.count; k++) total += this.particleKE(k);
@@ -338,10 +411,16 @@ export class Simulation {
         const toX = to % grid.nx;
         if (fromX === grid.nx - 1 && toX === 0 && grid.nx > 1) this.wrapX[i]!--;
         else if (fromX === 0 && toX === grid.nx - 1 && grid.nx > 1) this.wrapX[i]!++;
-        const fromY = (from - fromX) / grid.nx;
-        const toY = (to - toX) / grid.nx;
+        const fromYZ = (from - fromX) / grid.nx;
+        const toYZ = (to - toX) / grid.nx;
+        const fromY = fromYZ % grid.ny;
+        const toY = toYZ % grid.ny;
         if (fromY === grid.ny - 1 && toY === 0 && grid.ny > 1) this.wrapY[i]!--;
         else if (fromY === 0 && toY === grid.ny - 1 && grid.ny > 1) this.wrapY[i]!++;
+        const fromZ = (fromYZ - fromY) / grid.ny;
+        const toZ = (toYZ - toY) / grid.ny;
+        if (fromZ === grid.nz - 1 && toZ === 0 && grid.nz > 1) this.wrapZ[i]!--;
+        else if (fromZ === 0 && toZ === grid.nz - 1 && grid.nz > 1) this.wrapZ[i]!++;
       }
       grid.move(i, to);
       this.counters.cellCrossings++;
@@ -373,9 +452,9 @@ export class Simulation {
     if (type === PARTICLE) {
       const a = event.part1;
       const b = event.part2;
-      moveToTime(p, a, event.time);
-      moveToTime(p, b, event.time);
-      collide(p, a, b, event, this.arena);
+      this.moveToTime(p, a, event.time);
+      this.moveToTime(p, b, event.time);
+      this.collide(p, a, b, event, this.arena);
       this.counters.particleCollisions++;
       this.collisionCount[a]!++;
       this.collisionCount[b]!++;
@@ -384,7 +463,11 @@ export class Simulation {
       this.repredict(a);
       this.repredict(b);
     } else {
-      boundaryCollide(p, i, event, this.arena);
+      if (type === BARRIER && this.conductingDivider) {
+        this.conductAcrossDivider(i, event);
+        return event;
+      }
+      this.boundaryCollide(p, i, event, this.arena);
       if (type === WALL) this.counters.wallCollisions++;
       else if (type === BOUNDARY || type === EOB) this.counters.boundaryCrossings++;
       else if (type === BARRIER || type === EDGE) this.counters.dividerCollisions++;
@@ -393,6 +476,75 @@ export class Simulation {
       this.repredict(i);
     }
     return event;
+  }
+
+  /**
+   * A conducting divider (Physics.PerformEvent): particle i bounces off the divider and
+   * swaps its normal (x) kinetic energy with the particle on the other side that is
+   * heading for the divider and closest to it. i leaves the divider; the partner keeps
+   * its direction. Without such a partner it's an ordinary bounce.
+   */
+  private conductAcrossDivider(i: number, event: Readonly<EventInfo>): void {
+    const p = this.particles;
+    const partner = this.findIncomingParticleOnOppositeSide(i, event.side, event.time);
+    let partnerEnergy = 0;
+    let partnerDirection = 0;
+    if (partner >= 0) {
+      const v = p.vx[partner]!;
+      partnerEnergy = 0.5 * p.mass[partner]! * v * v;
+      partnerDirection = Math.sign(v);
+    }
+    this.boundaryCollide(p, i, event, this.arena);
+    this.counters.dividerCollisions++;
+    this.collisionCount[i]!++;
+    if (partner >= 0) {
+      const v = p.vx[i]!;
+      const currentEnergy = 0.5 * p.mass[i]! * v * v;
+      const currentDirection = event.side === LEFT ? -1.0 : 1.0;
+      p.vx[i] = currentDirection * Math.sqrt((2.0 * partnerEnergy) / p.mass[i]!);
+      p.vx[partner] = partnerDirection * Math.sqrt((2.0 * currentEnergy) / p.mass[partner]!);
+      this.collisionCount[partner]!++;
+      this.recordEventState(i);
+      this.recordEventState(partner);
+      this.repredict(i);
+      this.repredict(partner);
+    } else {
+      this.recordEventState(i);
+      this.repredict(i);
+    }
+  }
+
+  /**
+   * Java finds the conducting partner by moving every other particle to the event time
+   * (which, like a frame end, changes the rounding of later predictions; see frameTimes),
+   * then taking the closest one heading for the divider from the other side. The first
+   * index wins ties.
+   */
+  private findIncomingParticleOnOppositeSide(i: number, side: number, time: number): number {
+    const p = this.particles;
+    const arena = this.arena;
+    const currentOnLeft = side === LEFT;
+    const centerX = arena.xSize / 2.0;
+    let nearest = -1;
+    let nearestGap = Infinity;
+    for (let k = 0; k < p.count; k++) {
+      if (k === i) continue;
+      this.moveToTime(p, k, time);
+      const x = p.x[k]!;
+      if (x > centerX !== currentOnLeft) continue;
+      const v = p.vx[k]!;
+      if (currentOnLeft ? !(v < 0.0) : !(v > 0.0)) continue;
+      const gap = currentOnLeft
+        ? x - p.radius[k]! - arena.barrierRightX
+        : arena.barrierLeftX - p.radius[k]! - x;
+      if (gap < nearestGap) {
+        nearestGap = gap;
+        nearest = k;
+      }
+    }
+    this.frameTimes.push(time);
+    this.frameCountsAtOwnTime.push(true);
+    return nearest;
   }
 
   /**
@@ -406,6 +558,7 @@ export class Simulation {
     const arena = this.arena;
     const out = this.prediction;
     const counters = this.counters;
+    const predictPair = this.predictPair;
 
     // Start from the next cell crossing (internal, so it loses ties with real events).
     this.predictCrossing(i);
@@ -425,7 +578,7 @@ export class Simulation {
     const boundaryFromToggle = boundaryAt > this.eventT0[i]!;
     if (boundaryFromToggle) this.predictionState(i, boundaryAt, 0, true);
     else this.predictionState(i, this.eventT0[i]!, 0);
-    predictBoundary(scratch, 0, arena, out, this.holeOpen);
+    this.predictBoundary(scratch, 0, arena, out, this.holeOpen);
     counters.boundaryPredictions++;
     if (out.time < bestTime || (out.time === bestTime && 0 < bestRow)) {
       bestTime = out.time;
@@ -435,52 +588,50 @@ export class Simulation {
       bestSide = out.side;
     }
 
-    const cell = grid.cellOf[i]!;
-    const cx = cell % grid.nx;
-    const cy = (cell - cx) / grid.nx;
+    const neighbours = grid.neighbours;
+    const neighbourCount = grid.neighbourCount;
+    const firstNeighbour = grid.cellOf[i]! * neighbourCount;
     const countI = this.collisionCount[i]!;
     const eventT0 = this.eventT0;
     const tI = eventT0[i]!;
     let loadedAt = boundaryFromToggle ? NaN : tI; // time slot 0 currently holds i's state for
-    for (const dy of grid.offsetsY) {
-      for (const dx of grid.offsetsX) {
-        const c = grid.neighbour(cx, cy, dx, dy);
-        if (c < 0) continue;
-        for (let k = grid.head[c]!; k >= 0; k = grid.next[k]!) {
-          if (k === i) continue;
-          // Java predicted this pair at the later of the two particles' last events.
-          const tK = eventT0[k]!;
-          const te = tI > tK ? tI : tK;
-          if (te !== loadedAt) {
-            this.predictionState(i, te, 0);
-            loadedAt = te;
-          }
-          this.predictionState(k, te, 1);
-          predictPair(scratch, 0, 1, arena, out);
-          counters.pairPredictions++;
-          const t = out.time;
-          if (t === NEVER) continue;
-          const row = i > k ? i : k;
-          const col = i < k ? i : k;
-          if (
-            t < bestTime ||
-            (t === bestTime && (row < bestRow || (row === bestRow && col < bestCol)))
-          ) {
-            bestTime = t;
-            bestRow = row;
-            bestCol = col;
-            bestType = PARTICLE;
-            bestPartner = k;
-            bestSide = out.side;
-          }
-          // Offer the event to k if it beats k's own next event.
-          if (heap.keyBefore(t, row, col, k)) {
-            this.nextType[k] = PARTICLE;
-            this.nextPartner[k] = i;
-            this.nextSide[k] = out.side;
-            this.nextPartnerCount[k] = countI;
-            heap.set(k, t, row, col);
-          }
+    for (let m = 0; m < neighbourCount; m++) {
+      const c = neighbours[firstNeighbour + m]!;
+      if (c < 0) continue;
+      for (let k = grid.head[c]!; k >= 0; k = grid.next[k]!) {
+        if (k === i) continue;
+        // Java predicted this pair at the later of the two particles' last events.
+        const tK = eventT0[k]!;
+        const te = tI > tK ? tI : tK;
+        if (te !== loadedAt) {
+          this.predictionState(i, te, 0);
+          loadedAt = te;
+        }
+        this.predictionState(k, te, 1);
+        predictPair(scratch, 0, 1, arena, out);
+        counters.pairPredictions++;
+        const t = out.time;
+        if (t === NEVER) continue;
+        const row = i > k ? i : k;
+        const col = i < k ? i : k;
+        if (
+          t < bestTime ||
+          (t === bestTime && (row < bestRow || (row === bestRow && col < bestCol)))
+        ) {
+          bestTime = t;
+          bestRow = row;
+          bestCol = col;
+          bestType = PARTICLE;
+          bestPartner = k;
+          bestSide = out.side;
+        }
+        // Offer the event to k if it beats k's own next event.
+        if (heap.keyBefore(t, row, col, k)) {
+          this.nextType[k] = PARTICLE;
+          this.nextPartner[k] = i;
+          this.nextSide[k] = out.side;
+          this.nextPartnerCount[k] = countI;
+          heap.set(k, t, row, col);
         }
       }
     }
@@ -498,6 +649,7 @@ export class Simulation {
     const p = this.particles;
     this.eventX[i] = p.x[i]!;
     this.eventY[i] = p.y[i]!;
+    this.eventZ[i] = p.z[i]!;
     this.eventT0[i] = p.t0[i]!;
     this.resetWrap(i);
   }
@@ -513,11 +665,15 @@ export class Simulation {
     const p = this.particles;
     const cell = grid.cellOf[i]!;
     const cx = cell % grid.nx;
-    const cy = (cell - cx) / grid.nx;
+    const cyz = (cell - cx) / grid.nx;
+    const cy = cyz % grid.ny;
+    const cz = (cyz - cy) / grid.ny;
     let x = p.x[i]!;
     let y = p.y[i]!;
+    let z = p.z[i]!;
     if (x < 0) x += grid.xSize;
     if (y < 0) y += grid.ySize;
+    if (z < 0) z += grid.zSize;
     this.wrapX[i] =
       grid.nx > 1 && cx === grid.nx - 1 && x < grid.cellWidth
         ? 1
@@ -528,6 +684,12 @@ export class Simulation {
       grid.ny > 1 && cy === grid.ny - 1 && y < grid.cellHeight
         ? 1
         : grid.ny > 1 && cy === 0 && y > grid.ySize - grid.cellHeight
+          ? -1
+          : 0;
+    this.wrapZ[i] =
+      grid.nz > 1 && cz === grid.nz - 1 && z < grid.cellDepth
+        ? 1
+        : grid.nz > 1 && cz === 0 && z > grid.zSize - grid.cellDepth
           ? -1
           : 0;
   }
@@ -548,9 +710,11 @@ export class Simulation {
     const s = this.scratch;
     let x = this.eventX[k]!;
     let y = this.eventY[k]!;
+    let z = this.eventZ[k]!;
     let t = this.eventT0[k]!;
     const vx = p.vx[k]!;
     const vy = p.vy[k]!;
+    const vz = p.vz[k]!;
     if (t < te) {
       const frames = this.frameTimes;
       // First frame after t (binary search; frames are increasing).
@@ -563,18 +727,22 @@ export class Simulation {
       }
       for (let f = lo; f < frames.length; f++) {
         const frame = frames[f]!;
-        if (frame > te || (frame === te && !includeFrameAtTe)) break;
+        if (frame > te || (frame === te && !includeFrameAtTe && !this.frameCountsAtOwnTime[f]))
+          break;
         const dt = frame - t;
         x = x + vx * dt;
         y = y + vy * dt;
+        z = z + vz * dt;
         t = frame;
       }
     }
     s.x[slot] = x;
     s.y[slot] = y;
+    s.z[slot] = z;
     s.t0[slot] = t;
     s.vx[slot] = vx;
     s.vy[slot] = vy;
+    s.vz[slot] = vz;
     s.radius[slot] = p.radius[k]!;
     s.bFlag[slot] = p.bFlag[k]!;
   }
@@ -590,22 +758,28 @@ export class Simulation {
     const out = this.prediction;
     out.time = NEVER;
     out.part1 = -1;
-    if (grid.nx === 1 && grid.ny === 1) return;
+    if (grid.nx === 1 && grid.ny === 1 && grid.nz === 1) return;
 
     const cell = grid.cellOf[i]!;
     const cx = cell % grid.nx;
-    const cy = (cell - cx) / grid.nx;
+    const cyz = (cell - cx) / grid.nx;
+    const cy = cyz % grid.ny;
+    const cz = (cyz - cy) / grid.ny;
     let x = p.x[i]!;
     let y = p.y[i]!;
+    let z = p.z[i]!;
     if (grid.periodic) {
       // The stored position, in the frame of the particle's current cell (see wrapX).
       if (x < 0) x += grid.xSize;
       if (y < 0) y += grid.ySize;
+      if (z < 0) z += grid.zSize;
       x += this.wrapX[i]! * grid.xSize;
       y += this.wrapY[i]! * grid.ySize;
+      z += this.wrapZ[i]! * grid.zSize;
     }
     const vx = p.vx[i]!;
     const vy = p.vy[i]!;
+    const vz = p.vz[i]!;
 
     let tx = NEVER;
     let nx = cx;
@@ -633,42 +807,65 @@ export class Simulation {
         ny = cy === 0 ? grid.ny - 1 : cy - 1;
       }
     }
-    if (tx === NEVER && ty === NEVER) return;
+    let tz = NEVER;
+    let nz = cz;
+    if (grid.nz > 1 && vz !== 0) {
+      if (vz > 0) {
+        if (cz < grid.nz - 1 || grid.periodic) {
+          tz = ((cz + 1) * grid.cellDepth - z) / vz;
+          nz = cz + 1 === grid.nz ? 0 : cz + 1;
+        }
+      } else if (cz > 0 || grid.periodic) {
+        tz = (cz * grid.cellDepth - z) / vz;
+        nz = cz === 0 ? grid.nz - 1 : cz - 1;
+      }
+    }
+    if (tx === NEVER && ty === NEVER && tz === NEVER) return;
     const t0 = p.t0[i]!;
     // Round-off can put the edge marginally behind the particle; cross at once then.
-    if (tx <= ty) {
+    const layer = grid.nx * grid.ny;
+    if (tx <= ty && tx <= tz) {
       out.time = t0 + Math.max(tx, 0);
-      out.part1 = cy * grid.nx + nx;
-    } else {
+      out.part1 = cz * layer + cy * grid.nx + nx;
+    } else if (ty <= tz) {
       out.time = t0 + Math.max(ty, 0);
-      out.part1 = ny * grid.nx + cx;
+      out.part1 = cz * layer + ny * grid.nx + cx;
+    } else {
+      out.time = t0 + Math.max(tz, 0);
+      out.part1 = nz * layer + cy * grid.nx + cx;
     }
   }
 
   /**
-   * Periodic arenas: shifts every velocity so total momentum is (xMom, yMom), then rescales
-   * to restore the original kinetic energy (SetTotalMom). Callers re-predict afterwards.
+   * Periodic arenas: shifts every velocity so total momentum is (xMom, yMom, zMom), then
+   * rescales to restore the original kinetic energy (SetTotalMom). Callers re-predict
+   * afterwards. zMom is ignored in 2D.
    */
-  private setTotalMomentum(xMom: number, yMom: number): void {
+  private setTotalMomentum(xMom: number, yMom: number, zMom: number): void {
     const p = this.particles;
     const n = p.count;
     if (n < 2) return;
     let origKE = 0;
     let currX = 0;
     let currY = 0;
+    let currZ = 0;
+    const is3D = this.is3D;
     for (let k = 0; k < n; k++) {
       origKE += this.particleKE(k);
       currX += p.vx[k]! * p.mass[k]!;
       currY += p.vy[k]! * p.mass[k]!;
+      if (is3D) currZ += p.vz[k]! * p.mass[k]!;
     }
     if (!(origKE > 0.0)) return;
     const xAdj = (currX - xMom) / n;
     const yAdj = (currY - yMom) / n;
+    const zAdj = (currZ - zMom) / n;
     let currKE = 0;
     for (let k = 0; k < n; k++) {
       const mass = p.mass[k]!;
       p.vx[k] = snapSubtract(p.vx[k]!, xAdj / mass);
       p.vy[k] = snapSubtract(p.vy[k]!, yAdj / mass);
+      if (is3D) p.vz[k] = snapSubtract(p.vz[k]!, zAdj / mass);
       currKE += this.particleKE(k);
     }
     if (currKE > 0.0) {
@@ -676,16 +873,19 @@ export class Simulation {
       for (let k = 0; k < n; k++) {
         p.vx[k] = p.vx[k]! * f;
         p.vy[k] = p.vy[k]! * f;
+        if (is3D) p.vz[k] = p.vz[k]! * f;
       }
     }
   }
 
-  /** Particle2D.getKE: 0.5·m·|v|² in amu·m²/s², converted to joules. */
+  /** Particle2D/3D.getKE: 0.5·m·|v|² in amu·m²/s², converted to joules. */
   private particleKE(i: number): number {
     const p = this.particles;
     const vx = p.vx[i]!;
     const vy = p.vy[i]!;
-    const speed = Math.sqrt(0.0 + vx * vx + vy * vy);
+    let sum = 0.0 + vx * vx + vy * vy;
+    if (this.is3D) sum += p.vz[i]! * p.vz[i]!;
+    const speed = Math.sqrt(sum);
     const energy = 0.5 * p.mass[i]! * speed * speed;
     return (energy * AMU_JOULE) / 1.0;
   }
