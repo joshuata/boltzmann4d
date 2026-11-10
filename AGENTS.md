@@ -85,6 +85,10 @@ Production builds use the base path `/boltzmann4d/` (see `vite.config.ts`); the 
 - `src/sim`, `src/stats`, `src/io` and `src/utils` must stay pure: no DOM, no Three.js. They run in a Worker and in Node tests.
 - Physics changes must keep `src/sim/parity.test.ts` green: the engine reproduces the Java app's events and final states bit for bit from the same initial state (fixtures in `src/sim/parity/`).
 
+## Specs
+
+- `docs/specs/` lists what the app must do, extracted from the original Boltzmann 3D manual and worksheets, with requirement IDs (`SIM-3`, `STAT-12`, …) and classroom scenarios to check against. Read the relevant spec before building a feature, and cite its IDs in plans.
+
 ## Plans
 
 - Active plans go in `.agents/plans/` as `NNNN-short-slug.md`.
