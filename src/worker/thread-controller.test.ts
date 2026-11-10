@@ -2,8 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Simulation } from '../sim';
 import type { RenderFrame } from '../sim';
 import { ArenaType } from '../sim/simulation-info';
+import {
+  FRAME_DURATION,
+  MAX_TICK_MS,
+  parseSimulationSpeed,
+  ThreadController,
+  type PacingOptions,
+} from './thread-controller';
 
-/** Two particles bouncing in a small box, one simulation second per frame. */
+/**
+ * Two particles bouncing in a small box. A frame is FRAME_DURATION simulation seconds, so
+ * simulated time advances one second per real millisecond.
+ */
 function smallSimulation(): Simulation {
   return new Simulation(
     {
@@ -20,44 +30,92 @@ function smallSimulation(): Simulation {
         },
       ],
     },
-    { frameDuration: 1 },
+    { frameDuration: FRAME_DURATION },
   );
 }
-import { FRAME_DURATION, ThreadController } from './thread-controller';
+/** A fake clock and a tick source driven by hand. */
+class FakeDisplay {
+  now = 0;
+  private tick: (() => void) | null = null;
+  readonly options: PacingOptions = {
+    now: () => this.now,
+    ticks: (tick) => {
+      this.tick = tick;
+      return () => (this.tick = null);
+    },
+  };
+
+  /** Runs `ms` of real time, ticking every `period` ms. */
+  run(ms: number, period: number): void {
+    for (let n = Math.round(ms / period); n > 0; n--) {
+      this.now += period;
+      this.tick?.();
+    }
+  }
+}
 
 describe('ThreadController', () => {
   let frames: RenderFrame[];
   let physics: Simulation;
+  let display: FakeDisplay;
   let controller: ThreadController;
 
-  beforeEach(() => {
-    vi.useFakeTimers();
+  const start = (options: PacingOptions = {}) => {
     frames = [];
     physics = smallSimulation();
-    controller = new ThreadController(physics, (frame) => frames.push(frame));
+    display = new FakeDisplay();
+    controller = new ThreadController(physics, (frame) => frames.push(frame), {
+      ...display.options,
+      ...options,
+    });
     controller.startSimulationThreads();
+  };
+  const lastTime = () => frames.at(-1)?.time ?? 0;
+
+  beforeEach(() => start());
+  afterEach(() => controller.stopSimulationThreads());
+
+  it('advances simulated time with the wall clock, one frame per tick', () => {
+    display.run(100, 10);
+    expect(frames.map((f) => f.time)).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
   });
 
-  afterEach(() => {
-    controller.stopSimulationThreads();
-    vi.useRealTimers();
+  it('keeps the Java app speed: one frame of simulated time per FRAME_DURATION ms', () => {
+    display.run(FRAME_DURATION * 4, FRAME_DURATION);
+    expect(lastTime()).toBe(physics.frameDuration * 4);
   });
 
-  it('advances one frame per FRAME_DURATION while running', () => {
-    vi.advanceTimersByTime(FRAME_DURATION * 5);
-    expect(frames).toHaveLength(5);
-    expect(frames.map((f) => f.time)).toEqual([0, 1, 2, 3, 4]);
+  it('reaches the same simulated time at any tick rate', () => {
+    display.run(1250, 1000 / 60);
+    const at60 = lastTime();
+    start();
+    display.run(1250, 1000 / 144);
+    expect(lastTime()).toBeCloseTo(at60, 6);
+    expect(lastTime()).toBeCloseTo(1250, 6);
   });
 
-  it('stops producing frames while paused and resumes on play', () => {
-    vi.advanceTimersByTime(FRAME_DURATION * 2);
+  it('scales the rate by the simulation speed', () => {
+    start({ speed: 2 });
+    display.run(50, 10);
+    expect(lastTime()).toBe(100);
+  });
+
+  it('simulates at most MAX_TICK_MS per tick after a stall', () => {
+    display.run(10, 10);
+    display.now += 5000;
+    display.run(10, 10);
+    expect(frames.map((f) => f.time)).toEqual([10, 10 + MAX_TICK_MS]);
+  });
+
+  it('stops producing frames while paused and resumes without a jump', () => {
+    display.run(20, 10);
     controller.setPaused(true);
-    vi.advanceTimersByTime(FRAME_DURATION * 10);
+    display.run(500, 10);
     expect(frames).toHaveLength(2);
 
     controller.setPaused(false);
-    vi.advanceTimersByTime(FRAME_DURATION * 3);
-    expect(frames).toHaveLength(5);
+    display.run(30, 10);
+    expect(frames.map((f) => f.time)).toEqual([10, 20, 30, 40, 50]);
   });
 
   it('asks physics to stop its current frame when pausing', () => {
@@ -68,12 +126,12 @@ describe('ThreadController', () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 
-  it('steps exactly one frame per request while paused', () => {
+  it('steps exactly one Java frame of simulated time per request while paused', () => {
     controller.setPaused(true);
     controller.advanceOneFrame();
     controller.advanceOneFrame();
-    expect(frames).toHaveLength(2);
-    vi.advanceTimersByTime(FRAME_DURATION * 10);
+    expect(frames.map((f) => f.time)).toEqual([FRAME_DURATION, 2 * FRAME_DURATION]);
+    display.run(100, 10);
     expect(frames).toHaveLength(2);
   });
 
@@ -82,9 +140,29 @@ describe('ThreadController', () => {
     expect(frames).toHaveLength(0);
   });
 
+  it('shows the current frame without advancing', () => {
+    controller.showCurrentFrame();
+    expect(frames.map((f) => f.time)).toEqual([0]);
+    expect(physics.time).toBe(0);
+  });
+
   it('produces nothing after the threads are stopped', () => {
     controller.stopSimulationThreads();
-    vi.advanceTimersByTime(FRAME_DURATION * 10);
+    display.run(100, 10);
     expect(frames).toHaveLength(0);
+  });
+});
+
+describe('parseSimulationSpeed', () => {
+  it('reads the settings-file multiplier', () => {
+    expect(parseSimulationSpeed('1x')).toBe(1);
+    expect(parseSimulationSpeed('0.5x')).toBe(0.5);
+    expect(parseSimulationSpeed('4x')).toBe(4);
+  });
+
+  it('falls back to 1 when unreadable', () => {
+    expect(parseSimulationSpeed(undefined)).toBe(1);
+    expect(parseSimulationSpeed('fast')).toBe(1);
+    expect(parseSimulationSpeed('0x')).toBe(1);
   });
 });

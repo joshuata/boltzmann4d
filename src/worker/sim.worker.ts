@@ -6,15 +6,12 @@ import { Simulation, type SceneInfo } from '../sim';
 import { Statistics, statsContext } from '../stats';
 import { ArenaType } from '../sim/simulation-info';
 import type { FromWorker, ToWorker } from './index';
-import { ThreadController } from './thread-controller';
+import { parseSimulationSpeed, ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const post = (message: FromWorker) => scope.postMessage(message);
-/**
- * Statistics are summarised every this many frames: about once a second at the app's
- * 37 ms frames, like the Java app, but counted in frames so samples are reproducible.
- */
-const SUMMARY_EVERY_FRAMES = 27;
+/** Statistics are summarised about this often (real milliseconds), like the Java app. */
+const SUMMARY_INTERVAL_MS = 1000;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -58,9 +55,11 @@ async function load(preset?: string): Promise<void> {
   let simulation: Simulation;
   let statistics: Statistics;
   let typeColors: number[];
+  let speed: number;
   try {
     const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
     const { settings } = loadSettings(text);
+    speed = parseSimulationSpeed(settings.simulationSpeed);
     let stats: Statistics | null = null;
     simulation = new Simulation(settings, { onEvent: (event) => stats?.notifyOfEvent(event) });
     typeColors = settings.species.map((s) => s.type.defaultColor);
@@ -83,20 +82,25 @@ async function load(preset?: string): Promise<void> {
     port.postMessage(message, transfer);
   send({ type: 'scene', scene: sceneOf(simulation, typeColors) }, []);
 
-  let frameCount = 0;
-  const controller = new ThreadController(simulation, (frame, physicsMs) => {
-    send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
-    post({ type: 'timing', physicsMs });
-    if (frameCount++ % SUMMARY_EVERY_FRAMES === 0 || controller.isPaused()) {
-      statistics.sampleCurrent();
-      post({ type: 'statistics', summary: statistics.summary(simulation.time) });
-    }
-  });
+  let lastSummary = -Infinity;
+  const controller = new ThreadController(
+    simulation,
+    (frame, physicsMs) => {
+      send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
+      post({ type: 'timing', physicsMs, time: frame.time });
+      const now = performance.now();
+      if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
+        lastSummary = now;
+        statistics.sampleCurrent();
+        post({ type: 'statistics', summary: statistics.summary(simulation.time) });
+      }
+    },
+    { speed },
+  );
   threadController = controller;
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
-  // While paused, show the starting state straight away (a no-op while running).
-  threadController.advanceOneFrame();
+  threadController.showCurrentFrame();
   post({ type: 'loaded', preset: preset ?? 'default', particles: simulation.particles.count });
 }
 
