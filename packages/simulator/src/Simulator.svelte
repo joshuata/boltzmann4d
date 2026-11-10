@@ -4,6 +4,10 @@
   import { Button } from '@boltzmann4d/ui/button';
   import * as Collapsible from '@boltzmann4d/ui/collapsible';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+  import MaximizeIcon from '@lucide/svelte/icons/maximize';
+  import MinimizeIcon from '@lucide/svelte/icons/minimize';
+  import PanelRightCloseIcon from '@lucide/svelte/icons/panel-right-close';
+  import PanelRightOpenIcon from '@lucide/svelte/icons/panel-right-open';
   import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
   import StepForwardIcon from '@lucide/svelte/icons/step-forward';
   import { untrack } from 'svelte';
@@ -28,6 +32,18 @@
   let { preset = 'default' }: Props = $props();
 
   let canvas: HTMLCanvasElement;
+  /** The whole viewer (arena and sidebar), which goes fullscreen. */
+  let root: HTMLDivElement;
+  // Presentation mode, for projectors: hide the sidebar, and/or fill the screen.
+  let sidebarHidden = $state(false);
+  let fullscreen = $state(false);
+  /** Phones' Safari has no Fullscreen API for elements, so the button only shows where it works. */
+  const canFullscreen = typeof document !== 'undefined' && document.fullscreenEnabled;
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void root.requestFullscreen().catch(() => {});
+  }
   let sim = $state<SimulationClient | null>(null);
   /** The performance readouts under the particle count (frame rates, physics time, renderer). */
   let detailsOpen = $state(true);
@@ -54,10 +70,19 @@
   });
 </script>
 
+<svelte:document onfullscreenchange={() => (fullscreen = document.fullscreenElement === root)} />
+
 <!-- Phones: the arena takes a fixed share of the top and the sidebar scrolls below it.
-     Wider screens: the arena on the left, a 320px sidebar on the right. -->
+     Wider screens: the arena on the left, a 320px sidebar on the right.
+     With the sidebar hidden, the arena takes all of it. -->
 <div
-  class="grid h-full min-h-0 grid-rows-[min(55dvh,90vw)_1fr] overflow-hidden md:grid-cols-[1fr_320px] md:grid-rows-1"
+  bind:this={root}
+  class={[
+    'bg-background grid h-full min-h-0 overflow-hidden',
+    sidebarHidden
+      ? 'grid-rows-1'
+      : 'grid-rows-[min(55dvh,90vw)_1fr] md:grid-cols-[1fr_320px] md:grid-rows-1',
+  ]}
 >
   <div class="relative min-h-0 min-w-0">
     <canvas
@@ -79,6 +104,35 @@
     {#if sim && sim.dimension !== 3 && !sim.error}
       <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
     {/if}
+    <div class="absolute top-2 right-2 flex gap-1" role="group" aria-label="Presentation">
+      {#if canFullscreen}
+        <Button
+          variant="ghost"
+          size="icon"
+          class="bg-background/60 backdrop-blur-sm"
+          aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
+          title={fullscreen ? 'Exit full screen' : 'Full screen'}
+          onclick={toggleFullscreen}
+        >
+          {#if fullscreen}<MinimizeIcon aria-hidden="true" />{:else}<MaximizeIcon
+              aria-hidden="true"
+            />{/if}
+        </Button>
+      {/if}
+      <Button
+        variant="ghost"
+        size="icon"
+        class="bg-background/60 backdrop-blur-sm"
+        aria-label={sidebarHidden ? 'Show controls' : 'Hide controls'}
+        aria-pressed={sidebarHidden}
+        title={sidebarHidden ? 'Show controls' : 'Hide controls'}
+        onclick={() => (sidebarHidden = !sidebarHidden)}
+      >
+        {#if sidebarHidden}<PanelRightOpenIcon aria-hidden="true" />{:else}<PanelRightCloseIcon
+            aria-hidden="true"
+          />{/if}
+      </Button>
+    </div>
     {#if missing.length > 0 || sim?.error}
       <div class="bg-background/90 absolute inset-0 grid place-items-center p-4" role="alert">
         <div class="max-w-sm space-y-3 text-center">
@@ -98,6 +152,7 @@
     {/if}
   </div>
   <aside
+    hidden={sidebarHidden}
     class="bg-muted/40 min-h-0 overflow-y-auto overscroll-contain border-t p-4 md:border-t-0 md:border-l"
   >
     {#if sim}
