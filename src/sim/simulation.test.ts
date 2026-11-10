@@ -10,9 +10,14 @@ import {
 } from './particle-2d';
 import { seededRandom, syntheticGas } from './scenes';
 import { Simulation, snapSubtract, type InitialState } from './simulation';
-import { ArenaType } from './simulation-info';
+import { ArenaType, DividerThermalMode } from './simulation-info';
 
-const SUPPORTED = new Set<string>([ArenaType.REFLECTING_BOUNDARIES, ArenaType.PERIODIC_BOUNDARIES]);
+const SUPPORTED = new Set<string>([
+  ArenaType.REFLECTING_BOUNDARIES,
+  ArenaType.PERIODIC_BOUNDARIES,
+  ArenaType.DIVIDED_ARENA,
+  ArenaType.DIVIDED_ARENA_WITH_HOLE,
+]);
 
 function momentum(sim: Simulation): [number, number] {
   const p = sim.particles;
@@ -143,9 +148,17 @@ describe('Simulation', () => {
   it('rejects arenas and dimensions not ported yet', () => {
     const init = syntheticGas({ count: 4 });
     expect(() => new Simulation({ ...init, dimension: 3 })).toThrow(/3D/);
-    expect(() => new Simulation({ ...init, arenaType: ArenaType.DIVIDED_ARENA })).toThrow(
+    expect(() => new Simulation({ ...init, arenaType: ArenaType.MOVABLE_PISTON })).toThrow(
       /not supported yet/,
     );
+    expect(
+      () =>
+        new Simulation({
+          ...init,
+          arenaType: ArenaType.DIVIDED_ARENA,
+          dividerThermalMode: DividerThermalMode.CONDUCTING,
+        }),
+    ).toThrow(/Conducting/);
   });
 
   it.each([ArenaType.REFLECTING_BOUNDARIES, ArenaType.PERIODIC_BOUNDARIES])(
@@ -194,5 +207,41 @@ describe('snapSubtract', () => {
     expect(snapSubtract(1, 1)).toBe(0);
     expect(snapSubtract(1, 0.5)).toBe(0.5);
     expect(snapSubtract(1, 1 - 1e-12)).toBe(1 - (1 - 1e-12));
+  });
+});
+
+describe("Maxwell's demon", () => {
+  // One particle on the left, heading straight for the middle of the hole.
+  const demon = (): InitialState => ({
+    dimension: 2,
+    arenaType: ArenaType.DIVIDED_ARENA_WITH_HOLE,
+    arenaXSize: 40e-9,
+    arenaYSize: 20e-9,
+    arenaZSize: 0,
+    holeDiameter: 8e-9,
+    maxwellDemonMode: true,
+    species: [
+      {
+        type: { particleMass: 2, particleRadius: 0.5e-9 },
+        positions: new Float64Array([10e-9, 10e-9, 0]),
+        velocities: new Float64Array([1000, 0, 0]),
+      },
+    ],
+  });
+
+  it('bounces particles off the closed hole', () => {
+    const sim = new Simulation(demon());
+    expect(sim.step()).toMatchObject({ type: Collision.BARRIER, side: 1 /* LEFT */ });
+  });
+
+  it('lets them through once the hole is open (from the next frame)', () => {
+    const sim = new Simulation(demon(), { frameDuration: 1e-15 });
+    sim.setHoleOpen(true);
+    sim.advanceToNextFrame(); // first frame: snapshot only
+    sim.advanceToNextFrame(); // the change applies here
+    expect(sim.holeOpen).toBe(true);
+    // Through the hole, the next thing it meets is the right-hand wall.
+    expect(sim.step()).toMatchObject({ type: Collision.WALL, side: 2 /* RIGHT */ });
+    expect(sim.particles.x[0]).toBeCloseTo(40e-9 - 0.5e-9, 18);
   });
 });

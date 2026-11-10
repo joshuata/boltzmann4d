@@ -3,8 +3,11 @@
 // (render/protocol.ts), so the main thread only handles controls and readouts.
 
 export type ToWorker =
-  /** Sent once: where to stream scene and frames. The worker starts after this. */
-  | { type: 'connect'; frames: MessagePort }
+  /**
+   * Sent once: where to stream scene and frames, and which preset to load (default.set
+   * when absent). The worker starts after this.
+   */
+  | { type: 'connect'; frames: MessagePort; preset?: string }
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'step' };

@@ -87,7 +87,9 @@ export class SimulationClient {
       if (message.type === 'timing') this.physicsMs += 0.05 * (message.physicsMs - this.physicsMs);
       else this.error = message.message;
     };
-    this.#send({ type: 'connect', frames: channel.port1 }, [channel.port1]);
+    // `?preset=2Dhotcold` loads a bundled preset instead of default.set.
+    const preset = /[?&]preset=([\w-]+)/.exec(location.search)?.[1];
+    this.#send({ type: 'connect', frames: channel.port1, preset }, [channel.port1]);
   }
 
   setPaused(paused: boolean): void {

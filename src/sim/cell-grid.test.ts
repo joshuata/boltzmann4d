@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CellGrid } from './cell-grid';
-import type { Arena } from './particles';
+import { createArena, type Arena } from './particles';
 import { ArenaType } from './simulation-info';
 
-const arena = (type: ArenaType, size = 10): Arena => ({ type, xSize: size, ySize: size, zSize: 0 });
+const arena = (type: ArenaType, size = 10): Arena => createArena(type, size, size, 0);
 
 describe('CellGrid', () => {
   it('uses cells at least as wide as the contact distance', () => {

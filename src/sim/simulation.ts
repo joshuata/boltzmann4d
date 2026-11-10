@@ -24,8 +24,8 @@ import {
   predictBoundary2D,
   predictPair2D,
 } from './particle-2d';
-import { Particles, type Arena } from './particles';
-import { ArenaType } from './simulation-info';
+import { createArena, Particles, type Arena } from './particles';
+import { ArenaType, DividerThermalMode } from './simulation-info';
 
 // Local copies for the hot paths (see plan 0002).
 const predictPair = predictPair2D;
@@ -35,7 +35,7 @@ const boundaryCollide = boundaryCollide2D;
 const moveToTime = moveToTime2D;
 const NEVER = MAX_TIME;
 const PARTICLE = Collision.PARTICLE;
-const { BOUNDARY, EOB, WALL } = Collision;
+const { BOUNDARY, EOB, WALL, BARRIER, EDGE } = Collision;
 const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
 /** Next-event type for a cell crossing (internal; never reported). */
 const CROSSING = 255;
@@ -63,6 +63,12 @@ export interface InitialState {
   arenaXSize: number;
   arenaYSize: number;
   arenaZSize: number;
+  /** Arenas with a hole: its diameter in meters. */
+  holeDiameter?: number;
+  /** Maxwell's demon: the hole starts closed; open it with setHoleOpen(). */
+  maxwellDemonMode?: boolean;
+  /** Divided arenas: only INSULATING is supported so far. */
+  dividerThermalMode?: DividerThermalMode;
   species: readonly InitialSpecies[];
 }
 
@@ -88,6 +94,7 @@ export class Simulation {
     'particleCollisions',
     'wallCollisions',
     'boundaryCrossings',
+    'dividerCollisions',
     'pairPredictions',
     'boundaryPredictions',
     'cellCrossings',
@@ -96,6 +103,11 @@ export class Simulation {
 
   /** Simulation time (s) every particle has been moved to by the last advanceToTime(). */
   time = 0;
+  /** Maxwell's demon: whether the hole is open (it starts closed). */
+  holeOpen = false;
+  private nextFrameHoleOpen = false;
+  /** When Maxwell's demon last opened or closed the hole (-1: never). */
+  private boundaryRepredictTime = -1;
   frameDuration: number;
 
   private readonly onEvent: SimulationOptions['onEvent'];
@@ -137,19 +149,21 @@ export class Simulation {
     if (init.dimension !== 2) {
       throw new Error(`${init.dimension}D simulation is not supported yet`);
     }
-    if (
-      init.arenaType !== ArenaType.REFLECTING_BOUNDARIES &&
-      init.arenaType !== ArenaType.PERIODIC_BOUNDARIES
-    ) {
+    if (init.arenaType === ArenaType.MOVABLE_PISTON) {
       throw new Error(`Arena type ${init.arenaType} is not supported yet`);
     }
+    if (init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
+      throw new Error('Conducting dividers are not supported yet');
+    }
     this.dimension = init.dimension;
-    this.arena = {
-      type: init.arenaType,
-      xSize: init.arenaXSize,
-      ySize: init.arenaYSize,
-      zSize: init.arenaZSize,
-    };
+    this.arena = createArena(
+      init.arenaType,
+      init.arenaXSize,
+      init.arenaYSize,
+      init.arenaZSize,
+      init.holeDiameter,
+      init.maxwellDemonMode,
+    );
     this.frameDuration = options.frameDuration ?? DEFAULT_FRAME_DURATION;
     this.onEvent = options.onEvent;
 
@@ -235,6 +249,12 @@ export class Simulation {
    * `maxTime` (Physics.advanceToTime).
    */
   advanceToTime(maxTime: number): void {
+    if (this.nextFrameHoleOpen !== this.holeOpen) {
+      // Applied at the start of a frame, re-predicting every boundary event (Physics).
+      this.holeOpen = this.nextFrameHoleOpen;
+      this.boundaryRepredictTime = this.time;
+      for (let k = 0; k < this.particles.count; k++) this.repredict(k);
+    }
     const heap = this.heap;
     for (;;) {
       const i = heap.peek();
@@ -249,6 +269,14 @@ export class Simulation {
     }
     this.frameTimes.push(maxTime);
     this.time = maxTime;
+  }
+
+  /**
+   * Maxwell's demon: open or close the hole in the divider. Takes effect at the start of
+   * the next frame, as in Java (Physics.setArenaHoleOpen).
+   */
+  setHoleOpen(open: boolean): void {
+    this.nextFrameHoleOpen = open;
   }
 
   /** Frame API used by the worker's ThreadController (Physics.advanceToNextFrame). */
@@ -357,6 +385,7 @@ export class Simulation {
       boundaryCollide(p, i, event, this.arena);
       if (type === WALL) this.counters.wallCollisions++;
       else if (type === BOUNDARY || type === EOB) this.counters.boundaryCrossings++;
+      else if (type === BARRIER || type === EDGE) this.counters.dividerCollisions++;
       this.collisionCount[i]!++;
       this.recordEventState(i);
       this.repredict(i);
@@ -388,8 +417,13 @@ export class Simulation {
 
     // Java predicts boundaries only at the particle's own events, from that state.
     const scratch = this.scratch;
-    this.predictionState(i, this.eventT0[i]!, 0);
-    predictBoundary(scratch, 0, arena, out);
+    // Java predicts boundaries at the particle's own events, and for every particle when
+    // Maxwell's demon opens or closes the hole (from positions after that frame's move).
+    const boundaryAt = this.boundaryRepredictTime;
+    const boundaryFromToggle = boundaryAt > this.eventT0[i]!;
+    if (boundaryFromToggle) this.predictionState(i, boundaryAt, 0, true);
+    else this.predictionState(i, this.eventT0[i]!, 0);
+    predictBoundary(scratch, 0, arena, out, this.holeOpen);
     counters.boundaryPredictions++;
     if (out.time < bestTime || (out.time === bestTime && 0 < bestRow)) {
       bestTime = out.time;
@@ -405,7 +439,7 @@ export class Simulation {
     const countI = this.collisionCount[i]!;
     const eventT0 = this.eventT0;
     const tI = eventT0[i]!;
-    let loadedAt = tI; // time slot 0 currently holds i's state for
+    let loadedAt = boundaryFromToggle ? NaN : tI; // time slot 0 currently holds i's state for
     for (const dy of grid.offsetsY) {
       for (const dx of grid.offsetsX) {
         const c = grid.neighbour(cx, cy, dx, dy);
@@ -507,7 +541,7 @@ export class Simulation {
    * pairs lazily (at crossings, stale events, a partner's event), so it rebuilds the state
    * Java used; the arithmetic, and so every bit of the result, then matches.
    */
-  private predictionState(k: number, te: number, slot: number): void {
+  private predictionState(k: number, te: number, slot: number, includeFrameAtTe = false): void {
     const p = this.particles;
     const s = this.scratch;
     let x = this.eventX[k]!;
@@ -527,7 +561,7 @@ export class Simulation {
       }
       for (let f = lo; f < frames.length; f++) {
         const frame = frames[f]!;
-        if (frame >= te) break;
+        if (frame > te || (frame === te && !includeFrameAtTe)) break;
         const dt = frame - t;
         x = x + vx * dt;
         y = y + vy * dt;

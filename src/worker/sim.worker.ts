@@ -1,8 +1,9 @@
 // Simulation Web Worker entry: builds the Simulation from a settings file, paces it with
 // ThreadController, and streams frames to the renderer over the port it is given.
-import { loadDefaultSettingsText, loadSettings } from '../io';
+import { loadDefaultSettingsText, loadPresetText, loadSettings } from '../io';
 import type { RenderStream } from '../render/protocol';
 import { Simulation, type SceneInfo } from '../sim';
+import { ArenaType } from '../sim/simulation-info';
 import type { FromWorker, ToWorker } from './index';
 import { ThreadController } from './thread-controller';
 
@@ -17,7 +18,7 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
   const message = event.data;
   switch (message.type) {
     case 'connect':
-      start(message.frames).catch((error: unknown) => {
+      start(message.frames, message.preset).catch((error: unknown) => {
         post({ type: 'error', message: error instanceof Error ? error.message : String(error) });
       });
       break;
@@ -35,13 +36,17 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
   }
 };
 
-async function start(frames: MessagePort): Promise<void> {
+async function start(frames: MessagePort, preset?: string): Promise<void> {
   const send = (message: RenderStream, transfer: Transferable[]) =>
     frames.postMessage(message, transfer);
 
-  const { settings } = loadSettings(await loadDefaultSettingsText());
+  const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
+  const { settings } = loadSettings(text);
   const simulation = new Simulation(settings);
   const p = simulation.particles;
+  const arena = simulation.arena;
+  const divided =
+    arena.type === ArenaType.DIVIDED_ARENA || arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
   const scene: SceneInfo = {
     dimension: simulation.dimension,
     arenaXSize: simulation.arena.xSize,
@@ -50,6 +55,14 @@ async function start(frames: MessagePort): Promise<void> {
     radii: p.radius.slice(),
     types: p.type.slice(),
     typeColors: settings.species.map((s) => s.type.defaultColor),
+    divider: divided
+      ? {
+          leftX: arena.barrierLeftX,
+          rightX: arena.barrierRightX,
+          edgeY: arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE ? arena.edgeY : undefined,
+          edgeRadius: arena.edgeRadius,
+        }
+      : undefined,
   };
   send({ type: 'scene', scene }, [scene.radii.buffer, scene.types.buffer]);
 

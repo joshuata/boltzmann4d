@@ -16,6 +16,14 @@ export interface SceneInfo {
   types: Uint16Array;
   /** Per particle type, 0xRRGGBB. */
   typeColors: number[];
+  /** Divided arenas: the divider's faces, and the hole's edge discs if it has one. */
+  divider?: {
+    leftX: number;
+    rightX: number;
+    /** Centres of the two edge discs lining the hole (top, bottom); absent without a hole. */
+    edgeY?: readonly [number, number];
+    edgeRadius: number;
+  };
 }
 
 /** Snapshot of particle state handed to the renderer (mirrors RenderFrame.java). */

@@ -1,4 +1,4 @@
-{"preset":"2Dbrownian","generator":"boltzmann3d ParityDump, Java 25.0.5+8-LTS","dimension":2,"arenaType":"PERIODIC_BOUNDARIES","arenaXSize":7.02E-8,"arenaYSize":5.0100000000000005E-8,"arenaZSize":-1.0
+{"preset":"2Dbrownian","generator":"boltzmann3d ParityDump, Java 25.0.5+8-LTS","dimension":2,"arenaType":"PERIODIC_BOUNDARIES","arenaXSize":7.02E-8,"arenaYSize":5.0100000000000005E-8,"arenaZSize":-1.0,"holeDiameter":-1.0,"maxwellDemonMode":false,"dividerThermalMode":"INSULATING"
 ,"species":[
 {"name":"Red","mass":200.0,"radius":5.0E-9
 ,"positions":[4.8998867080338105E-8,2.1444240540837287E-8,5.0E-9]

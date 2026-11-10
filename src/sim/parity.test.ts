@@ -14,6 +14,9 @@ interface ParityFixture {
   arenaXSize: number;
   arenaYSize: number;
   arenaZSize: number;
+  holeDiameter: number;
+  maxwellDemonMode: boolean;
+  dividerThermalMode: 'INSULATING' | 'CONDUCTING';
   species: {
     name: string;
     mass: number;
@@ -30,7 +33,12 @@ interface ParityFixture {
 }
 
 const fixtures = import.meta.glob<ParityFixture>('./parity/*.json', { import: 'default' });
-const SUPPORTED = new Set<string>([ArenaType.REFLECTING_BOUNDARIES, ArenaType.PERIODIC_BOUNDARIES]);
+const SUPPORTED = new Set<string>([
+  ArenaType.REFLECTING_BOUNDARIES,
+  ArenaType.PERIODIC_BOUNDARIES,
+  ArenaType.DIVIDED_ARENA,
+  ArenaType.DIVIDED_ARENA_WITH_HOLE,
+]);
 
 function initialState(f: ParityFixture): InitialState {
   return {
@@ -39,6 +47,9 @@ function initialState(f: ParityFixture): InitialState {
     arenaXSize: f.arenaXSize,
     arenaYSize: f.arenaYSize,
     arenaZSize: f.arenaZSize,
+    holeDiameter: f.holeDiameter,
+    maxwellDemonMode: f.maxwellDemonMode,
+    dividerThermalMode: f.dividerThermalMode,
     species: f.species.map((s) => ({
       type: { particleMass: s.mass, particleRadius: s.radius },
       positions: Float64Array.from(s.positions),
@@ -56,7 +67,11 @@ describe('parity with the Java app', () => {
 
     it(name, async (context) => {
       const f = await load();
-      if (!SUPPORTED.has(f.arenaType) || f.dimension !== 2) {
+      if (
+        !SUPPORTED.has(f.arenaType) ||
+        f.dimension !== 2 ||
+        f.dividerThermalMode === 'CONDUCTING'
+      ) {
         context.skip(`${f.dimension}D ${f.arenaType} is not ported yet`);
       }
       const events: number[][] = [];

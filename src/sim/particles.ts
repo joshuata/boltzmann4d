@@ -4,7 +4,7 @@
 //
 // Motion is lazy, as in Java: each particle's position is exact at its own time t0, and
 // is only moved forward when an event involves it or a frame needs every particle.
-import type { ArenaType } from './simulation-info';
+import { ARENA_DIVIDER_RADIUS, ArenaType } from './simulation-info';
 
 /** The arena as the physics sees it (SI units: meters). */
 export interface Arena {
@@ -12,6 +12,44 @@ export interface Arena {
   xSize: number;
   ySize: number;
   zSize: number;
+  /** Divided arenas: the divider's faces (centre ± ARENA_DIVIDER_RADIUS). */
+  barrierLeftX: number;
+  barrierRightX: number;
+  /** Arenas with a hole: the hole's diameter, and the two edge discs that line it. */
+  holeDiameter: number;
+  edgeX: number;
+  edgeY: readonly [number, number];
+  edgeRadius: number;
+  /** Maxwell's demon: the hole only lets particles through while it's open. */
+  maxwellDemonMode: boolean;
+}
+
+/** Fills in the divider and hole geometry the way Java's ArenaInfo and Particle2D do. */
+export function createArena(
+  type: ArenaType,
+  xSize: number,
+  ySize: number,
+  zSize: number,
+  holeDiameter = -1,
+  maxwellDemonMode = false,
+): Arena {
+  const dividerRadius = ARENA_DIVIDER_RADIUS;
+  const hasHole = type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+  // ArenaInfo.holeRadius: the edge discs sit just outside the hole.
+  const holeRadius = 0.5 * holeDiameter + dividerRadius;
+  return {
+    type,
+    xSize,
+    ySize,
+    zSize,
+    barrierLeftX: 0.5 * xSize - dividerRadius,
+    barrierRightX: 0.5 * xSize + dividerRadius,
+    holeDiameter: hasHole ? holeDiameter : -1,
+    edgeX: 0.5 * xSize,
+    edgeY: [0.5 * ySize + holeRadius, 0.5 * ySize - holeRadius],
+    edgeRadius: dividerRadius,
+    maxwellDemonMode: hasHole && maxwellDemonMode,
+  };
 }
 
 export class Particles {

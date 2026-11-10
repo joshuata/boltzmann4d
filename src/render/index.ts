@@ -53,6 +53,8 @@ export function createRenderer(
   const circle = new THREE.CircleGeometry(1, 32); // scaled per instance by radius
   const particleMaterial = new THREE.MeshBasicMaterial();
   let walls: THREE.LineLoop | null = null;
+  const dividerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  let divider: THREE.Group | null = null;
   let particles: THREE.InstancedMesh | null = null;
   let radii: Float64Array = new Float64Array(0);
   let arena = { x: 1, y: 1 };
@@ -96,6 +98,14 @@ export function createRenderer(
       wallMaterial,
     );
     scene.add(walls);
+
+    if (divider) {
+      scene.remove(divider);
+      divider.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      divider = null;
+    }
+    if (info.divider) divider = buildDivider(info.divider, arena.y, dividerMaterial);
+    if (divider) scene.add(divider);
 
     if (particles) {
       scene.remove(particles);
@@ -163,8 +173,43 @@ export function createRenderer(
       particles?.dispose();
       circle.dispose();
       particleMaterial.dispose();
+      divider?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      dividerMaterial.dispose();
       wallMaterial.dispose();
       renderer.dispose();
     },
   };
+}
+
+/**
+ * The divider as filled bars (in nanometres), with a gap for the hole and the two edge
+ * discs that line it.
+ */
+function buildDivider(
+  info: NonNullable<SceneInfo['divider']>,
+  arenaHeight: number,
+  material: THREE.Material,
+): THREE.Group {
+  const group = new THREE.Group();
+  const left = info.leftX * NM;
+  const width = (info.rightX - info.leftX) * NM;
+  const bar = (from: number, to: number) => {
+    if (to <= from) return;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, to - from), material);
+    mesh.position.set(left + width / 2, (from + to) / 2, 0);
+    group.add(mesh);
+  };
+  if (info.edgeY) {
+    const [top, bottom] = info.edgeY.map((y) => y * NM) as [number, number];
+    bar(0, bottom);
+    bar(top, arenaHeight);
+    for (const y of [top, bottom]) {
+      const edge = new THREE.Mesh(new THREE.CircleGeometry(info.edgeRadius * NM, 24), material);
+      edge.position.set(left + width / 2, y, 0);
+      group.add(edge);
+    }
+  } else {
+    bar(0, arenaHeight);
+  }
+  return group;
 }
