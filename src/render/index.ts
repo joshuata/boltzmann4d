@@ -42,6 +42,9 @@ const requestDraw: (draw: () => void) => void =
  * the main thread. It only draws when something changed (a frame, the scene or the size),
  * at most once per display refresh.
  */
+/** Piston fill (the palettes come with the rendering baseline, plan 0005 step 6). */
+const PISTON_COLOR = 0xb0b0b0;
+
 export function createRenderer(
   canvas: HTMLCanvasElement | OffscreenCanvas,
   initialSize: ViewSize,
@@ -59,6 +62,12 @@ export function createRenderer(
   let walls: THREE.LineLoop | null = null;
   const dividerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
   let divider: THREE.Group | null = null;
+  // Piston arenas: the valve slab and its shaft (unit squares, placed each frame).
+  const pistonMaterial = new THREE.MeshBasicMaterial({ color: PISTON_COLOR });
+  const unitSquare = new THREE.PlaneGeometry(1, 1);
+  const valve = new THREE.Mesh(unitSquare, pistonMaterial);
+  const shaft = new THREE.Mesh(unitSquare, pistonMaterial);
+  let piston: NonNullable<SceneInfo['piston']> | null = null;
   let particles: THREE.InstancedMesh | null = null;
   let radii: Float64Array = new Float64Array(0);
   let colors: THREE.Color[] = [];
@@ -114,6 +123,13 @@ export function createRenderer(
     if (info.divider) divider = buildDivider(info.divider, arena.y, dividerMaterial);
     if (divider) scene.add(divider);
 
+    piston = info.piston ?? null;
+    scene.remove(valve, shaft);
+    if (piston) {
+      placePiston(arena.y);
+      scene.add(valve, shaft);
+    }
+
     if (particles) {
       scene.remove(particles);
       particles.dispose();
@@ -144,7 +160,25 @@ export function createRenderer(
     scheduleDraw();
   };
 
+  /**
+   * The piston at height `y` (nm) as Java draws it: a slab two valve radii thick under
+   * the arena top, and a shaft up from its middle. Clipped to the arena.
+   */
+  const placePiston = (y: number) => {
+    if (!piston) return;
+    const top = arena.y;
+    const valveTop = Math.min(y + 2 * piston.valveRadius * NM, top);
+    valve.visible = valveTop > y;
+    valve.scale.set(arena.x, valveTop - y, 1);
+    valve.position.set(arena.x / 2, (y + valveTop) / 2, 0);
+    const shaftWidth = 2 * piston.shaftRadius * NM;
+    shaft.visible = top > valveTop;
+    shaft.scale.set(shaftWidth, top - valveTop, 1);
+    shaft.position.set(arena.x / 2, (valveTop + top) / 2, 0);
+  };
+
   const displayFrame = (frame: RenderFrame) => {
+    if (frame.pistonY !== undefined) placePiston(frame.pistonY * NM);
     if (!particles) return;
     const d = frame.dimension;
     const count = Math.min(frame.types.length, radii.length);
@@ -209,6 +243,8 @@ export function createRenderer(
       particleMaterial.dispose();
       divider?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
       dividerMaterial.dispose();
+      unitSquare.dispose();
+      pistonMaterial.dispose();
       wallMaterial.dispose();
       renderer.dispose();
     },

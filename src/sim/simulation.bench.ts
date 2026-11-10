@@ -3,6 +3,7 @@
 import { test } from 'vitest';
 import { loadPresetText, loadSettings } from '../io';
 import { syntheticGas, seededRandom } from './scenes';
+import { PistonMode } from './piston';
 import { Simulation, type InitialState } from './simulation';
 import { ArenaType, DividerThermalMode } from './simulation-info';
 
@@ -22,6 +23,10 @@ const scenes: [string, () => Promise<InitialState>][] = [
       dividerThermalMode: DividerThermalMode.CONDUCTING,
     }),
   ],
+  [
+    'default, piston (50)',
+    async () => ({ ...(await preset('default')), arenaType: ArenaType.MOVABLE_PISTON }),
+  ],
   ['synthetic (1000, reflecting)', async () => syntheticGas({ count: 1000 })],
   [
     'synthetic (1000, periodic)',
@@ -32,10 +37,16 @@ const scenes: [string, () => Promise<InitialState>][] = [
 for (const [label, load] of scenes) {
   test(`${EVENTS} events: ${label}`, async ({ bench }) => {
     const init = await load();
-    let simulation = new Simulation(init);
+    // Piston arenas run with the piston on its way in.
+    const create = () => {
+      const sim = new Simulation(init);
+      if (sim.piston) sim.movePiston(0.5, PistonMode.ADIABATIC, 500);
+      return sim;
+    };
+    let simulation = create();
     await bench(
       `${EVENTS} events: ${label}`,
-      { beforeAll: () => void (simulation = new Simulation(init)) },
+      { beforeAll: () => void (simulation = create()) },
       () => {
         for (let k = 0; k < EVENTS; k++) simulation.step();
       },

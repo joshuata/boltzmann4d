@@ -9,7 +9,8 @@ import type { Renderer, ViewSize } from '../render';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '../stats/summary';
-import type { FromWorker, ToWorker } from '../worker';
+import type { PistonMode } from '../sim/piston';
+import type { ArenaInfo, ArenaOptions, FromWorker, PistonInfo, ToWorker } from '../worker';
 import SimWorker from '../worker/sim.worker?worker';
 
 export class SimulationClient {
@@ -28,6 +29,10 @@ export class SimulationClient {
   particleCount = $state(0);
   /** True while a preset is loading. */
   loading = $state(true);
+  /** Arena options the running preset can take, and which are on (null until loaded). */
+  arena = $state.raw<ArenaInfo | null>(null);
+  /** Piston arenas: limits, and the piston's level and motion as of the latest frame. */
+  piston = $state.raw<(PistonInfo & { level: number; moving: boolean }) | null>(null);
   /** Latest statistics from the physics worker (about once a second); null until the first. */
   statistics = $state.raw<StatisticsSummary | null>(null);
   /** Where drawing happens. */
@@ -120,6 +125,14 @@ export class SimulationClient {
           // A newly loaded preset starts again from 0: count only forward progress.
           this.#simulatedThisSecond += Math.max(0, message.time - this.#lastFrameTime);
           this.#lastFrameTime = message.time;
+          if (
+            message.piston &&
+            this.piston &&
+            (message.piston.level !== this.piston.level ||
+              message.piston.moving !== this.piston.moving)
+          ) {
+            this.piston = { ...this.piston, ...message.piston };
+          }
           break;
         case 'statistics':
           this.statistics = message.summary;
@@ -127,6 +140,8 @@ export class SimulationClient {
         case 'loaded':
           this.preset = message.preset;
           this.particleCount = message.particles;
+          this.arena = message.arena;
+          this.piston = message.piston ? { ...message.piston, level: 0, moving: false } : null;
           this.loading = false;
           this.error = null;
           break;
@@ -159,6 +174,25 @@ export class SimulationClient {
       '',
       `${location.pathname}${query.length ? `?${query.join('&')}` : ''}${location.hash}`,
     );
+  }
+
+  /** Reloads the running preset with these arena options (the simulation starts over). */
+  setArenaOptions(options: ArenaOptions): void {
+    this.loading = true;
+    this.#send({
+      type: 'load',
+      preset: this.preset,
+      arena: { ...this.arena?.options, ...options },
+    });
+  }
+
+  /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
+  movePiston(level: number, mode: PistonMode, speed: number): void {
+    this.#send({ type: 'movePiston', level, mode, speed });
+  }
+
+  stopPiston(): void {
+    this.#send({ type: 'stopPiston' });
   }
 
   setPaused(paused: boolean): void {

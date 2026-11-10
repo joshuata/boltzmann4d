@@ -148,9 +148,6 @@ describe('Simulation', () => {
   it('rejects arenas and dimensions not ported yet', () => {
     const init = syntheticGas({ count: 4 });
     expect(() => new Simulation({ ...init, dimension: 3 })).toThrow(/3D/);
-    expect(() => new Simulation({ ...init, arenaType: ArenaType.MOVABLE_PISTON })).toThrow(
-      /not supported yet/,
-    );
   });
 
   it.each([ArenaType.REFLECTING_BOUNDARIES, ArenaType.PERIODIC_BOUNDARIES])(

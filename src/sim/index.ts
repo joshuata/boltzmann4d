@@ -26,6 +26,8 @@ export interface SceneInfo {
     edgeY?: readonly [number, number];
     edgeRadius: number;
   };
+  /** Piston arenas: the piston's valve and shaft radii, meters (its height comes per frame). */
+  piston?: { valveRadius: number; shaftRadius: number };
 }
 
 /** Snapshot of particle state handed to the renderer (mirrors RenderFrame.java). */
@@ -36,6 +38,8 @@ export interface RenderFrame {
   positions: Float64Array;
   /** Per-particle type index into the particle-type table. */
   types: Uint16Array;
+  /** Piston arenas: y of the piston's underside, meters. */
+  pistonY?: number;
 }
 
 export {
@@ -47,6 +51,8 @@ export {
   type SimulationOptions,
 } from './simulation';
 
+export { compressionLimitPercent, DEFAULT_PISTON_SPEED, Piston, PistonMode } from './piston';
+export { Thermostat } from './thermostat';
 export { createCounters, resetCounters, type Counters } from './counters';
 export {
   CalendarUpdate,

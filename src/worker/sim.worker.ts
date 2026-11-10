@@ -4,8 +4,13 @@ import { loadDefaultSettingsText, loadPresetText, loadSettings } from '../io';
 import type { RenderStream } from '../render/protocol';
 import { Simulation, type SceneInfo } from '../sim';
 import { Statistics, statsContext } from '../stats';
-import { ArenaType } from '../sim/simulation-info';
-import type { FromWorker, ToWorker } from './index';
+import {
+  ArenaType,
+  DividerThermalMode,
+  PISTON_SHAFT_RADIUS,
+  PISTON_VALVE_RADIUS,
+} from '../sim/simulation-info';
+import type { ArenaInfo, ArenaOptions, FromWorker, ToWorker } from './index';
 import { parseSimulationSpeed, ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
@@ -17,6 +22,7 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
 
 let frames: MessagePort | null = null;
 let threadController: ThreadController | null = null;
+let running: Simulation | null = null;
 let paused = false;
 /** Bumped per load request, so a slow load can't replace a newer one. */
 let loadGeneration = 0;
@@ -26,10 +32,22 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
   switch (message.type) {
     case 'connect':
       frames = message.frames;
-      void load(message.preset);
+      void load(message.preset, message.arena);
       break;
     case 'load':
-      void load(message.preset);
+      void load(message.preset, message.arena);
+      break;
+    case 'movePiston':
+    case 'stopPiston':
+      try {
+        if (message.type === 'movePiston') {
+          running?.movePiston(message.level, message.mode, message.speed);
+        } else {
+          running?.stopPiston();
+        }
+      } catch (error) {
+        post({ type: 'error', message: `Piston: ${errorText(error)}` });
+      }
       break;
     case 'play':
       paused = false;
@@ -50,15 +68,41 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
  * simulation. If the preset can't be loaded or isn't supported yet, reports the error and
  * keeps the current simulation running. Paused stays paused.
  */
-async function load(preset?: string): Promise<void> {
+async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
   const generation = ++loadGeneration;
   let simulation: Simulation;
   let statistics: Statistics;
   let typeColors: number[];
   let speed: number;
+  let arenaInfo: ArenaInfo;
   try {
     const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
-    const { settings } = loadSettings(text);
+    const { settings: loaded } = loadSettings(text);
+    const canHavePiston =
+      loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
+      loaded.arenaType === ArenaType.MOVABLE_PISTON;
+    const canConduct =
+      loaded.arenaType === ArenaType.DIVIDED_ARENA ||
+      loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+    const settings = { ...loaded };
+    if (canHavePiston && arena.piston !== undefined) {
+      settings.arenaType = arena.piston
+        ? ArenaType.MOVABLE_PISTON
+        : ArenaType.REFLECTING_BOUNDARIES;
+    }
+    if (canConduct && arena.conductingDivider !== undefined) {
+      settings.dividerThermalMode = arena.conductingDivider
+        ? DividerThermalMode.CONDUCTING
+        : DividerThermalMode.INSULATING;
+    }
+    arenaInfo = {
+      canHavePiston,
+      canConduct,
+      options: {
+        piston: settings.arenaType === ArenaType.MOVABLE_PISTON,
+        conductingDivider: settings.dividerThermalMode === DividerThermalMode.CONDUCTING,
+      },
+    };
     speed = parseSimulationSpeed(settings.simulationSpeed);
     let stats: Statistics | null = null;
     simulation = new Simulation(settings, { onEvent: (event) => stats?.notifyOfEvent(event) });
@@ -87,7 +131,15 @@ async function load(preset?: string): Promise<void> {
     simulation,
     (frame, physicsMs) => {
       send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
-      post({ type: 'timing', physicsMs, time: frame.time });
+      const piston = simulation.piston;
+      post({
+        type: 'timing',
+        physicsMs,
+        time: frame.time,
+        piston: piston
+          ? { level: piston.curLevel, moving: piston.isMoving(simulation.time) }
+          : undefined,
+      });
       const now = performance.now();
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
         lastSummary = now;
@@ -98,10 +150,19 @@ async function load(preset?: string): Promise<void> {
     { speed },
   );
   threadController = controller;
+  running = simulation;
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
   threadController.showCurrentFrame();
-  post({ type: 'loaded', preset: preset ?? 'default', particles: simulation.particles.count });
+  post({
+    type: 'loaded',
+    preset: preset ?? 'default',
+    particles: simulation.particles.count,
+    arena: arenaInfo,
+    piston: simulation.piston
+      ? { maxLevel: simulation.maxPistonLevel(), arenaHeight: simulation.arena.ySize }
+      : undefined,
+  });
 }
 
 function sceneOf(simulation: Simulation, typeColors: number[]): SceneInfo {
@@ -125,6 +186,9 @@ function sceneOf(simulation: Simulation, typeColors: number[]): SceneInfo {
           edgeY: arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE ? arena.edgeY : undefined,
           edgeRadius: arena.edgeRadius,
         }
+      : undefined,
+    piston: simulation.piston
+      ? { valveRadius: PISTON_VALVE_RADIUS, shaftRadius: PISTON_SHAFT_RADIUS }
       : undefined,
   };
 }

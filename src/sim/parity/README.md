@@ -8,7 +8,7 @@ A fixture holds:
 - every event Java performed, as `[type, time, part1, part2, side]`, over whole frames until at least 2,000 events,
 - the final positions and velocities after those frames.
 
-Besides the bundled presets, fixtures cover _scenarios_: settings files in the fork's `tests/edu/byu/chem/boltzmann/tools/scenarios/` for modes the presets don't use, e.g. `2Dhotcold-conducting` (the hot/cold preset with a conducting divider).
+Besides the bundled presets, fixtures cover _scenarios_: settings files in the fork's `tests/edu/byu/chem/boltzmann/tools/scenarios/` for modes the presets don't use, e.g. `2Dhotcold-conducting` (the hot/cold preset with a conducting divider). A scenario may have a `.actions` script of run-time actions applied between frames (piston moves and stops); the fixture records them and the test replays them.
 
 Fixtures for modes that aren't ported yet (e.g. 3D) are skipped by the test, not deleted, so they start checking as soon as the port lands.
 
