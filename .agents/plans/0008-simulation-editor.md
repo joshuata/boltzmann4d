@@ -27,7 +27,7 @@ Teachers and students can build their own simulation (arena, species, counts, te
 1. Engine (first PR, done): JSON schema and types for scenarios, a validator with readable errors, and `.set ⇄ JSON` conversion with round-trip tests over every bundled preset.
 2. Worker protocol: load a scenario (JSON) instead of only a preset name; presets become scenarios produced from the bundled `.set` files.
 3. Site: `/upload` opens a `.json` or `.set` file (FILE-1's file picker), stores it, and runs it; a route to run a stored scenario.
-4. Simulation editor: a form-based editor over the schema (start from any preset), with live validation, run, and download as `.json` or `.set`. Works at narrow widths and with touch (AGENTS.md UI rules).
+4. Simulation editor: superseded by plan 0010 (a WYSIWYG editor with drawn walls, spawn regions and up to 10 particle kinds).
 5. Saved scenarios: an IndexedDB store of named scenarios (JSON), listed on `/upload`, with a user default (FILE-2).
 
 ## Open questions
