@@ -3,6 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
+    <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111114" media="(prefers-color-scheme: dark)" />
+    <!-- Pages render only in the browser (ssr = false), so link previews and crawlers that
+         don't run scripts see just these defaults. -->
+    <meta
+      name="description"
+      content="A kinetic theory demonstrator in the browser: watch a hard-sphere gas collide in 2D and 3D, and compare it with the Maxwell–Boltzmann predictions."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Boltzmann 4D" />
+    <meta property="og:title" content="Boltzmann 4D" />
+    <meta
+      property="og:description"
+      content="A kinetic theory demonstrator in the browser: watch a hard-sphere gas collide in 2D and 3D, and compare it with the Maxwell–Boltzmann predictions."
+    />
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">
