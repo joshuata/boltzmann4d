@@ -1,5 +1,5 @@
 // The statistics for one simulation (the statistics side of Physics.java): one instance
-// per statistic per non-empty set of particle types, fed by every event before it is
+// per statistic per set of particle types (statisticSubsets), fed by every event before it is
 // performed and sampled at frame boundaries.
 //
 // Instantaneous Speed is the only statistic so far (it is also the Java app's default).
@@ -7,7 +7,7 @@ import type { EventInfo } from '../sim/event';
 import { Collision } from '../sim/event';
 import type { Particles } from '../sim/particles';
 import {
-  allTypeSubsets,
+  statisticSubsets,
   collisionLifetime,
   predictCollisionRateForTypes,
   temperature,
@@ -70,7 +70,7 @@ export class Statistics {
       (options.forgetMultiplier ?? 4.0) *
       collisionLifetime(predictCollisionRateForTypes(ctx, allTypes, false));
 
-    this.speed = allTypeSubsets(ctx.types.length).map(
+    this.speed = statisticSubsets(ctx.types.length).map(
       (types) => new InstantaneousSpeed(ctx, types),
     );
     // Bins of every subset cover the union of their ranges, so they can be compared.

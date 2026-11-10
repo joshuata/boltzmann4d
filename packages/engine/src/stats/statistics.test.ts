@@ -51,6 +51,31 @@ describe('WeightedValueTracker', () => {
 });
 
 describe('Statistics', () => {
+  it('handles many kinds, each alone and all together', () => {
+    const gas = syntheticGas({ count: 200, seed: 2 });
+    const [a, b] = gas.species;
+    // Ten kinds: five copies of each of the two species.
+    const species = Array.from({ length: 10 }, (_, k) => {
+      const s = k % 2 === 0 ? a! : b!;
+      const n = s.positions.length / 3 / 5;
+      const part = Math.floor(k / 2);
+      return {
+        ...s,
+        positions: s.positions.slice(3 * n * part, 3 * n * (part + 1)),
+        velocities: s.velocities.slice(3 * n * part, 3 * n * (part + 1)),
+      };
+    });
+    const { sim, stats } = simulate({ ...gas, species });
+    for (let k = 0; k < 2000; k++) sim.step();
+    stats.sampleCurrent();
+    const summary = stats.summary(sim.time);
+    expect(summary.statistics.map((s) => s.types.length)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 10]); // prettier-ignore
+    const all = summary.statistics.at(-1)!.current;
+    expect(all.binsByType).toHaveLength(10);
+    const counted = all.binsByType.flat().reduce((x, y) => x + y, 0);
+    expect(counted).toBeGreaterThan(0.95 * sim.particles.count); // a few may be off the axis
+  });
+
   it('records every non-empty set of types, bins aligned across them', () => {
     const { stats } = simulate(syntheticGas({ count: 50 }));
     expect(stats.speed.map((s) => s.types)).toEqual([[0], [1], [0, 1]]);

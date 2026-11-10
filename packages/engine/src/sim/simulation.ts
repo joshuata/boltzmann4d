@@ -24,7 +24,6 @@ import {
   moveToTime2D,
   predictBoundary2D,
   predictPair2D,
-  type Reaction,
 } from './particle-2d';
 import {
   boundaryCollide3D,
@@ -41,6 +40,7 @@ import {
 } from './attractive-wall';
 import { createArena, Particles, type Arena } from './particles';
 import { compressionLimitPercent, Piston, PistonMode } from './piston';
+import { ReactionTable, type ReactionRule } from './reactions';
 import { Thermostat } from './thermostat';
 import { convert } from '../utils/units';
 import { ArenaType, DividerThermalMode } from './simulation-info';
@@ -126,11 +126,11 @@ export interface InitialState {
    */
   wells?: { radiusMultiplier: number; depths: readonly number[] };
   /**
-   * Red↔blue reactions between the first two species (the settings dialog's Reactions
-   * tab), activation energies in kJ/mol. A red pair (species 0) colliding hard enough
-   * turns blue (species 1's colour) and back; particles keep their own species. 2D only.
+   * Reaction rules between species (KIND-13; Java's Reactions tab is the single rule
+   * `javaReaction`): a pair colliding hard enough becomes the rule's products, showing
+   * their colour but keeping their own species (mass, radius, well depth).
    */
-  reactions?: Reaction;
+  reactions?: readonly ReactionRule[];
   /** A square well along the bottom wall (non-periodic 2D arenas). */
   attractiveWall?: AttractiveWallOptions;
   species: readonly InitialSpecies[];
@@ -182,8 +182,8 @@ export class Simulation {
   readonly piston: Piston | null;
   /** The wall thermostat, switched on by isothermal piston moves. */
   readonly thermostat = new Thermostat();
-  /** Red↔blue reactions (null without them). */
-  readonly reaction: Reaction | null;
+  /** The reaction rules, compiled (null without any). */
+  readonly reactions: ReactionTable | null;
   /** The attractive wall (null without one). */
   readonly wall: AttractiveWall | null;
   /** Attractive wall: 1 for each particle inside its well. */
@@ -291,8 +291,10 @@ export class Simulation {
         ? wells.radiusMultiplier
         : 0;
     this.wellDepths = Float64Array.from(init.species, (_, t) => wells?.depths[t] ?? 0);
-    this.reaction =
-      init.reactions && init.dimension === 2 && init.species.length >= 2 ? init.reactions : null;
+    this.reactions =
+      init.reactions && init.reactions.length > 0
+        ? new ReactionTable(init.reactions, init.species.length)
+        : null;
     this.wall =
       init.attractiveWall &&
       init.dimension === 2 && // 2D only so far
@@ -699,7 +701,7 @@ export class Simulation {
               this.wellDepths[p.type[a]!]! + this.wellDepths[p.type[b]!]!,
             );
       // An exit without the energy to leave comes back as WELL_REFLECT.
-      const performed = this.collide(p, a, b, event, this.arena, wellEnergy, this.reaction);
+      const performed = this.collide(p, a, b, event, this.arena, wellEnergy, this.reactions);
       if (this.wellMultiplier > 0) {
         const key = a * p.count + b;
         this.lastPairType.set(key, performed as number); // wells are 2D-only

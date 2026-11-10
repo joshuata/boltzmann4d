@@ -29,8 +29,9 @@ export interface ArenaOptions {
    */
   wells?: { radiusMultiplier: number; depths: number[] } | null;
   /**
-   * Red↔blue reactions (one-species 2D scenarios): activation energies in kJ/mol. null turns
-   * them off; absent follows the scenario's reaction_mode.
+   * The Java reaction, species 0 + 0 ⇌ 1 + 1 (2D scenarios with one species or that rule
+   * already): activation energies in kJ/mol. null turns it off; absent follows the
+   * scenario's rules.
    */
   reactions?: { forward: number; reverse: number; suppressReverse: boolean } | null;
   /** A square well along the bottom wall: width in m, depth in kJ/mol. null turns it off. */
@@ -53,7 +54,10 @@ export interface ArenaInfo {
   canDemon: boolean;
   /** Square wells work in every arena but periodic ones (as in Java). */
   canHaveWells: boolean;
-  /** Reactions need a single species (a reacted copy is added), as Java's dialog does. */
+  /**
+   * Whether the Java reaction can be switched: a single species (a reacted copy is added),
+   * as Java's dialog requires, or that rule already.
+   */
   canReact: boolean;
   /** Species names, for per-species settings. */
   typeNames: string[];

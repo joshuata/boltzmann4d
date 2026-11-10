@@ -125,6 +125,11 @@ export const ReactionSchema = z.object({
   forward: nonNegative(),
   reverse: nonNegative(),
   suppressReverse: z.boolean().default(false),
+  /**
+   * Off: kept in the scenario but not simulated. 3D `.set` files with reaction_mode TRUE
+   * migrate to a disabled rule, since the Java app never ran reactions in 3D.
+   */
+  enabled: z.boolean().default(true),
 });
 
 /** Histogram axis limits for one statistic: for all kinds together and per kind. */
@@ -327,7 +332,10 @@ function checkGeometry(scenario: ScenarioObject, issue: Issue): void {
   });
 }
 
-/** KIND-14: each pair of kinds reacts by at most one rule, counting enabled reverse reactions. */
+/**
+ * KIND-14: each pair of kinds reacts by at most one enabled rule, counting reverse reactions
+ * that aren't suppressed.
+ */
 function checkReactions(scenario: ScenarioObject, issue: Issue): void {
   const kindIds = new Set(scenario.kinds.map((k) => k.id));
   const pairKey = ([a, b]: [string, string]) => (a < b ? `${a} + ${b}` : `${b} + ${a}`);
@@ -341,6 +349,7 @@ function checkReactions(scenario: ScenarioObject, issue: Issue): void {
         );
       }
     });
+    if (!rule.enabled) return;
     const keys = [pairKey(rule.reactants)];
     if (!rule.suppressReverse) keys.push(pairKey(rule.products));
     for (const key of new Set(keys)) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadSetFile } from '../io/load';
 import { loadDefaultSetFileText, loadPresetText, presetNames } from '../io/presets';
 import { SetFileError } from '../io/set-file';
+import { toV1 } from './migrate';
 import { resolveScenario } from './resolve';
 import {
   parseScenario,
@@ -262,13 +263,27 @@ describe('version 2 scenarios', () => {
         forward: 8,
         reverse: 4,
         suppressReverse: false,
+        enabled: true,
       },
     ]);
-    expect(resolveScenario(scenario).reaction).toEqual({
-      forward: 8,
-      reverse: 4,
-      suppressReverse: false,
-    });
+    const resolved = resolveScenario(scenario);
+    // Blue has no particles but is kept, since the reaction makes it.
+    expect(resolved.species.map((s) => s.kindId)).toEqual(['red', 'blue']);
+    expect(resolved.reactions).toEqual([
+      { reactants: [0, 0], products: [1, 1], forward: 8, reverse: 4, suppressReverse: false },
+    ]);
+  });
+
+  it('keeps reaction mode switched off where the Java app ignores it', async () => {
+    // 3D: Java has no reactions there, so 3Dequil has never reacted.
+    const { scenario } = setFileToScenario(await loadPresetText('3Dequil'));
+    expect(scenario.reactions.map((r) => r.enabled)).toEqual([false]);
+    const resolved = resolveScenario(scenario);
+    expect(resolved.reactions).toEqual([]);
+    expect(resolved.species.map((s) => s.kindId)).toEqual(['red']);
+    // It still round-trips as reaction_mode TRUE.
+    expect(toV1(scenario).scenario?.modes.reaction).toBe(true);
+    expect(toV1(scenario).warnings).toEqual([]);
   });
 
   it('checks references to kinds and regions', async () => {

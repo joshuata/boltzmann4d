@@ -9,9 +9,8 @@
 // random numbers are drawn.
 //
 // Version 2 features the simulation can't run yet (plan 0010) are refused with a
-// ScenarioError: drawn walls and spawn regions (step 4), more than two kinds and reaction
-// rules other than Red + Red → Blue + Blue (step 3).
-import type { Reaction } from '../sim/particle-2d';
+// ScenarioError: drawn walls and spawn regions (step 4).
+import type { ReactionRule } from '../sim/reactions';
 import { ParticleType } from '../sim/particle-type';
 import { ARENA_DIVIDER_RADIUS, ArenaType } from '../sim/simulation-info';
 import type { DividerThermalMode } from '../sim/simulation-info';
@@ -25,10 +24,13 @@ import type { Kind, Population, Scenario } from './schema';
 export const parseHexColor = (hex: string) => parseInt(hex.slice(1), 16);
 
 export type Dimension = 1 | 2 | 3;
-export type StatColor = 'RED' | 'BLUE' | 'BOTH';
+/** Which species the statistics show (KIND-4): all of them, or these species indices. */
+export type StatKinds = 'all' | number[];
 
 /** One particle type and all its particles. Vectors are stored flat, 3 components each. */
 export interface ParticleSpecies {
+  /** The scenario kind's id. */
+  kindId: string;
   type: ParticleType;
   /** Initial temperature in K requested by the file, or NaN to infer it from the velocities. */
   initialTemperature: number;
@@ -38,16 +40,14 @@ export interface ParticleSpecies {
   velocities: Float64Array;
 }
 
+/** Histogram axis limits for one statistic: for all species together and by species index. */
 export interface AbscissaLimits {
-  both?: [number, number];
-  red?: [number, number];
-  blue?: [number, number];
+  all?: [number, number];
+  species: Map<number, [number, number]>;
 }
 
-/** Colours as 0xRRGGBB, from `color_scheme CUSTOM: ...`. */
+/** Colours as 0xRRGGBB for the CUSTOM colour scheme; kinds' colours are on their types. */
 export interface CustomColors {
-  red: number;
-  blue: number;
   background: number;
   divider: number;
   /** Arena wall colours for 3D views, when the file gives all six or some of them. */
@@ -66,12 +66,11 @@ export interface ResolvedScenario {
   /** Diameter of the hole in the divider, in meters. */
   holeDiameter: number;
   maxwellDemonMode: boolean;
-  reactionMode: boolean;
-  /** The reaction's activation energies, when reactionMode is on. */
-  reaction: Reaction | null;
+  /** The enabled reaction rules, with kinds as species indices (KIND-13). */
+  reactions: ReactionRule[];
   /**
-   * One per kind, in the scenario's order (Red then Blue for `.set` files); a kind with no
-   * particles is left out (as DummyMain did).
+   * One per kind, in the scenario's order (Red then Blue for `.set` files). A kind with no
+   * particles is left out (as DummyMain did), unless a reaction rule can produce it.
    */
   species: ParticleSpecies[];
 
@@ -83,7 +82,7 @@ export interface ResolvedScenario {
   forgetMultiplier: number;
   pressurePredictionMode: 'IDEAL' | 'REAL';
   statName: string;
-  statColor: StatColor;
+  statKinds: StatKinds;
   cumulative: boolean;
   width: boolean;
   history: boolean;
@@ -127,14 +126,19 @@ export function resolveScenario(
   const arena = { x: nmToM(a.size[0]), y: nmToM(a.size[1]), z: nmToM(a.size[2]) };
   const colors = display.customColors;
   const wallNames = ['left', 'right', 'top', 'bottom', 'front', 'back'] as const;
-  const [red, blue] = kinds;
-  const [rule] = scenario.reactions;
+  const rules = scenario.reactions.filter((r) => r.enabled);
   const kindColor = (index: number) => {
     const kind = kinds[index];
     return kind?.color !== undefined
       ? parseHexColor(kind.color)
       : (paletteColor(display.palette, index) ?? 0xffffff);
   };
+
+  const species = resolveSpecies(scenario, rules, kindColor, arena, random);
+  const speciesIndex = new Map(species.map((s, i) => [s.kindId, i]));
+  // Kinds left out (no particles, no reaction makes them) can't be shown; -1 drops them.
+  const speciesOf = (kind: string) => speciesIndex.get(kind) ?? -1;
+  const shownKinds = (ids: string[]) => ids.map(speciesOf).filter((i) => i >= 0);
 
   return {
     dimension: a.dimensions,
@@ -145,11 +149,14 @@ export function resolveScenario(
     arenaZSize: arena.z,
     holeDiameter: nmToM(Math.round(a.holeSize)),
     maxwellDemonMode: modes.maxwellDemon,
-    reactionMode: rule !== undefined,
-    reaction: rule
-      ? { forward: rule.forward, reverse: rule.reverse, suppressReverse: rule.suppressReverse }
-      : null,
-    species: resolveSpecies(scenario, kindColor, arena, random),
+    reactions: rules.map((r) => ({
+      reactants: [speciesOf(r.reactants[0]), speciesOf(r.reactants[1])],
+      products: [speciesOf(r.products[0]), speciesOf(r.products[1])],
+      forward: r.forward,
+      reverse: r.reverse,
+      suppressReverse: r.suppressReverse,
+    })),
+    species,
 
     paused: run.paused,
     simulationSpeed: run.speed,
@@ -157,20 +164,19 @@ export function resolveScenario(
     forgetMultiplier: st.forgetTime,
     pressurePredictionMode: st.pressurePredictionMode,
     statName: st.name,
-    statColor:
-      st.kinds === 'all' || st.kinds.length > 1 ? 'BOTH' : st.kinds[0] === red?.id ? 'RED' : 'BLUE',
+    statKinds: st.kinds === 'all' ? 'all' : shownKinds(st.kinds),
     cumulative: st.cumulative,
     width: st.width,
     history: st.history,
     abscissaLimits: new Map(
       Object.entries(st.abscissaLimits).map(([name, limits]) => {
-        const byRole: AbscissaLimits = {};
-        if (limits.all) byRole.both = limits.all;
-        const redLimits = red && limits.kinds[red.id];
-        const blueLimits = blue && limits.kinds[blue.id];
-        if (redLimits) byRole.red = redLimits;
-        if (blueLimits) byRole.blue = blueLimits;
-        return [name.toUpperCase(), byRole];
+        const resolved: AbscissaLimits = { species: new Map() };
+        if (limits.all) resolved.all = limits.all;
+        for (const [kind, range] of Object.entries(limits.kinds)) {
+          const index = speciesOf(kind);
+          if (index >= 0) resolved.species.set(index, range);
+        }
+        return [name.toUpperCase(), resolved];
       }),
     ),
 
@@ -178,8 +184,6 @@ export function resolveScenario(
     customColors:
       display.colorScheme === 'CUSTOM' && colors
         ? {
-            red: kindColor(0),
-            blue: kindColor(1),
             background: parseHexColor(colors.background),
             divider: parseHexColor(colors.divider),
             walls3D: Object.fromEntries(
@@ -195,22 +199,12 @@ export function resolveScenario(
   };
 }
 
-/** Refuses what the simulation can't run yet (plan 0010 steps 3 and 4). */
+/** Refuses what the simulation can't run yet (plan 0010 step 4). */
 function checkSupported(scenario: Scenario): void {
   const problems: string[] = [];
   if (scenario.walls.length > 0) problems.push("Drawn walls can't be simulated yet");
   if (scenario.spawnRegions.length > 0 || scenario.populations.some((p) => p.region)) {
     problems.push("Spawn regions can't be simulated yet");
-  }
-  if (scenario.kinds.length > 2)
-    problems.push("More than two particle kinds can't be simulated yet");
-  const [red, blue] = scenario.kinds;
-  const javaRule = (r: Scenario['reactions'][number]) =>
-    r.reactants.every((k) => k === red?.id) && r.products.every((k) => k === blue?.id);
-  if (scenario.reactions.length > 1 || !scenario.reactions.every(javaRule)) {
-    problems.push(
-      `Only the reaction ${red?.name} + ${red?.name} → ${blue?.name} + ${blue?.name} can be simulated yet`,
-    );
   }
   if (problems.length > 0) throw new ScenarioError(problems);
 }
@@ -224,6 +218,7 @@ interface SpeciesBuilder {
 
 function resolveSpecies(
   scenario: Scenario,
+  rules: Scenario['reactions'],
   kindColor: (index: number) => number,
   arena: { x: number; y: number; z: number },
   random: () => number,
@@ -247,9 +242,11 @@ function resolveSpecies(
     placePopulation(population, builders.get(population.kind)!, dimension, arena, side, random);
   }
 
-  return [...builders.values()]
-    .filter((s) => s.positions.length > 0)
-    .map((s) => ({
+  const reacting = new Set(rules.flatMap((r) => [...r.reactants, ...r.products]));
+  return [...builders.entries()]
+    .filter(([id, s]) => s.positions.length > 0 || reacting.has(id))
+    .map(([kindId, s]) => ({
+      kindId,
       type: s.type,
       initialTemperature: s.initialTemperature,
       positions: Float64Array.from(s.positions.flat()),

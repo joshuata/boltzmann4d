@@ -8,6 +8,7 @@ import {
 } from '@boltzmann4d/engine/scenario';
 import type { RenderStream } from '../render/protocol';
 import {
+  javaReaction,
   Simulation,
   type ColorMode,
   type InitialState,
@@ -136,24 +137,37 @@ async function load(
         ? DividerThermalMode.CONDUCTING
         : DividerThermalMode.INSULATING;
     }
-    // Reactions (as Java's Reactions tab): one species plus a "Reacted" copy of it that
-    // particles turn into. Scenarios with a reaction rule get it with the rule's energies;
-    // `.set` files with reaction_mode TRUE get the tab's defaults (Java ignored the key).
-    const canReact = scenario.dimension === 2 && scenario.species.length === 1;
-    const reactions = canReact
-      ? arena.reactions !== undefined
-        ? arena.reactions
-        : scenario.reaction
-          ? { ...scenario.reaction }
-          : null
+    // Reactions: the scenario's rules. The sidebar's switch (Java's Reactions tab) edits
+    // the Java rule, species 0 + 0 → 1 + 1, in 2D scenarios with a single species (a
+    // "Reacted" copy of it is added for particles to turn into) or with that rule already
+    // (`.set` files with reaction_mode TRUE, which get the tab's defaults).
+    const [rule, ...otherRules] = scenario.reactions;
+    const javaRule =
+      rule !== undefined &&
+      otherRules.length === 0 &&
+      scenario.species.length === 2 &&
+      rule.reactants.every((k) => k === 0) &&
+      rule.products.every((k) => k === 1);
+    const canReact =
+      scenario.dimension === 2 &&
+      ((scenario.species.length === 1 && rule === undefined) || javaRule);
+    let reactions: ArenaOptions['reactions'] = javaRule
+      ? { forward: rule.forward, reverse: rule.reverse, suppressReverse: rule.suppressReverse }
       : null;
-    if (reactions) {
+    if (canReact && arena.reactions !== undefined) {
+      reactions = arena.reactions;
+      scenario.reactions = reactions
+        ? [javaReaction(reactions.forward, reactions.reverse, reactions.suppressReverse)]
+        : [];
+    }
+    if (reactions && scenario.species.length === 1) {
       const red = scenario.species[0]!;
       const empty = new Float64Array(0);
       scenario.species = [
         red,
         {
           ...red,
+          kindId: 'reacted',
           type: new ParticleType(
             red.type.particleMass,
             red.type.particleRadius,
@@ -172,7 +186,6 @@ async function load(
       ...scenario,
       ...(wells ? { wells } : {}),
       ...(attractiveWall ? { attractiveWall } : {}),
-      ...(reactions ? { reactions } : {}),
     };
     const arenaInfo: ArenaInfo = {
       canHavePiston,

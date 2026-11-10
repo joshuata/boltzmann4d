@@ -20,14 +20,36 @@ const JAVA_DEFAULT_TYPE = { mass: 2.0, radius: 1.0 } as const;
 
 const kindOf = (color: ParticleColorV1) => (color === 'RED' ? RED_KIND : BLUE_KIND);
 
+/** Whether a group places any particles. */
+const hasParticles = (g: { randomlyPlaced: { count: number }[]; particles: unknown[] }) =>
+  g.particles.length > 0 || g.randomlyPlaced.some((b) => b.count > 0);
+
+/**
+ * Whether reaction_mode TRUE runs: the Java app has reactions only in 2D, and only with a
+ * single particle type, which turns blue (SIM-25). Otherwise the rule is kept, switched off.
+ */
+function javaRunsReaction(v1: ScenarioV1): boolean {
+  return (
+    v1.arena.dimensions === 2 &&
+    !v1.particleGroups.some((g) => g.color === 'BLUE' && hasParticles(g))
+  );
+}
+
 /**
  * A v1 scenario as v2. Where a colour has several particle groups, the kind takes the last
  * group's mass and radius (as Java's particle types do); set-convert warns when they differ.
  */
 export function migrateV1(v1: ScenarioV1): ScenarioInput {
   const custom = v1.display.colorScheme === 'CUSTOM' ? v1.display.customColors : undefined;
+  const reactionEnabled = v1.modes.reaction && javaRunsReaction(v1);
   const kind = (color: ParticleColorV1, name: string): Kind => {
-    const last = v1.particleGroups.filter((g) => g.color === color).at(-1) ?? JAVA_DEFAULT_TYPE;
+    const groups = (c: ParticleColorV1) => v1.particleGroups.filter((g) => g.color === c);
+    // A reaction's product with no group of its own is a copy of the reactant (SIM-26:
+    // "blue particles of the same size"), as the reacted species always was here.
+    const last =
+      groups(color).at(-1) ??
+      (reactionEnabled && color === 'BLUE' ? groups('RED').at(-1) : undefined) ??
+      JAVA_DEFAULT_TYPE;
     const override = custom && (color === 'RED' ? custom.red : custom.blue);
     return {
       id: kindOf(color),
@@ -58,6 +80,7 @@ export function migrateV1(v1: ScenarioV1): ScenarioInput {
             products: [BLUE_KIND, BLUE_KIND],
             ...DEFAULT_REACTION,
             suppressReverse: false,
+            enabled: reactionEnabled,
           },
         ]
       : [],
@@ -105,7 +128,7 @@ export interface V1Conversion {
   scenario?: ScenarioV1Input;
   /** Why the scenario can't be written as `.set`. */
   problems: string[];
-  /** Display settings `.set` can't store, which a `.set` file would lose. */
+  /** Settings `.set` can't store, which a `.set` file would lose. */
   warnings: string[];
 }
 
@@ -141,8 +164,21 @@ export function toV1(scenario: Scenario): V1Conversion {
       rule.forward === DEFAULT_REACTION.forward &&
       rule.reverse === DEFAULT_REACTION.reverse &&
       !rule.suppressReverse;
-    if (isJavaRule) reaction = true;
-    else {
+    if (isJavaRule) {
+      // reaction_mode TRUE; whether it runs follows from the arena and particles
+      // (javaRunsReaction), so a rule switched on or off against that is lost.
+      reaction = true;
+      const runs =
+        scenario.arena.dimensions === 2 &&
+        !scenario.populations.some((p) => p.kind === blue.id && hasParticles(p));
+      if (rule.enabled !== runs) {
+        warnings.push(
+          rule.enabled
+            ? 'the reaction (which only runs in 2D with no Blue particles at the start)'
+            : 'the switched-off reaction',
+        );
+      }
+    } else {
       problems.push(
         `its reactions aren't the single rule ${red?.name ?? 'Red'} + ${red?.name ?? 'Red'} → ${blue?.name ?? 'Blue'} + ${blue?.name ?? 'Blue'} with activation energies ${DEFAULT_REACTION.forward} and ${DEFAULT_REACTION.reverse} kJ/mol`,
       );

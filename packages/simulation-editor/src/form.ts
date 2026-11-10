@@ -103,7 +103,7 @@ export function formFromScenario(scenario: Scenario): EditorForm {
     red: speciesFields(scenario, ids.red),
     blue: speciesFields(scenario, ids.blue),
     maxwellDemon: modes.maxwellDemon,
-    reaction: scenario.reactions.length > 0,
+    reaction: scenario.reactions.some((r) => r.enabled),
     paused: run.paused,
   };
 }
@@ -174,8 +174,9 @@ function withReaction(
   ids: { red: string; blue: string },
   on: boolean,
 ): Scenario {
-  if (!on) return { ...scenario, reactions: [] };
   const [rule] = scenario.reactions;
+  // Off keeps a rule that was already switched off (3D `.set` files' reaction_mode TRUE).
+  if (!on) return { ...scenario, reactions: rule && !rule.enabled ? [rule] : [] };
   const kinds = scenario.kinds.some((k) => k.id === ids.blue)
     ? scenario.kinds
     : [...scenario.kinds, { ...scenario.kinds[0]!, id: ids.blue, name: 'Blue', color: undefined }];
@@ -183,12 +184,15 @@ function withReaction(
     ...scenario,
     kinds,
     reactions: [
-      rule ?? {
-        reactants: [ids.red, ids.red],
-        products: [ids.blue, ids.blue],
-        ...DEFAULT_REACTION,
-        suppressReverse: false,
-      },
+      rule
+        ? { ...rule, enabled: true }
+        : {
+            reactants: [ids.red, ids.red],
+            products: [ids.blue, ids.blue],
+            ...DEFAULT_REACTION,
+            suppressReverse: false,
+            enabled: true,
+          },
     ],
   };
 }
