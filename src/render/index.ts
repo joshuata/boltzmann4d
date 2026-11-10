@@ -15,6 +15,8 @@ export interface Renderer {
   setSize(size: ViewSize): void;
   /** Queues a frame; it is drawn on the next animation tick (MainGuiView.setNextFrameToDisplay). */
   setNextFrameToDisplay(frame: RenderFrame): void;
+  /** Simulation frames drawn so far (frames replaced before a refresh aren't counted). */
+  framesDrawn(): number;
   dispose(): void;
 }
 
@@ -61,6 +63,7 @@ export function createRenderer(
   let nextFrame: RenderFrame | null = null;
   let size = initialSize;
   let drawScheduled = false;
+  let drawnCount = 0;
   let disposed = false;
   const matrix = new THREE.Matrix4();
   const color = new THREE.Color();
@@ -144,6 +147,7 @@ export function createRenderer(
     if (nextFrame) {
       displayFrame(nextFrame);
       nextFrame = null;
+      drawnCount++;
     }
     renderer.render(scene, camera);
   };
@@ -163,6 +167,7 @@ export function createRenderer(
       fitCamera();
       scheduleDraw();
     },
+    framesDrawn: () => drawnCount,
     setNextFrameToDisplay(frame) {
       nextFrame = frame; // only the latest frame is drawn if several arrive between refreshes
       scheduleDraw();

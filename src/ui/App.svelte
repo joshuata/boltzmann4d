@@ -52,10 +52,12 @@
         {sim.loading ? 'Loading…' : `${sim.particleCount} particles`}
       </p>
       <p class="readout">
-        Physics: {sim.physicsMs.toFixed(2)} ms/frame · rendering on the {sim.renderThread ===
-        'worker'
-          ? 'render worker'
-          : 'main thread'}
+        {sim.simulationFps.toFixed(0)} fps ({sim.drawnFps.toFixed(0)} drawn) · physics {sim.physicsMs.toFixed(
+          2,
+        )} ms/frame
+      </p>
+      <p class="readout">
+        Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}
       </p>
     {/if}
   </aside>

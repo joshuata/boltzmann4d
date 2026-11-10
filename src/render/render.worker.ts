@@ -21,6 +21,10 @@ scope.onmessage = (event: MessageEvent<ToRenderWorker>) => {
       case 'init': {
         const active = createRenderer(message.canvas, message.size);
         renderer = active;
+        setInterval(() => {
+          const drawn: FromRenderWorker = { type: 'drawn', frames: active.framesDrawn() };
+          scope.postMessage(drawn);
+        }, 1000);
         message.frames.onmessage = (e: MessageEvent<RenderStream>) => {
           if (e.data.type === 'scene') active.setScene(e.data.scene);
           else active.setNextFrameToDisplay(e.data.frame);
