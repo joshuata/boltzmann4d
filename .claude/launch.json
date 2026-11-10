@@ -3,15 +3,17 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev", "--port", "5173", "--strictPort"],
-      "port": 5173
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "pnpm dev --port \"${PORT:-5173}\" --strictPort"],
+      "port": 5173,
+      "autoPort": true
     },
     {
       "name": "preview",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "pnpm build && pnpm preview --port 4173 --strictPort"],
-      "port": 4173
+      "runtimeArgs": ["-c", "pnpm build && pnpm preview --port \"${PORT:-4173}\" --strictPort"],
+      "port": 4173,
+      "autoPort": true
     }
   ]
 }
