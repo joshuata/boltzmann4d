@@ -8,6 +8,7 @@
   import { SimulationEditor, type SavedScenario } from '@boltzmann4d/simulation-editor';
   import { Simulator } from '@boltzmann4d/simulator';
   import { tick } from 'svelte';
+  import { withQuery } from '../../lib/with-query';
 
   /** The scenario last run, as a new object each time so Run always restarts it. */
   let running = $state.raw<{ name: string; scenario: Scenario } | null>(null);
@@ -17,8 +18,7 @@
 
   // After a save, the URL names what's being edited, so reloading keeps working on it.
   function onSaved(saved: SavedScenario) {
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- the path is resolve()d; only a query is added
-    replaceState(`${resolve('/editor')}?id=${encodeURIComponent(saved.id)}`, {});
+    replaceState(withQuery(resolve('/editor'), { id: saved.id }), {});
   }
 
   async function run(scenario: Scenario, name: string) {

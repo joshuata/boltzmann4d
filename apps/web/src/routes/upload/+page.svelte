@@ -24,6 +24,7 @@
     type UnreadableScenario,
   } from '@boltzmann4d/simulation-editor';
   import { Simulator } from '@boltzmann4d/simulator';
+  import { withQuery } from '../../lib/with-query';
   import { Button } from '@boltzmann4d/ui/button';
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
   import FileUpIcon from '@lucide/svelte/icons/file-up';
@@ -45,9 +46,8 @@
   let input: HTMLInputElement;
 
   const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
-  const scenarioHref = (entryId: string) =>
-    `${resolve('/upload')}?id=${encodeURIComponent(entryId)}`;
-  const editHref = (entryId: string) => `${resolve('/editor')}?id=${encodeURIComponent(entryId)}`;
+  const scenarioHref = (entryId: string) => withQuery(resolve('/upload'), { id: entryId });
+  const editHref = (entryId: string) => withQuery(resolve('/editor'), { id: entryId });
 
   async function refresh() {
     try {
@@ -101,8 +101,7 @@
     }
     try {
       const saved = await keepOpenedFile(file.name, scenario);
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- the path is resolve()d; only a query is added
-      await goto(`${resolve('/upload')}?id=${encodeURIComponent(saved.id)}`);
+      await goto(withQuery(resolve('/upload'), { id: saved.id }));
     } catch (error) {
       // Can't store it: run it anyway, just for now.
       storageProblem = message(error);

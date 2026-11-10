@@ -1,6 +1,7 @@
 <!-- Top bar. Wide screens: the app name, the 2D and 3D simulation menus, the current
-     simulation, Upload and Help. Phones: the app name, the current simulation and a menu
-     button that opens a sheet with the simulations, Upload, Documentation and About. -->
+     simulation, Your scenarios and Help. Phones: the app name, the current simulation and a
+     menu button that opens a sheet with the simulations, Your scenarios, Documentation and
+     About. -->
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -83,7 +84,7 @@
   {/if}
 
   <div class="hidden items-center gap-1 md:flex">
-    <Button variant="ghost" href={resolve('/upload')}>Upload</Button>
+    <Button variant="ghost" href={resolve('/upload')}>Your scenarios</Button>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
         {#snippet child({ props })}
@@ -168,7 +169,7 @@
             <a
               href={resolve('/upload')}
               class="hover:bg-muted block rounded-md px-2 py-2.5 text-sm font-medium"
-              onclick={() => (sheetOpen = false)}>Upload settings</a
+              onclick={() => (sheetOpen = false)}>Your scenarios</a
             >
           </li>
           <li>
