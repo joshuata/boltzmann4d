@@ -11,7 +11,12 @@ import {
 } from '@boltzmann4d/engine/sim';
 import { DefaultParticleInfo, ParticleType } from '@boltzmann4d/engine/sim/particle-type';
 import { averageVelocity, avgKineticEnergy } from '@boltzmann4d/engine/stats/formulas';
-import { Statistics, statsContext, weightedAverage, type StatsContext } from '@boltzmann4d/engine/stats';
+import {
+  Statistics,
+  statsContext,
+  weightedAverage,
+  type StatsContext,
+} from '@boltzmann4d/engine/stats';
 import { convert } from '@boltzmann4d/engine/utils/units';
 
 /** kg per amu. */
