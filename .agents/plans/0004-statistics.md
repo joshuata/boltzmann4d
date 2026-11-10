@@ -54,8 +54,8 @@ From a survey of `vendor/boltzmann3d/src/edu/byu/chem/boltzmann/model/statistics
 1. `Formulas` and `StatUtils` predictions (averages, widths, distributions, collision rate and lifetime, gamma helpers), with tests. _Done (#19)._
 2. Statistics core: per-particle last-collision times, weighted trackers, histogram bins, the forget, type subsets, hooked into `Simulation`. Instantaneous Speed first. _Done for Instantaneous Speed: `src/stats/statistics.ts` and friends; a 200,000-event run matches the Maxwell–Boltzmann distribution to within 1% per bin._
 3. Worker → UI summary messages; speed histogram chart with the theoretical curve and markers in the sidebar; type-subset and cumulative/current toggles. _Done: summaries every 27 frames (and after each step while paused); `src/charts/SpeedHistogram.svelte` (LayerChart) in `src/ui/StatisticsPanel.svelte`. The chart's x axis spans the bins' shared range rather than each subset's own range, so subsets are directly comparable; the curve still covers the subset's own range, as in Java._
-4. Distribution and Java parity tests; benchmarks with statistics on.
-5. The remaining statistics (velocity components, kinetic energy, path, time per collision, the per-particle averages, collision rate, pressure) and the history plot, behind a statistic picker.
+4. Distribution and Java parity tests; benchmarks with statistics on. _Scheduled in plan 0006, Phase 3._
+5. The remaining statistics (velocity components, kinetic energy, path, time per collision, the per-particle averages, collision rate, pressure) and the history plot, behind a statistic picker. _Scheduled in plan 0006, Phases 2 (pressure) and 3._
 
 ## Decisions (agreed 2026-11-09)
 
