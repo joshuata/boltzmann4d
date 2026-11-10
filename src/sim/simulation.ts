@@ -53,6 +53,8 @@ export interface InitialSpecies {
   positions: Float64Array;
   /** x, y, z per particle, m/s. */
   velocities: Float64Array;
+  /** Initial temperature (K) the settings file asked for, or NaN/absent to infer it. */
+  initialTemperature?: number;
 }
 
 /** Everything the simulation starts from. io's SimulationSettings satisfies this. */

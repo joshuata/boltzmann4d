@@ -22,7 +22,7 @@ It supports 1D, 2D and 3D arenas, pistons, thermostats, dividers and holes (effu
 | Physics | Custom TS port, no engine | General engines (Matter.js, Rapier, Planck) step in fixed time increments with soft contacts. They would change the results and can't do wells, reactions or time reversal. |
 | Rendering | Three.js | One engine for 1D/2D (orthographic camera) and 3D (perspective camera, lit instanced spheres). |
 | UI | Svelte 5 + Vite + TypeScript | The UI is mostly forms, dialogs and live readouts. |
-| Charts | Custom Canvas2D | Ports `StatPanel`, `HistogramBins` and `History`. |
+| Charts | LayerChart | Svelte-native chart components (Svelte 5), so charts are built in Svelte rather than hand-drawn on a canvas. Replaces `StatPanel`'s drawing; the binning (`HistogramBins`, `History`) is ported in `src/stats`. |
 | Threading | Physics worker + render worker | Physics mirrors `ThreadController`. Three.js draws on an `OffscreenCanvas` in its own worker; frames go physics → renderer directly over a `MessageChannel` as transferable typed arrays, so the main thread only runs the UI. `?render=main` (and browsers without `OffscreenCanvas`) draw on the main thread instead. |
 | Tooling | mise, pnpm, hk, Vitest, ESLint, Prettier, markdownlint-cli2 | mise pins tool versions; hk runs every linter and the pre-commit hook. |
 
@@ -39,7 +39,7 @@ src/
   worker/   physics Web Worker + message protocol
   render/   Three.js scene (1D/2D/3D views, color modes, periodic ghosts, trace) + render worker
   ui/       Svelte components (App.svelte = root)
-  charts/   Canvas2D histogram / history plots
+  charts/   statistics charts (LayerChart Svelte components)
 ```
 
 Java sources referenced above live in `vendor/boltzmann3d/src/edu/byu/chem/boltzmann/`. Presets (`*.set`) are in `resources/simsettingsfiles/presets/`. The rendering behaviours to preserve are listed in `vendor/boltzmann3d/docs/rendering-baseline.md`.
@@ -68,6 +68,13 @@ Run `pnpm build && pnpm test && pnpm lint` before calling work done.
 `.github/workflows/ci.yml` runs `mise run lint`, `mise run test` and `mise run build` on every pull request and on pushes to `main`. On `main` it then deploys `dist/` to GitHub Pages at `https://joshuata.github.io/boltzmann4d/`.
 
 Production builds use the base path `/boltzmann4d/` (see `vite.config.ts`); the dev server stays at `/`. Load assets through Vite (imports, `?worker`, `?raw`, `import.meta.glob`) or `import.meta.env.BASE_URL` so URLs keep working under that path. To check a production build locally, run `pnpm build && pnpm preview` and open `http://localhost:4173/boltzmann4d/`.
+
+## UI rules
+
+- The whole sidebar is Svelte: controls, readouts and charts are Svelte components (charts via LayerChart), with no hand-built DOM or canvas drawing.
+- Sidebar components get their data from the main visualization component, the `SimulationClient` that `App.svelte` creates for the canvas (`src/ui/simulation.svelte.ts`). They read its reactive state and call its methods; they never talk to the physics or render workers directly.
+- New data for the sidebar (statistics, timing, …) goes through `SimulationClient`: the worker sends it, the client exposes it as `$state`, and components receive it as props.
+- This keeps the UI ready for other devices: components only depend on reactive state, so the layout can change with screen size (phones, tablets, desktop) without touching data flow. Sidebar components must work at narrow widths and with touch input.
 
 ## Porting rules
 
