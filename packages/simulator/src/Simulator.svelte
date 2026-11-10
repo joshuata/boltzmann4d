@@ -4,6 +4,7 @@
   import { Button } from '@boltzmann4d/ui/button';
   import * as Collapsible from '@boltzmann4d/ui/collapsible';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+  import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
   import StepForwardIcon from '@lucide/svelte/icons/step-forward';
   import { untrack } from 'svelte';
   import ArenaOptions from './ui/ArenaOptions.svelte';
@@ -66,6 +67,10 @@
       aria-label={sim?.dimension === 3
         ? 'Simulation arena; drag or use the arrow keys to turn it'
         : 'Simulation arena'}
+      onclick={() => {
+        // Maxwell's demon (2D): clicking the arena opens or closes the hole, as in Java.
+        if (sim && sim.dimension !== 3 && sim.holeOpen !== null) sim.setHoleOpen(!sim.holeOpen);
+      }}
     ></canvas>
     {#if sim && sim.dimension !== 3}
       <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
@@ -107,6 +112,27 @@
       >
         <StepForwardIcon aria-hidden="true" />
       </Button>
+      <!-- Restart (Physics.reset): the same starting positions and velocities again. -->
+      <Button
+        variant="outline"
+        size="icon-lg"
+        disabled={!sim || sim.loading}
+        aria-label="Restart"
+        title="Restart from the starting state"
+        onclick={() => sim?.restart()}
+      >
+        <RotateCcwIcon aria-hidden="true" />
+      </Button>
+      {#if sim?.holeOpen !== null && sim?.holeOpen !== undefined}
+        <Button
+          variant="outline"
+          size="lg"
+          aria-pressed={sim.holeOpen}
+          onclick={() => sim?.setHoleOpen(!sim.holeOpen)}
+        >
+          {sim.holeOpen ? 'Close hole' : 'Open hole'}
+        </Button>
+      {/if}
     </div>
     <RateSlider
       value={sim?.rateScale ?? 1}

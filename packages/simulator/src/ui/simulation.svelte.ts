@@ -39,6 +39,8 @@ export class SimulationClient {
   arenaSize = $state.raw({ width: 0, height: 0 });
   canvasSize = $state.raw({ width: 0, height: 0 });
   #viewChosen = false;
+  /** Maxwell's demon: whether the hole is open (null without the demon). */
+  holeOpen = $state<boolean | null>(null);
   /** True while a preset is loading. */
   loading = $state(true);
   /** Arena options the running preset can take, and which are on (null until loaded). */
@@ -139,6 +141,9 @@ export class SimulationClient {
           // A newly loaded preset starts again from 0: count only forward progress.
           this.#simulatedThisSecond += Math.max(0, message.time - this.#lastFrameTime);
           this.#lastFrameTime = message.time;
+          if ((message.holeOpen ?? null) !== this.holeOpen) {
+            this.holeOpen = message.holeOpen ?? null;
+          }
           if (
             message.piston &&
             this.piston &&
@@ -201,6 +206,16 @@ export class SimulationClient {
 
   stopPiston(): void {
     this.#send({ type: 'stopPiston' });
+  }
+
+  /** Starts the running simulation again from its starting state (same positions). */
+  restart(): void {
+    this.#send({ type: 'restart' });
+  }
+
+  /** Maxwell's demon: opens or closes the hole (from the next frame). */
+  setHoleOpen(open: boolean): void {
+    this.#send({ type: 'setHoleOpen', open });
   }
 
   /** Colours particles by type, speed or kinetic energy (kept across presets). */

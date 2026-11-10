@@ -68,7 +68,7 @@
     onChange({ wells: { radiusMultiplier: multiplier, depths: [...depths] } });
 </script>
 
-{#if arena.canHavePiston || arena.canConduct || arena.canHaveWells || arena.canReact}
+{#if arena.canHavePiston || arena.canConduct || arena.canDemon || arena.canHaveWells || arena.canReact}
   <fieldset class="options">
     <legend>Arena</legend>
     {#if arena.canHavePiston}
@@ -91,6 +91,17 @@
           onchange={(e) => onChange({ conductingDivider: e.currentTarget.checked })}
         />
         Divider conducts heat
+      </label>
+    {/if}
+    {#if arena.canDemon}
+      <label>
+        <input
+          type="checkbox"
+          checked={arena.options.demon ?? false}
+          {disabled}
+          onchange={(e) => onChange({ demon: e.currentTarget.checked })}
+        />
+        Maxwell's demon (you open the hole)
       </label>
     {/if}
     {#if arena.canHaveWells}
