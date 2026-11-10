@@ -9,11 +9,11 @@ import {
   predictBoundary2D,
   predictPair2D,
 } from './particle-2d';
-import { Particles, type Arena } from './particles';
+import { createArena, Particles, type Arena } from './particles';
 import { ArenaType } from './simulation-info';
 
-const reflecting: Arena = { type: ArenaType.REFLECTING_BOUNDARIES, xSize: 10, ySize: 8, zSize: 0 };
-const periodic: Arena = { type: ArenaType.PERIODIC_BOUNDARIES, xSize: 10, ySize: 8, zSize: 0 };
+const reflecting: Arena = createArena(ArenaType.REFLECTING_BOUNDARIES, 10, 8, 0);
+const periodic: Arena = createArena(ArenaType.PERIODIC_BOUNDARIES, 10, 8, 0);
 
 interface Spec {
   x: number;

@@ -7,7 +7,7 @@ import checkFile from 'eslint-plugin-check-file';
 import svelteConfig from './svelte.config.js';
 
 export default ts.config(
-  { ignores: ['dist/', 'node_modules/', 'coverage/'] },
+  { ignores: ['dist/', 'node_modules/', 'coverage/', 'vendor/'] },
   js.configs.recommended,
   ...ts.configs.recommended,
   ...svelte.configs.recommended,

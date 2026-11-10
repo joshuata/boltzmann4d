@@ -1,6 +1,6 @@
 # Physics benchmarks: Java app vs web engine
 
-How fast the event-driven physics runs as the particle count grows, in the original Java app ([boltzmann3d](../../boltzmann3d)) and in this port. Use it as the baseline when changing the engine: a change should keep the parity tests green and not move these numbers the wrong way.
+How fast the event-driven physics runs as the particle count grows, in the original Java app ([boltzmann3d](https://github.com/byu-chem/boltzmann3d), vendored in `vendor/boltzmann3d`) and in this port. Use it as the baseline when changing the engine: a change should keep the parity tests green and not move these numbers the wrong way.
 
 ## Method
 
@@ -22,16 +22,16 @@ Each event re-predicts the involved particles against every other particle, so c
 Web engine (writes `results/web-node.json`):
 
 ```bash
-mise run bench:scaling
+mise run web:bench
 ```
 
-Java app (writes `results/java.json`). Needs the `boltzmann4d-parity-tools` branch of boltzmann3d ([joshuata/boltzmann3d](https://github.com/joshuata/boltzmann3d/tree/boltzmann4d-parity-tools), a fork of byu-chem/boltzmann3d) checked out at `../boltzmann3d`, or `BOLTZMANN3D_DIR` pointing at it:
+Java app (writes `results/java.json`), using the boltzmann3d fork in the `vendor/boltzmann3d` submodule (`git submodule update --init` first):
 
 ```bash
-mise run bench:java
+mise run java:bench
 ```
 
-Then rebuild the tables below:
+Then rebuild the tables below. This also reruns either benchmark first, but only if its program changed since its results were written:
 
 ```bash
 mise run bench:report
@@ -50,65 +50,78 @@ Run them one at a time on an otherwise idle machine; the results below come from
 
 | Particles | Java (with statistics) | Java (physics only) | Web engine (Node) |
 | --------: | ---------------------: | ------------------: | ----------------: |
-|       100 |                141,444 |             143,288 |           186,117 |
-|       300 |                 44,328 |              46,004 |            60,949 |
-|     1,000 |                  4,905 |               5,643 |            18,812 |
-|     3,000 |                    952 |               1,106 |             6,291 |
-|    10,000 |                     12 |                  13 |             1,588 |
-|    20,000 |          out of memory |       out of memory |               644 |
+|       100 |                141,444 |             143,288 |           430,735 |
+|       300 |                 44,328 |              46,004 |           393,315 |
+|     1,000 |                  4,905 |               5,643 |           359,592 |
+|     3,000 |                    952 |               1,106 |           321,764 |
+|    10,000 |                     12 |                  13 |           291,015 |
+|    20,000 |          out of memory |       out of memory |           284,546 |
+|    50,000 |                      – |                   – |           252,577 |
+|   100,000 |                      – |                   – |           198,195 |
 
 ### Frames per second (the app shows about 27)
 
 | Particles | Java (with statistics) | Java (physics only) | Web engine (Node) |
 | --------: | ---------------------: | ------------------: | ----------------: |
-|       100 |               18,714.0 |            18,963.3 |          24,570.4 |
-|       300 |                2,157.2 |             2,239.3 |           2,968.9 |
-|     1,000 |                   76.9 |                88.1 |             290.6 |
-|     3,000 |                    4.9 |                 5.8 |              33.6 |
-|    10,000 |                  0.032 |               0.034 |               2.6 |
-|    20,000 |          out of memory |       out of memory |              0.39 |
+|       100 |               18,714.0 |            18,963.3 |          56,939.7 |
+|       300 |                2,157.2 |             2,239.3 |          19,160.7 |
+|     1,000 |                   76.9 |                88.1 |           5,599.8 |
+|     3,000 |                    4.9 |                 5.8 |           1,730.0 |
+|    10,000 |                  0.032 |               0.034 |             481.0 |
+|    20,000 |          out of memory |       out of memory |             237.0 |
+|    50,000 |                      – |                   – |              84.8 |
+|   100,000 |                      – |                   – |              33.4 |
 
 ### Setup time, ms (building the simulation and predicting every initial event)
 
 | Particles | Java (with statistics) | Java (physics only) | Web engine (Node) |
 | --------: | ---------------------: | ------------------: | ----------------: |
-|       100 |                     19 |                 1.3 |               1.6 |
-|       300 |                     11 |                 3.4 |               1.4 |
-|     1,000 |                     79 |                  60 |                13 |
-|     3,000 |                    548 |                 441 |               129 |
-|    10,000 |                 12,952 |               9,732 |             1,292 |
-|    20,000 |          out of memory |       out of memory |             5,641 |
+|       100 |                     19 |                 1.3 |               1.2 |
+|       300 |                     11 |                 3.4 |               1.5 |
+|     1,000 |                     79 |                  60 |              0.75 |
+|     3,000 |                    548 |                 441 |               1.7 |
+|    10,000 |                 12,952 |               9,732 |               5.2 |
+|    20,000 |          out of memory |       out of memory |               5.8 |
+|    50,000 |                      – |                   – |                10 |
+|   100,000 |                      – |                   – |                22 |
 
 ### Memory after setup, MB
 
 | Particles | Java (with statistics) | Java (physics only) | Web engine (Node) |
 | --------: | ---------------------: | ------------------: | ----------------: |
-|       100 |                      2 |                   2 |                 7 |
+|       100 |                      2 |                   2 |                 8 |
 |       300 |                      8 |                   8 |                 8 |
-|     1,000 |                     75 |                  75 |                12 |
-|     3,000 |                    657 |                 657 |                51 |
-|    10,000 |                  7,260 |               7,261 |               486 |
-|    20,000 |          out of memory |       out of memory |             2,396 |
+|     1,000 |                     75 |                  75 |                 8 |
+|     3,000 |                    657 |                 657 |                 9 |
+|    10,000 |                  7,260 |               7,261 |                10 |
+|    20,000 |          out of memory |       out of memory |                12 |
+|    50,000 |                      – |                   – |                19 |
+|   100,000 |                      – |                   – |                31 |
 
 ### Web engine speed relative to Java (events per second)
 
 | Particles | vs Java physics only | vs Java with statistics |
 | --------: | -------------------: | ----------------------: |
-|       100 |                1.30× |                   1.32× |
-|       300 |                1.32× |                   1.37× |
-|     1,000 |                3.33× |                   3.84× |
-|     3,000 |                5.69× |                   6.61× |
-|    10,000 |              125.00× |                 131.79× |
+|       100 |                3.01× |                   3.05× |
+|       300 |                8.55× |                   8.87× |
+|     1,000 |               63.72× |                  73.32× |
+|     3,000 |              290.80× |                 338.07× |
+|    10,000 |           22,910.25× |              24,155.07× |
 |    20,000 |                    – |                       – |
+|    50,000 |                    – |                       – |
+|   100,000 |                    – |                       – |
 
 <!-- results:end -->
 
-## Findings (November 2026 baseline)
+## Findings
 
-- **Same work on both sides.** Both engines perform the same number of events per frame on the same scene (about 7.56 at 100 particles), so the numbers compare like for like. The parity tests (`src/sim/parity.test.ts`) confirm the two engines produce bit-identical events on the shipped presets.
-- **Small scenes are close.** Up to a few hundred particles, which covers every shipped preset (the largest has 200), the web engine is about 1.3× faster than the Java app.
-- **The gap widens with size, mostly because of memory.** Both engines keep one event slot per particle pair. Java stores each as an object, about 150 bytes per pair as measured (657 MB for 4.5 million pairs at 3,000 particles); the web engine uses flat typed arrays, about 11 bytes per pair. At 3,000 particles that's 657 MB against 51 MB, and the web engine is 5.7× faster. At 10,000, Java's 7.3 GB heap leaves the JVM mostly collecting garbage and it falls to 13 events/s (the web engine is 125× faster). At 20,000 Java runs out of its 12 GB heap; the web engine runs in 2.4 GB.
-- **Real-time limit.** The app advances about 27 frames per second. Java keeps up to roughly 1,000 particles (88 frames/s physics-only) but not 3,000 (6); the web engine keeps up to roughly 3,000 (34) but not 10,000 (2.6). At 60 frames per second, with the physics using a whole core, the web engine manages about 2,300 particles (measured: 63 frames/s at 2,250, 51 at 2,500); fitting Java's numbers to the N² frame cost puts it at roughly 950–1,200.
-- **Statistics cost Java 1–16%,** depending on particle count. The web engine has no statistics yet; expect a similar overhead once they land.
-- **Both engines are quadratic.** Setup, memory and per-frame cost all grow with N², from predicting every pair. Going much past 10,000 particles needs a different neighbour structure (cell lists), which would change the order in which ties are broken, so it would need its own parity approach.
-- **Not measured yet:** the web engine in a browser worker (the report accepts a `web-browser` variant), 1D and 3D scenes, and the arenas not ported yet.
+The web engine figures above are for the cell-grid engine (plan 0003). The Java figures, and the first web engine's, are from the same day (November 2026).
+
+- **Same work on both sides.** Both engines perform the same events on the same scene, and the parity tests (`src/sim/parity.test.ts`) confirm they are bit-identical on the shipped presets.
+- **The web engine now scales almost linearly.** It predicts collisions only with particles in neighbouring cells and keeps one next event per particle in a heap. So events per second fall only slowly with particle count (431k at 100 particles, 198k at 100,000), and memory grows linearly (31 MB at 100,000).
+- **Java stays quadratic.** It predicts every pair after every event and stores an event slot (about 150 bytes) per pair. It falls from 143k events/s at 100 particles to 13 at 10,000 (7.3 GB heap, mostly garbage collection) and runs out of a 12 GB heap at 20,000.
+- **Against Java (physics only):** 3× faster at 100 particles, 64× at 1,000, 290× at 3,000, and four orders of magnitude at 10,000.
+- **Real-time limit.** At the app's ~27 frames per second, Java keeps up to about 1,000 particles. At 60 frames per second, the web engine keeps up to about 60,000–70,000 (85 frames/s at 50,000, 33 at 100,000), against about 2,300 for the first web engine and roughly 1,000 for Java. At that size, rendering is the limit, not the physics.
+- **For reference, the first web engine** (Java's pair table ported directly) ran 186k events/s at 100 particles, 18.8k at 1,000 and 644 at 20,000, using 2.4 GB at 20,000.
+- **Statistics cost Java 1–16%,** depending on particle count. The web engine has no statistics yet.
+- **Not measured yet:** the web engine in a browser worker (the report accepts a `web-browser` variant), 1D and 3D scenes, denser gases (more events per frame), and the arenas not ported yet.

@@ -10,7 +10,7 @@ Plan 0001, migration step 2 (with step 4, the parity harness, pulled in alongsid
 
 ## Java sources
 
-In `../boltzmann3d/src/edu/byu/chem/boltzmann/model/physics/`, about 3,500 of the package's 7,200 lines matter for this plan:
+In `vendor/boltzmann3d/src/edu/byu/chem/boltzmann/model/physics/`, about 3,500 of the package's 7,200 lines matter for this plan:
 
 | Java | Role | Notes |
 | --- | --- | --- |
@@ -58,19 +58,19 @@ The physics itself uses no randomness. Given an initial state, a run is fully de
 
 ## Parity harness (plan 0001 step 4, pulled forward)
 
-- A small headless Java runner added to `../boltzmann3d` that loads a preset, fixes the initial state (positions and velocities written out, since random placement differs between Java and JS), runs N events and dumps the event sequence (time, type, particles) plus final positions and velocities as JSON.
+- A small headless Java runner added to boltzmann3d (now `vendor/boltzmann3d`) that loads a preset, fixes the initial state (positions and velocities written out, since random placement differs between Java and JS), runs N events and dumps the event sequence (time, type, particles) plus final positions and velocities as JSON.
 - Dumps are committed as fixtures under `src/sim/parity/`. Vitest replays the same initial state through the TS engine and compares event-by-event within a tolerance.
 - Start with `2Dmixture` (reflecting) and `2Dequil` (check boundaries) plus one periodic preset; add presets as features land.
 
 ## Steps
 
 1. Benchmark and profile scaffolding against the existing stub (`mise run bench`, `mise run profile`), so the harness exists before the real engine. _Done._
-2. Port the calendar with unit tests (ordering, tie-breaking, dirty-row rescans) and micro-benchmarks. _Done: `src/sim/event-calendar.ts`. One event cycle (take the next event, re-predict two particles, find the new minimum) with random predictions: about 600k/s at 60 particles, 117k/s at 200, 23k/s at 1,000 (Apple Silicon, Node 24)._
+2. Port the calendar with unit tests (ordering, tie-breaking, dirty-row rescans) and micro-benchmarks. _Done: `src/sim/event-calendar.ts` (later replaced by plan 0003's per-particle heap and removed). One event cycle (take the next event, re-predict two particles, find the new minimum) with random predictions: about 600k/s at 60 particles, 117k/s at 200, 23k/s at 1,000 (Apple Silicon, Node 24)._
 3. Port 2D motion, pair prediction and collision response, and reflecting-wall prediction and response. _Done: `src/sim/particles.ts` (typed-array store) and `src/sim/particle-2d.ts`, covering reflecting walls and periodic boundaries with images. Re-predicting one particle against 199 others: about 290k/s (reflecting) and 270k/s (periodic); one collision response: about 23M/s._
 4. Port the event loop (`advanceToTime`, `step`, `CalUpdate`, last-collision tracking) and wire it into the worker in place of the stub; the app renders a loaded preset (default: `default.set`). _Done: `src/sim/simulation.ts`; the worker runs `default.set` and sends a scene message (arena, radii, colours) before frames. Last-collision tracking is skipped: it only matters for wells. The engine matches a lazy-motion brute-force search bit for bit over 2,000 events (reflecting and periodic). Throughput: about 345k events/s (2Dmixture, 60), 99k/s (2Dbrownian, 200), 17k/s (1,000 synthetic). The profiler shows the calendar scanning about 2.4 entries per pair prediction, the first thing to look at when optimising._
 5. Java parity runner and fixtures; parity tests green for reflecting presets. _Done: `ParityDump` and `PhysicsBenchmark` on the `boltzmann4d-parity-tools` branch of joshuata/boltzmann3d (a fork of byu-chem/boltzmann3d); fixtures for all 15 2D presets in `src/sim/parity/`. The 11 reflecting and periodic presets match Java bit for bit (every event and the final state, at least 2,000 events each); the 4 divider and hole presets are skipped until those arenas are ported._
 6. Periodic boundaries (including `SetTotalMom`) with parity fixtures. _Done with step 4; covered by the periodic fixtures (2Dbrownian, 2Ddiffuse, 2Dliquid)._
-7. Record benchmark baselines (`benchmarks/README.md`, Java app and web engine up to 20,000 particles); then move this plan to `.agents/archived-plans/`.
+7. Record benchmark baselines (`benchmarks/README.md`, Java app and web engine up to 20,000 particles); then move this plan to `.agents/archived-plans/`. _Done; the engine then moved to plan 0003's cell grid._
 
 Out of scope here: 1D and 3D, dividers and holes, piston, wells, reactions, thermostat, time reversal, statistics (each a later plan or plan 0001 step).
 

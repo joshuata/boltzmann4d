@@ -1,13 +1,20 @@
-// The event-driven simulation (port of the core of Physics.java): owns the particles and
-// the event calendar, performs events in time order, and re-predicts what each event
-// changed.
+// The event-driven simulation (the core of Physics.java): owns the particles, performs
+// events in time order, and re-predicts what each event changed.
 //
-// Scope (plan 0002): 2D hard spheres in reflecting and periodic arenas. The calendar
-// update order in calUpdate() follows Physics.CalUpdate exactly, because with tied event
-// times the calendar's choice depends on the order of updates.
+// Scope (plan 0002): 2D hard spheres in reflecting and periodic arenas.
+//
+// Scheduling (plan 0003) differs from Java's N² event table but performs the same events
+// in the same order with the same arithmetic (checked against Java by parity.test.ts):
+// - A cell grid limits predictions to particles in the same or neighbouring cells; cell
+//   crossings are internal events that never touch a particle's state.
+// - Each particle keeps only its soonest event, in an indexed heap whose ties follow
+//   Java's calendar order (see event-heap.ts).
+// - Each particle has a collision counter; an event whose partner has changed since it
+//   was predicted is stale, and its particle is simply re-predicted.
+import { CellGrid } from './cell-grid';
 import { createCounters } from './counters';
-import { CalendarUpdate, Collision, MAX_TIME, createEvent, type EventInfo } from './event';
-import { EventCalendar } from './event-calendar';
+import { Collision, MAX_TIME, createEvent, type EventInfo } from './event';
+import { EventHeap, INTERNAL_ROW } from './event-heap';
 import type { Dimension, RenderFrame } from './index';
 import {
   boundaryCollide2D,
@@ -17,8 +24,8 @@ import {
   predictBoundary2D,
   predictPair2D,
 } from './particle-2d';
-import { Particles, type Arena } from './particles';
-import { ArenaType } from './simulation-info';
+import { createArena, Particles, type Arena } from './particles';
+import { ArenaType, DividerThermalMode } from './simulation-info';
 
 // Local copies for the hot paths (see plan 0002).
 const predictPair = predictPair2D;
@@ -28,8 +35,10 @@ const boundaryCollide = boundaryCollide2D;
 const moveToTime = moveToTime2D;
 const NEVER = MAX_TIME;
 const PARTICLE = Collision.PARTICLE;
-const { BOUNDARY, EOB, WALL } = Collision;
-const { PARTICLE_1, PARTICLE_2, PARTICLE_ALL, BOUNDARY_ALL, EVERYTHING } = CalendarUpdate;
+const { BOUNDARY, EOB, WALL, BARRIER, EDGE } = Collision;
+const PERIODIC = ArenaType.PERIODIC_BOUNDARIES;
+/** Next-event type for a cell crossing (internal; never reported). */
+const CROSSING = 255;
 
 /** Simulation time per displayed frame, in seconds (Physics.DEFAULT_FRAME_DURATION). */
 export const DEFAULT_FRAME_DURATION = 0.404706830433 * 1e-12;
@@ -54,6 +63,12 @@ export interface InitialState {
   arenaXSize: number;
   arenaYSize: number;
   arenaZSize: number;
+  /** Arenas with a hole: its diameter in meters. */
+  holeDiameter?: number;
+  /** Maxwell's demon: the hole starts closed; open it with setHoleOpen(). */
+  maxwellDemonMode?: boolean;
+  /** Divided arenas: only INSULATING is supported so far. */
+  dividerThermalMode?: DividerThermalMode;
   species: readonly InitialSpecies[];
 }
 
@@ -68,28 +83,64 @@ export class Simulation {
   readonly dimension: Dimension;
   readonly arena: Arena;
   readonly particles: Particles;
-  readonly calendar: EventCalendar;
+  readonly grid: CellGrid;
 
   /**
-   * Work done so far. `events` counts every event performed; the others break it down
-   * or count predictions (pair and boundary).
+   * Work done so far. `events` counts every physical event performed; the others break
+   * it down, count predictions, and count scheduling work (cell crossings, stale events).
    */
   readonly counters = createCounters(
     'events',
     'particleCollisions',
     'wallCollisions',
     'boundaryCrossings',
+    'dividerCollisions',
     'pairPredictions',
     'boundaryPredictions',
+    'cellCrossings',
+    'staleEvents',
   );
 
   /** Simulation time (s) every particle has been moved to by the last advanceToTime(). */
   time = 0;
+  /** Maxwell's demon: whether the hole is open (it starts closed). */
+  holeOpen = false;
+  private nextFrameHoleOpen = false;
+  /** When Maxwell's demon last opened or closed the hole (-1: never). */
+  private boundaryRepredictTime = -1;
   frameDuration: number;
 
   private readonly onEvent: SimulationOptions['onEvent'];
+  private readonly heap: EventHeap;
+
+  // Each particle's next event (keys live in the heap).
+  private readonly nextType: Uint8Array;
+  private readonly nextPartner: Int32Array;
+  private readonly nextSide: Uint8Array;
+  /** The partner's collision count when the pair event was predicted. */
+  private readonly nextPartnerCount: Uint32Array;
+  /** Destination cell of a crossing event. */
+  private readonly nextCell: Int32Array;
+  /**
+   * Periodic arenas: whole boxes to add to a particle's stored position to express it in
+   * the frame of its current cell. Crossings that wrap around the box change it; it is
+   * reset whenever the stored position is refreshed (events, frame moves).
+   */
+  private readonly wrapX: Int32Array;
+  private readonly wrapY: Int32Array;
+  /** Number of state-changing events each particle has had (for staleness). */
+  private readonly collisionCount: Uint32Array;
+
+  // Parity with Java (see predictionState): each particle's state right after its last
+  // event, and the times at which a frame moved every particle.
+  private readonly eventX: Float64Array;
+  private readonly eventY: Float64Array;
+  private readonly eventT0: Float64Array;
+  private frameTimes: number[] = [];
+  /** Two-particle scratch store holding reconstructed states for predictions. */
+  private readonly scratch = new Particles(2);
+
   private readonly event = createEvent();
-  private readonly action = createEvent();
   private readonly prediction = createEvent();
   private firstRun = true;
   private currentFrame: RenderFrame | null = null;
@@ -98,19 +149,21 @@ export class Simulation {
     if (init.dimension !== 2) {
       throw new Error(`${init.dimension}D simulation is not supported yet`);
     }
-    if (
-      init.arenaType !== ArenaType.REFLECTING_BOUNDARIES &&
-      init.arenaType !== ArenaType.PERIODIC_BOUNDARIES
-    ) {
+    if (init.arenaType === ArenaType.MOVABLE_PISTON) {
       throw new Error(`Arena type ${init.arenaType} is not supported yet`);
     }
+    if (init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
+      throw new Error('Conducting dividers are not supported yet');
+    }
     this.dimension = init.dimension;
-    this.arena = {
-      type: init.arenaType,
-      xSize: init.arenaXSize,
-      ySize: init.arenaYSize,
-      zSize: init.arenaZSize,
-    };
+    this.arena = createArena(
+      init.arenaType,
+      init.arenaXSize,
+      init.arenaYSize,
+      init.arenaZSize,
+      init.holeDiameter,
+      init.maxwellDemonMode,
+    );
     this.frameDuration = options.frameDuration ?? DEFAULT_FRAME_DURATION;
     this.onEvent = options.onEvent;
 
@@ -134,14 +187,52 @@ export class Simulation {
     });
     this.particles = p;
 
-    this.calendar = new EventCalendar(count);
-    this.calUpdate(this.setAction(EVERYTHING));
-    if (this.arena.type === ArenaType.PERIODIC_BOUNDARIES) this.setTotalMomentum(0, 0);
+    this.heap = new EventHeap(count);
+    this.nextType = new Uint8Array(count);
+    this.nextPartner = new Int32Array(count);
+    this.nextSide = new Uint8Array(count);
+    this.nextPartnerCount = new Uint32Array(count);
+    this.nextCell = new Int32Array(count);
+    this.wrapX = new Int32Array(count);
+    this.wrapY = new Int32Array(count);
+    this.collisionCount = new Uint32Array(count);
+    this.eventX = new Float64Array(count);
+    this.eventY = new Float64Array(count);
+    this.eventT0 = new Float64Array(count);
+
+    // Cells must be at least the largest contact distance between two particles.
+    let r1 = 0;
+    let r2 = 0;
+    for (let k = 0; k < count; k++) {
+      const r = p.radius[k]!;
+      if (r > r1) {
+        r2 = r1;
+        r1 = r;
+      } else if (r > r2) {
+        r2 = r;
+      }
+    }
+    this.grid = new CellGrid(this.arena, count, r1 + r2);
+    for (let k = 0; k < count; k++) {
+      this.grid.insert(k, this.grid.rowOf(p.y[k]!) * this.grid.nx + this.grid.columnOf(p.x[k]!));
+    }
+
+    // Java predicts everything, then (periodic) zeroes the momentum and predicts
+    // everything again; only the second prediction matters, so adjust first.
+    if (this.arena.type === PERIODIC) this.setTotalMomentum(0, 0);
+    for (let k = 0; k < count; k++) this.recordEventState(k);
+    for (let k = 0; k < count; k++) this.repredict(k);
   }
 
   /** Time of the next event, or MAX_TIME if nothing will ever happen. */
   nextEventTime(): number {
-    return this.calendar.nextEventTime();
+    // Skip past internal and stale events so this is a real event time.
+    for (;;) {
+      const i = this.heap.peek();
+      if (i < 0) return NEVER;
+      if (this.isReal(i)) return this.heap.time[i]!;
+      this.processInternal(i);
+    }
   }
 
   /**
@@ -149,8 +240,8 @@ export class Simulation {
    * Particles not involved keep their own t0; call advanceToTime() for a consistent state.
    */
   step(): Readonly<EventInfo> | null {
-    if (this.calendar.nextEventTime() === NEVER) return null;
-    return this.performNextEvent();
+    if (this.nextEventTime() === NEVER) return null;
+    return this.perform(this.heap.peek());
   }
 
   /**
@@ -158,11 +249,34 @@ export class Simulation {
    * `maxTime` (Physics.advanceToTime).
    */
   advanceToTime(maxTime: number): void {
-    const calendar = this.calendar;
-    while (calendar.nextEventTime() <= maxTime) this.performNextEvent();
+    if (this.nextFrameHoleOpen !== this.holeOpen) {
+      // Applied at the start of a frame, re-predicting every boundary event (Physics).
+      this.holeOpen = this.nextFrameHoleOpen;
+      this.boundaryRepredictTime = this.time;
+      for (let k = 0; k < this.particles.count; k++) this.repredict(k);
+    }
+    const heap = this.heap;
+    for (;;) {
+      const i = heap.peek();
+      if (i < 0 || heap.time[i]! > maxTime) break;
+      if (this.isReal(i)) this.perform(i);
+      else this.processInternal(i);
+    }
     const p = this.particles;
-    for (let i = 0; i < p.count; i++) moveToTime(p, i, maxTime);
+    for (let k = 0; k < p.count; k++) {
+      moveToTime(p, k, maxTime);
+      this.resetWrap(k);
+    }
+    this.frameTimes.push(maxTime);
     this.time = maxTime;
+  }
+
+  /**
+   * Maxwell's demon: open or close the hole in the divider. Takes effect at the start of
+   * the next frame, as in Java (Physics.setArenaHoleOpen).
+   */
+  setHoleOpen(open: boolean): void {
+    this.nextFrameHoleOpen = open;
   }
 
   /** Frame API used by the worker's ThreadController (Physics.advanceToNextFrame). */
@@ -188,9 +302,9 @@ export class Simulation {
   snapshot(): RenderFrame {
     const p = this.particles;
     const positions = new Float64Array(p.count * 2);
-    for (let i = 0; i < p.count; i++) {
-      positions[2 * i] = p.x[i]!;
-      positions[2 * i + 1] = p.y[i]!;
+    for (let k = 0; k < p.count; k++) {
+      positions[2 * k] = p.x[k]!;
+      positions[2 * k + 1] = p.y[k]!;
     }
     return { dimension: this.dimension, time: this.time, positions, types: p.type.slice() };
   }
@@ -198,129 +312,340 @@ export class Simulation {
   /** Total kinetic energy in joules (sum of Particle2D.getKE). */
   kineticEnergy(): number {
     let total = 0;
-    for (let i = 0; i < this.particles.count; i++) total += this.particleKE(i);
+    for (let k = 0; k < this.particles.count; k++) total += this.particleKE(k);
     return total;
   }
 
-  private performNextEvent(): Readonly<EventInfo> {
-    const calendar = this.calendar;
-    calendar.nextEvent(this.event);
+  /** True if particle i's next event is a physical event that is still valid. */
+  private isReal(i: number): boolean {
+    const type = this.nextType[i]!;
+    if (type === CROSSING) return false;
+    if (type !== PARTICLE) return true;
+    return this.collisionCount[this.nextPartner[i]!] === this.nextPartnerCount[i];
+  }
+
+  /** Handles a cell crossing or a stale pair event at the top of the heap. */
+  private processInternal(i: number): void {
+    if (this.nextType[i] === CROSSING) {
+      const grid = this.grid;
+      const from = grid.cellOf[i]!;
+      const to = this.nextCell[i]!;
+      if (grid.periodic) {
+        // Track wraps around the box, so the stored position stays readable in the new cell.
+        const fromX = from % grid.nx;
+        const toX = to % grid.nx;
+        if (fromX === grid.nx - 1 && toX === 0 && grid.nx > 1) this.wrapX[i]!--;
+        else if (fromX === 0 && toX === grid.nx - 1 && grid.nx > 1) this.wrapX[i]!++;
+        const fromY = (from - fromX) / grid.nx;
+        const toY = (to - toX) / grid.nx;
+        if (fromY === grid.ny - 1 && toY === 0 && grid.ny > 1) this.wrapY[i]!--;
+        else if (fromY === 0 && toY === grid.ny - 1 && grid.ny > 1) this.wrapY[i]!++;
+      }
+      grid.move(i, to);
+      this.counters.cellCrossings++;
+    } else {
+      this.counters.staleEvents++;
+    }
+    this.repredict(i);
+  }
+
+  /** Performs particle i's (valid, physical) next event and re-predicts what it changed. */
+  private perform(i: number): Readonly<EventInfo> {
+    const p = this.particles;
     const event = this.event;
+    const type = this.nextType[i]!;
+    event.time = this.heap.time[i]!;
+    event.side = this.nextSide[i]!;
+    event.type = type as EventInfo['type'];
+    if (type === PARTICLE) {
+      const j = this.nextPartner[i]!;
+      event.part1 = i < j ? i : j;
+      event.part2 = i < j ? j : i;
+    } else {
+      event.part1 = i;
+      event.part2 = 0;
+    }
     this.onEvent?.(event);
     this.counters.events++;
 
-    const p = this.particles;
-    const action = this.action;
-    if (event.type === PARTICLE) {
-      moveToTime(p, event.part1, event.time);
-      moveToTime(p, event.part2, event.time);
-      collide(p, event.part1, event.part2, event, this.arena);
+    if (type === PARTICLE) {
+      const a = event.part1;
+      const b = event.part2;
+      moveToTime(p, a, event.time);
+      moveToTime(p, b, event.time);
+      collide(p, a, b, event, this.arena);
       this.counters.particleCollisions++;
-      action.type = PARTICLE_2;
-      action.part1 = event.part1;
-      action.part2 = event.part2;
+      this.collisionCount[a]!++;
+      this.collisionCount[b]!++;
+      this.recordEventState(a);
+      this.recordEventState(b);
+      this.repredict(a);
+      this.repredict(b);
     } else {
-      boundaryCollide(p, event.part1, event, this.arena);
-      if (event.type === WALL) this.counters.wallCollisions++;
-      else if (event.type === BOUNDARY || event.type === EOB) this.counters.boundaryCrossings++;
-      action.type = PARTICLE_1;
-      action.part1 = event.part1;
-      action.part2 = event.part2;
+      boundaryCollide(p, i, event, this.arena);
+      if (type === WALL) this.counters.wallCollisions++;
+      else if (type === BOUNDARY || type === EOB) this.counters.boundaryCrossings++;
+      else if (type === BARRIER || type === EDGE) this.counters.dividerCollisions++;
+      this.collisionCount[i]!++;
+      this.recordEventState(i);
+      this.repredict(i);
     }
-    this.calUpdate(action);
     return event;
   }
 
   /**
-   * Re-predicts the events an action affected and finds the new minimum
-   * (Physics.CalUpdate). The order of calendar updates matches Java exactly.
+   * Predicts particle i's next event: walls/boundaries, every particle in the neighbouring
+   * cells, and its next cell crossing; keeps the soonest (in Java's tie order) and offers
+   * each pair event to the partner too, in case it is sooner than the partner's own.
    */
-  private calUpdate(action: EventInfo): void {
-    const calendar = this.calendar;
-    const p = this.particles;
+  private repredict(i: number): void {
+    const grid = this.grid;
+    const heap = this.heap;
     const arena = this.arena;
-    const n = p.count;
     const out = this.prediction;
     const counters = this.counters;
-    calendar.markForUpdate(action);
 
-    switch (action.type) {
-      case PARTICLE_2: {
-        const a = action.part1;
-        const b = action.part2;
-        for (let i = 0; i < n; i++) {
-          if (i !== a) {
-            predictPair(p, a, i, arena, out);
-            calendar.update(out.type, a, i, out.side, out.time);
-          }
-          if (i !== b) {
-            predictPair(p, b, i, arena, out);
-            calendar.update(out.type, b, i, out.side, out.time);
-          }
-        }
-        counters.pairPredictions += 2 * (n - 1);
-        // Periodic arenas: a and b may meet again through another image.
-        if (arena.type === ArenaType.PERIODIC_BOUNDARIES) {
-          predictPair(p, a, b, arena, out);
-          calendar.update(PARTICLE, a, b, out.side, out.time);
-          counters.pairPredictions++;
-        }
-        predictBoundary(p, a, arena, out);
-        calendar.update(out.type, a, 0, out.side, out.time);
-        predictBoundary(p, b, arena, out);
-        calendar.update(out.type, b, 0, out.side, out.time);
-        counters.boundaryPredictions += 2;
-        break;
-      }
-      case PARTICLE_1: {
-        const a = action.part1;
-        for (let i = 0; i < n; i++) {
-          if (i !== a) {
-            predictPair(p, a, i, arena, out);
-            calendar.update(out.type, a, i, out.side, out.time);
-          }
-        }
-        counters.pairPredictions += n - 1;
-        predictBoundary(p, a, arena, out);
-        calendar.update(out.type, a, 0, out.side, out.time);
-        counters.boundaryPredictions++;
-        break;
-      }
-      case PARTICLE_ALL:
-        for (let i = 0; i < n; i++) {
-          for (let j = 0; j < i; j++) {
-            predictPair(p, i, j, arena, out);
-            calendar.update(out.type, i, j, out.side, out.time);
-          }
-        }
-        counters.pairPredictions += (n * (n - 1)) / 2;
-        break;
-      case BOUNDARY_ALL:
-        for (let i = 0; i < n; i++) {
-          predictBoundary(p, i, arena, out);
-          calendar.update(out.type, i, 0, out.side, out.time);
-        }
-        counters.boundaryPredictions += n;
-        break;
-      case EVERYTHING:
-        for (let i = 0; i < n; i++) {
-          for (let j = 0; j < i; j++) {
-            predictPair(p, i, j, arena, out);
-            calendar.update(out.type, i, j, out.side, out.time);
-          }
-          predictBoundary(p, i, arena, out);
-          calendar.update(out.type, i, 0, out.side, out.time);
-        }
-        counters.pairPredictions += (n * (n - 1)) / 2;
-        counters.boundaryPredictions += n;
-        break;
+    // Start from the next cell crossing (internal, so it loses ties with real events).
+    this.predictCrossing(i);
+    let bestTime = out.time;
+    let bestRow = INTERNAL_ROW;
+    let bestCol = i;
+    let bestType = CROSSING;
+    let bestPartner = -1;
+    let bestSide = 0;
+    const crossingCell = out.part1;
+
+    // Java predicts boundaries only at the particle's own events, from that state.
+    const scratch = this.scratch;
+    // Java predicts boundaries at the particle's own events, and for every particle when
+    // Maxwell's demon opens or closes the hole (from positions after that frame's move).
+    const boundaryAt = this.boundaryRepredictTime;
+    const boundaryFromToggle = boundaryAt > this.eventT0[i]!;
+    if (boundaryFromToggle) this.predictionState(i, boundaryAt, 0, true);
+    else this.predictionState(i, this.eventT0[i]!, 0);
+    predictBoundary(scratch, 0, arena, out, this.holeOpen);
+    counters.boundaryPredictions++;
+    if (out.time < bestTime || (out.time === bestTime && 0 < bestRow)) {
+      bestTime = out.time;
+      bestRow = 0;
+      bestCol = i;
+      bestType = out.type;
+      bestSide = out.side;
     }
-    calendar.findMinimum();
+
+    const cell = grid.cellOf[i]!;
+    const cx = cell % grid.nx;
+    const cy = (cell - cx) / grid.nx;
+    const countI = this.collisionCount[i]!;
+    const eventT0 = this.eventT0;
+    const tI = eventT0[i]!;
+    let loadedAt = boundaryFromToggle ? NaN : tI; // time slot 0 currently holds i's state for
+    for (const dy of grid.offsetsY) {
+      for (const dx of grid.offsetsX) {
+        const c = grid.neighbour(cx, cy, dx, dy);
+        if (c < 0) continue;
+        for (let k = grid.head[c]!; k >= 0; k = grid.next[k]!) {
+          if (k === i) continue;
+          // Java predicted this pair at the later of the two particles' last events.
+          const tK = eventT0[k]!;
+          const te = tI > tK ? tI : tK;
+          if (te !== loadedAt) {
+            this.predictionState(i, te, 0);
+            loadedAt = te;
+          }
+          this.predictionState(k, te, 1);
+          predictPair(scratch, 0, 1, arena, out);
+          counters.pairPredictions++;
+          const t = out.time;
+          if (t === NEVER) continue;
+          const row = i > k ? i : k;
+          const col = i < k ? i : k;
+          if (
+            t < bestTime ||
+            (t === bestTime && (row < bestRow || (row === bestRow && col < bestCol)))
+          ) {
+            bestTime = t;
+            bestRow = row;
+            bestCol = col;
+            bestType = PARTICLE;
+            bestPartner = k;
+            bestSide = out.side;
+          }
+          // Offer the event to k if it beats k's own next event.
+          if (heap.keyBefore(t, row, col, k)) {
+            this.nextType[k] = PARTICLE;
+            this.nextPartner[k] = i;
+            this.nextSide[k] = out.side;
+            this.nextPartnerCount[k] = countI;
+            heap.set(k, t, row, col);
+          }
+        }
+      }
+    }
+
+    this.nextType[i] = bestType;
+    this.nextSide[i] = bestSide;
+    this.nextPartner[i] = bestPartner;
+    if (bestType === PARTICLE) this.nextPartnerCount[i] = this.collisionCount[bestPartner]!;
+    if (bestType === CROSSING) this.nextCell[i] = crossingCell;
+    heap.set(i, bestTime, bestRow, bestCol);
+  }
+
+  /** Remembers particle i's state right after an event (for predictionState). */
+  private recordEventState(i: number): void {
+    const p = this.particles;
+    this.eventX[i] = p.x[i]!;
+    this.eventY[i] = p.y[i]!;
+    this.eventT0[i] = p.t0[i]!;
+    this.resetWrap(i);
+  }
+
+  /**
+   * Periodic arenas: after the stored position is refreshed it describes where the
+   * particle is now, i.e. inside its cell up to round-off. The only ambiguity is at the
+   * box edge (stored just above 0 but already in the last column, or the reverse).
+   */
+  private resetWrap(i: number): void {
+    const grid = this.grid;
+    if (!grid.periodic) return;
+    const p = this.particles;
+    const cell = grid.cellOf[i]!;
+    const cx = cell % grid.nx;
+    const cy = (cell - cx) / grid.nx;
+    let x = p.x[i]!;
+    let y = p.y[i]!;
+    if (x < 0) x += grid.xSize;
+    if (y < 0) y += grid.ySize;
+    this.wrapX[i] =
+      grid.nx > 1 && cx === grid.nx - 1 && x < grid.cellWidth
+        ? 1
+        : grid.nx > 1 && cx === 0 && x > grid.xSize - grid.cellWidth
+          ? -1
+          : 0;
+    this.wrapY[i] =
+      grid.ny > 1 && cy === grid.ny - 1 && y < grid.cellHeight
+        ? 1
+        : grid.ny > 1 && cy === 0 && y > grid.ySize - grid.cellHeight
+          ? -1
+          : 0;
+  }
+
+  /**
+   * Loads into scratch `slot` particle k's state as Java's calendar would have seen it when
+   * it predicted at time `te`: the state after k's last event, moved by every frame
+   * boundary between that event and `te` (Java moves every particle at each frame end, and
+   * an event at exactly a frame's end comes before that frame's move).
+   *
+   * Java predicts each pair once, at the later of the two particles' events, and keeps
+   * that prediction even as frame moves round positions afterwards. This engine predicts
+   * pairs lazily (at crossings, stale events, a partner's event), so it rebuilds the state
+   * Java used; the arithmetic, and so every bit of the result, then matches.
+   */
+  private predictionState(k: number, te: number, slot: number, includeFrameAtTe = false): void {
+    const p = this.particles;
+    const s = this.scratch;
+    let x = this.eventX[k]!;
+    let y = this.eventY[k]!;
+    let t = this.eventT0[k]!;
+    const vx = p.vx[k]!;
+    const vy = p.vy[k]!;
+    if (t < te) {
+      const frames = this.frameTimes;
+      // First frame after t (binary search; frames are increasing).
+      let lo = 0;
+      let hi = frames.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (frames[mid]! > t) hi = mid;
+        else lo = mid + 1;
+      }
+      for (let f = lo; f < frames.length; f++) {
+        const frame = frames[f]!;
+        if (frame > te || (frame === te && !includeFrameAtTe)) break;
+        const dt = frame - t;
+        x = x + vx * dt;
+        y = y + vy * dt;
+        t = frame;
+      }
+    }
+    s.x[slot] = x;
+    s.y[slot] = y;
+    s.t0[slot] = t;
+    s.vx[slot] = vx;
+    s.vy[slot] = vy;
+    s.radius[slot] = p.radius[k]!;
+    s.bFlag[slot] = p.bFlag[k]!;
+  }
+
+  /**
+   * When particle i's straight-line path leaves its cell: time into `prediction.time` and
+   * destination cell into `prediction.part1`. Uses the particle's own (x, t0) without
+   * changing it. Reflecting arenas have no crossing at the outer edge (walls come first).
+   */
+  private predictCrossing(i: number): void {
+    const p = this.particles;
+    const grid = this.grid;
+    const out = this.prediction;
+    out.time = NEVER;
+    out.part1 = -1;
+    if (grid.nx === 1 && grid.ny === 1) return;
+
+    const cell = grid.cellOf[i]!;
+    const cx = cell % grid.nx;
+    const cy = (cell - cx) / grid.nx;
+    let x = p.x[i]!;
+    let y = p.y[i]!;
+    if (grid.periodic) {
+      // The stored position, in the frame of the particle's current cell (see wrapX).
+      if (x < 0) x += grid.xSize;
+      if (y < 0) y += grid.ySize;
+      x += this.wrapX[i]! * grid.xSize;
+      y += this.wrapY[i]! * grid.ySize;
+    }
+    const vx = p.vx[i]!;
+    const vy = p.vy[i]!;
+
+    let tx = NEVER;
+    let nx = cx;
+    if (grid.nx > 1 && vx !== 0) {
+      if (vx > 0) {
+        if (cx < grid.nx - 1 || grid.periodic) {
+          tx = ((cx + 1) * grid.cellWidth - x) / vx;
+          nx = cx + 1 === grid.nx ? 0 : cx + 1;
+        }
+      } else if (cx > 0 || grid.periodic) {
+        tx = (cx * grid.cellWidth - x) / vx;
+        nx = cx === 0 ? grid.nx - 1 : cx - 1;
+      }
+    }
+    let ty = NEVER;
+    let ny = cy;
+    if (grid.ny > 1 && vy !== 0) {
+      if (vy > 0) {
+        if (cy < grid.ny - 1 || grid.periodic) {
+          ty = ((cy + 1) * grid.cellHeight - y) / vy;
+          ny = cy + 1 === grid.ny ? 0 : cy + 1;
+        }
+      } else if (cy > 0 || grid.periodic) {
+        ty = (cy * grid.cellHeight - y) / vy;
+        ny = cy === 0 ? grid.ny - 1 : cy - 1;
+      }
+    }
+    if (tx === NEVER && ty === NEVER) return;
+    const t0 = p.t0[i]!;
+    // Round-off can put the edge marginally behind the particle; cross at once then.
+    if (tx <= ty) {
+      out.time = t0 + Math.max(tx, 0);
+      out.part1 = cy * grid.nx + nx;
+    } else {
+      out.time = t0 + Math.max(ty, 0);
+      out.part1 = ny * grid.nx + cx;
+    }
   }
 
   /**
    * Periodic arenas: shifts every velocity so total momentum is (xMom, yMom), then rescales
-   * to restore the original kinetic energy, and re-predicts everything (SetTotalMom).
+   * to restore the original kinetic energy (SetTotalMom). Callers re-predict afterwards.
    */
   private setTotalMomentum(xMom: number, yMom: number): void {
     const p = this.particles;
@@ -329,29 +654,28 @@ export class Simulation {
     let origKE = 0;
     let currX = 0;
     let currY = 0;
-    for (let i = 0; i < n; i++) {
-      origKE += this.particleKE(i);
-      currX += p.vx[i]! * p.mass[i]!;
-      currY += p.vy[i]! * p.mass[i]!;
+    for (let k = 0; k < n; k++) {
+      origKE += this.particleKE(k);
+      currX += p.vx[k]! * p.mass[k]!;
+      currY += p.vy[k]! * p.mass[k]!;
     }
     if (!(origKE > 0.0)) return;
     const xAdj = (currX - xMom) / n;
     const yAdj = (currY - yMom) / n;
     let currKE = 0;
-    for (let i = 0; i < n; i++) {
-      const mass = p.mass[i]!;
-      p.vx[i] = snapSubtract(p.vx[i]!, xAdj / mass);
-      p.vy[i] = snapSubtract(p.vy[i]!, yAdj / mass);
-      currKE += this.particleKE(i);
+    for (let k = 0; k < n; k++) {
+      const mass = p.mass[k]!;
+      p.vx[k] = snapSubtract(p.vx[k]!, xAdj / mass);
+      p.vy[k] = snapSubtract(p.vy[k]!, yAdj / mass);
+      currKE += this.particleKE(k);
     }
     if (currKE > 0.0) {
       const f = Math.sqrt(origKE / currKE);
-      for (let i = 0; i < n; i++) {
-        p.vx[i] = p.vx[i]! * f;
-        p.vy[i] = p.vy[i]! * f;
+      for (let k = 0; k < n; k++) {
+        p.vx[k] = p.vx[k]! * f;
+        p.vy[k] = p.vy[k]! * f;
       }
     }
-    this.calUpdate(this.setAction(EVERYTHING));
   }
 
   /** Particle2D.getKE: 0.5·m·|v|² in amu·m²/s², converted to joules. */
@@ -362,14 +686,6 @@ export class Simulation {
     const speed = Math.sqrt(0.0 + vx * vx + vy * vy);
     const energy = 0.5 * p.mass[i]! * speed * speed;
     return (energy * AMU_JOULE) / 1.0;
-  }
-
-  private setAction(type: EventInfo['type']): EventInfo {
-    const action = this.action;
-    action.type = type;
-    action.time = 0;
-    action.part1 = action.part2 = action.side = 0;
-    return action;
   }
 }
 

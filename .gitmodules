@@ -1,0 +1,4 @@
+[submodule "vendor/boltzmann3d"]
+	path = vendor/boltzmann3d
+	url = https://github.com/joshuata/boltzmann3d.git
+	branch = boltzmann4d-parity-tools
