@@ -61,7 +61,7 @@ Java sources referenced above live in `vendor/boltzmann3d/src/edu/byu/chem/boltz
 
 ## Commands
 
-Tool versions (node, pnpm, hk, pkl, markdownlint-cli2) are pinned in `mise.toml`. Run `mise install` once; it also installs `node_modules`. After that, `mise run <task>` reinstalls `node_modules` automatically whenever `package.json` or `pnpm-lock.yaml` changes (mise's `[deps.pnpm]` provider). Calling `pnpm` directly doesn't, so run `mise deps` after pulling if you skip `mise run`. Run `hk install` once to enable the git pre-commit hook. In VS Code, open `boltzmann4d.code-workspace` rather than the repo folder: the Svelte extension only finds each package's dependencies (and SvelteKit's `./$types`) when that package is its own workspace folder.
+Tool versions (node, pnpm, hk, pkl, markdownlint-cli2, gh) are pinned in `mise.toml`. Run `mise install` once; it also installs `node_modules`. After that, `mise run <task>` reinstalls `node_modules` automatically whenever `package.json` or `pnpm-lock.yaml` changes (mise's `[deps.pnpm]` provider). Calling `pnpm` directly doesn't, so run `mise deps` after pulling if you skip `mise run`. Run `hk install` once to enable the git pre-commit hook. In VS Code, open `boltzmann4d.code-workspace` rather than the repo folder: the Svelte extension only finds each package's dependencies (and SvelteKit's `./$types`) when that package is its own workspace folder.
 
 - `pnpm dev`: start the SvelteKit dev server (`apps/web`)
 - `pnpm build`: type-check every workspace (`pnpm -r run check`: svelte-check, or tsc for the engine), then build the static site into `apps/web/build/`
