@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadPresetText, loadSettings } from '../io';
+import { loadPresetText, loadSetFile } from '../io';
 import type { AttractiveWallOptions } from './attractive-wall';
 import { Collision } from './event';
 import { seededRandom, syntheticGas } from './scenes';
@@ -9,8 +9,8 @@ import { ArenaType } from './simulation-info';
 const kB = 1.3806504e-23;
 
 async function withWall(wall: AttractiveWallOptions, preset = 'default'): Promise<InitialState> {
-  const { settings } = loadSettings(await loadPresetText(preset), { random: seededRandom(5) });
-  return { ...settings, attractiveWall: wall };
+  const { scenario } = loadSetFile(await loadPresetText(preset), { random: seededRandom(5) });
+  return { ...scenario, attractiveWall: wall };
 }
 
 /** Steps `events` events and moves everyone to the last one, calling `each` per step. */

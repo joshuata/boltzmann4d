@@ -170,7 +170,7 @@ describe('ThreadController', () => {
 });
 
 describe('parseSimulationSpeed', () => {
-  it('reads the settings-file multiplier', () => {
+  it('reads the scenario speed multiplier', () => {
     expect(parseSimulationSpeed('1x')).toBe(1);
     expect(parseSimulationSpeed('0.5x')).toBe(0.5);
     expect(parseSimulationSpeed('4x')).toBe(4);

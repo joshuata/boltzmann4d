@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "license": "GPL-3.0-only",
-  "description": "Event-driven hard-sphere physics, statistics and .set settings files. Pure TypeScript: no DOM, no Three.js.",
+  "description": "Event-driven hard-sphere physics, statistics and scenarios (JSON and .set files). Pure TypeScript: no DOM, no Three.js.",
   "exports": {
     "./sim": "./src/sim/index.ts",
     "./stats": "./src/stats/index.ts",
     "./io": "./src/io/index.ts",
+    "./scenario": "./src/scenario/index.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
@@ -16,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "ohm-js": "^17.5.0"
+    "ohm-js": "^17.5.0",
+    "zod": "^4.6.7"
   }
 }

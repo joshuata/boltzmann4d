@@ -2,7 +2,7 @@
 // (src/sim/simulation.bench.ts) give the same scenes without statistics; each iteration
 // here also performs 1,000 events, so the difference is what the statistics add.
 import { test } from 'vitest';
-import { loadPresetText, loadSettings } from '../io';
+import { loadPresetText, loadSetFile } from '../io';
 import { seededRandom, syntheticGas } from '../sim/scenes';
 import { Simulation, type InitialState } from '../sim/simulation';
 import { ArenaType } from '../sim/simulation-info';
@@ -12,7 +12,7 @@ import { statsContext } from './stats-context';
 const EVENTS = 1000;
 
 async function preset(name: string): Promise<InitialState> {
-  return loadSettings(await loadPresetText(name), { random: seededRandom(1) }).settings;
+  return loadSetFile(await loadPresetText(name), { random: seededRandom(1) }).scenario;
 }
 
 const scenes: [string, () => Promise<InitialState>][] = [

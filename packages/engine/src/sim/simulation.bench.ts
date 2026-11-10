@@ -1,7 +1,7 @@
 // Engine benchmarks: run with `mise run bench`. Each iteration performs 1,000 events, so
 // events per second = hz × 1,000. Starting states are fixed (seeded) for comparability.
 import { test } from 'vitest';
-import { loadPresetText, loadSettings } from '../io';
+import { loadPresetText, loadSetFile } from '../io';
 import { syntheticGas, seededRandom } from './scenes';
 import { PistonMode } from './piston';
 import { Simulation, type InitialState } from './simulation';
@@ -10,7 +10,7 @@ import { ArenaType, DividerThermalMode } from './simulation-info';
 const EVENTS = 1000;
 
 async function preset(name: string): Promise<InitialState> {
-  return loadSettings(await loadPresetText(name), { random: seededRandom(1) }).settings;
+  return loadSetFile(await loadPresetText(name), { random: seededRandom(1) }).scenario;
 }
 
 const scenes: [string, () => Promise<InitialState>][] = [

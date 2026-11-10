@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadPresetText, loadSettings } from '../io';
+import { loadPresetText, loadSetFile } from '../io';
 import { seededRandom, syntheticGas } from './scenes';
 import { Simulation, type InitialState } from './simulation';
 
@@ -40,8 +40,8 @@ function run(sim: Simulation, events: number): void {
 }
 
 async function equil(): Promise<InitialState> {
-  const { settings } = loadSettings(await loadPresetText('2Dequil'), { random: seededRandom(6) });
-  return settings;
+  const { scenario } = loadSetFile(await loadPresetText('2Dequil'), { random: seededRandom(6) });
+  return scenario;
 }
 
 describe('red↔blue reactions', () => {

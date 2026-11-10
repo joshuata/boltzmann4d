@@ -39,6 +39,7 @@ packages/
     src/sim/           physics — port of model/physics (parity fixtures in sim/parity/)
     src/stats/         statistics + Formulas — port of model/statistics
     src/io/            .set file parsing (Ohm grammar) and loading, plus the bundled presets — from model/io
+    src/scenario/      scenarios, the web app's JSON format for a simulation setup: Zod schema and validation, .set ⇄ JSON, resolving into the starting state
     src/utils/         shared pure helpers (unit conversions) — from utils
   simulator/           @boltzmann4d/simulator: the viewer, exported as <Simulator>
     src/Simulator.svelte  arena canvas + sidebar
@@ -103,7 +104,7 @@ Production builds use the base path `/boltzmann4d/` (`paths.base` in `apps/web/v
 
 ## Specs
 
-- `docs/specs/` lists what the app must do, extracted from the original Boltzmann 3D manual and worksheets, with requirement IDs (`SIM-3`, `STAT-12`, …) and classroom scenarios to check against. Read the relevant spec before building a feature, and cite its IDs in plans.
+- `docs/specs/` lists what the app must do, extracted from the original Boltzmann 3D manual and worksheets, with requirement IDs (`SIM-3`, `STAT-12`, …) and classroom stories (user stories, `docs/specs/stories.md`) to check against. Read the relevant spec before building a feature, and cite its IDs in plans.
 
 ## Skills
 

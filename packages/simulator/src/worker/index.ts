@@ -94,7 +94,7 @@ export type FromWorker =
       dimension: Dimension;
       arena: ArenaInfo;
       piston?: PistonInfo;
-      /** The settings file's view (colour mode, trace) and the arena's size, m. */
+      /** The scenario's view (colour mode, trace) and the arena's size, m. */
       view: {
         colorMode: ColorMode;
         trace: { enabled: boolean; pointSize: number };

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ArenaType } from '../sim/simulation-info';
 import { avgKineticEnergy } from '../stats/formulas';
-import { calculateTotalKE, loadSettings } from './load';
-import { loadDefaultSettingsText, loadPresetText, presetNames } from './presets';
+import { calculateTotalKE, loadSetFile } from './load';
+import { loadDefaultSetFileText, loadPresetText, presetNames } from './presets';
 import { SetFileError } from './set-file';
 
 /** Same seeded generator as the stub physics, so runs are reproducible. */
@@ -28,12 +28,12 @@ describe('presets', () => {
   });
 
   it.each(presetNames)('loads %s', async (name) => {
-    const { settings, warnings } = loadSettings(await loadPresetText(name), {
+    const { scenario, warnings } = loadSetFile(await loadPresetText(name), {
       random: seededRandom(1),
     });
     expect(warnings).toEqual([]);
-    expect(settings.species.length).toBeGreaterThan(0);
-    for (const species of settings.species) {
+    expect(scenario.species.length).toBeGreaterThan(0);
+    for (const species of scenario.species) {
       expect(species.positions.length).toBe(species.velocities.length);
       expect(species.positions.every(Number.isFinite)).toBe(true);
       expect(species.velocities.every(Number.isFinite)).toBe(true);
@@ -41,13 +41,13 @@ describe('presets', () => {
   });
 });
 
-describe('loadSettings', () => {
-  it('reads global settings and randomly placed groups (2Dmixture)', async () => {
-    const { settings, version } = loadSettings(await loadPresetText('2Dmixture'), {
+describe('loadSetFile', () => {
+  it('reads global scenario and randomly placed groups (2Dmixture)', async () => {
+    const { scenario, version } = loadSetFile(await loadPresetText('2Dmixture'), {
       random: seededRandom(2),
     });
     expect(version).toBe('V2.43');
-    expect(settings).toMatchObject({
+    expect(scenario).toMatchObject({
       dimension: 2,
       arenaType: ArenaType.REFLECTING_BOUNDARIES,
       // nm -> m is `value * 1e-9`, exactly as in Java.
@@ -62,9 +62,9 @@ describe('loadSettings', () => {
       colorScheme: 'DARK',
       maxwellDemonMode: false,
     });
-    expect(settings.abscissaLimits.get('COLLISION_RATE')?.red).toEqual([4.8144e-2, 0.14443]);
+    expect(scenario.abscissaLimits.get('COLLISION_RATE')?.red).toEqual([4.8144e-2, 0.14443]);
 
-    const [red, blue] = settings.species;
+    const [red, blue] = scenario.species;
     expect(red?.type).toMatchObject({
       displayName: 'Red',
       particleMass: 2,
@@ -92,16 +92,16 @@ describe('loadSettings', () => {
 
   it('is reproducible for a given random source', async () => {
     const text = await loadPresetText('3Dmixture');
-    const a = loadSettings(text, { random: seededRandom(9) }).settings.species;
-    const b = loadSettings(text, { random: seededRandom(9) }).settings.species;
+    const a = loadSetFile(text, { random: seededRandom(9) }).scenario.species;
+    const b = loadSetFile(text, { random: seededRandom(9) }).scenario.species;
     expect(a).toEqual(b);
   });
 
   it('converts explicitly placed particles (default.set)', async () => {
-    const { settings } = loadSettings(await loadDefaultSettingsText());
+    const { scenario } = loadSetFile(await loadDefaultSetFileText());
     // The Blue group has no particles, so only Red remains.
-    expect(settings.species.map((s) => s.type.displayName)).toEqual(['Red']);
-    const [red] = settings.species;
+    expect(scenario.species.map((s) => s.type.displayName)).toEqual(['Red']);
+    const [red] = scenario.species;
     const [position, velocity] = [rows(red!.positions)[0], rows(red!.velocities)[0]];
     expect(position).toEqual([30.662509904308962 * 1e-9, 39.252027832806874 * 1e-9, 0]);
     const speed = 1579.3484959644366;
@@ -110,10 +110,10 @@ describe('loadSettings', () => {
   });
 
   it('scales group velocities to the requested temperature (2Dhotcold)', async () => {
-    const { settings } = loadSettings(await loadPresetText('2Dhotcold'));
-    const temperatures = settings.species.map((s) => s.initialTemperature);
+    const { scenario } = loadSetFile(await loadPresetText('2Dhotcold'));
+    const temperatures = scenario.species.map((s) => s.initialTemperature);
     expect(temperatures).toEqual([500, 300]);
-    for (const species of settings.species) {
+    for (const species of scenario.species) {
       const velocities = rows(species.velocities);
       const meanKE = calculateTotalKE(species.type, velocities) / velocities.length;
       expect(meanKE).toBeCloseTo(avgKineticEnergy(species.initialTemperature, 2), 30);
@@ -122,33 +122,33 @@ describe('loadSettings', () => {
   });
 
   describe('errors', () => {
-    const base = async () => loadDefaultSettingsText();
+    const base = async () => loadDefaultSetFileText();
 
     it.each([
       ['boundary REFLECTING', 'boundary BOUNCY', /Unknown boundary mode: BOUNCY/],
       ['dimensions 2', 'dimensions 4', /dimensions must be 1, 2 or 3/],
-      ['color Red', 'color Green', /must be Red or Blue/],
+      ['color Red', 'color Green', /must be RED or BLUE, not GREEN/],
       ['color Red', 'color Red\n  temperature 2000', /temperature must be between 0 and 1500/],
       ['  boundary REFLECTING\n', '', /GlobalSettings.boundary is missing/],
     ])('replacing %j with %j fails', async (from, to, message) => {
       const text = (await base()).replace(from, to);
-      expect(() => loadSettings(text)).toThrow(SetFileError);
-      expect(() => loadSettings(text)).toThrow(message);
+      expect(() => loadSetFile(text)).toThrow(SetFileError);
+      expect(() => loadSetFile(text)).toThrow(message);
     });
 
     it('warns when the header is missing', async () => {
       const text = (await base()).replace(/^#Boltzmann3D/, '#Something');
-      expect(loadSettings(text).warnings).toHaveLength(1);
+      expect(loadSetFile(text).warnings).toHaveLength(1);
     });
   });
 
   it('accepts custom colour schemes', async () => {
-    const text = (await loadDefaultSettingsText()).replace(
+    const text = (await loadDefaultSetFileText()).replace(
       'color_scheme DARK',
       // `#` starts a comment in .set files, so hex colours must use 0x.
       'color_scheme CUSTOM: 0xFF0000, 0x0000ff 0 0x808080 0x010203',
     );
-    expect(loadSettings(text).settings.customColors).toEqual({
+    expect(loadSetFile(text).scenario.customColors).toEqual({
       red: 0xff0000,
       blue: 0x0000ff,
       background: 0,

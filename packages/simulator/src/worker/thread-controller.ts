@@ -37,7 +37,7 @@ export type GiveFrame = (frame: RenderFrame, physicsMs: number) => void;
 export type TickSource = (tick: () => void) => () => void;
 
 export interface PacingOptions {
-  /** Multiplies the rate simulated time advances at (settings' `simulation_speed`). */
+  /** Multiplies the rate simulated time advances at (the scenario's `simulation_speed`). */
   speed?: number;
   /** The user's extra multiplier on top of `speed` (the sidebar's rate slider); see setRateScale. */
   rateScale?: number;
@@ -65,7 +65,7 @@ export const defaultTickSource: TickSource = (tick) => {
   return () => clearInterval(timer);
 };
 
-/** Parses a settings-file speed such as `1x` or `0.5x`; 1 when unreadable. */
+/** Parses a scenario speed such as `1x` or `0.5x`; 1 when unreadable. */
 export function parseSimulationSpeed(text: string | undefined): number {
   const speed = Number.parseFloat(text ?? '');
   return Number.isFinite(speed) && speed > 0 ? speed : 1;
