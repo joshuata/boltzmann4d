@@ -44,7 +44,7 @@
 
   /** Theoretical curve over the statistic's own range, its maximum scaled to 1. */
   const curve = $derived.by(() => {
-    const points = statistic.prediction.curve;
+    const points = distribution.prediction.curve;
     const [min, max] = statistic.range;
     const peak = Math.max(...points, 0) || 1;
     return points.map((y, i) => ({
@@ -53,7 +53,7 @@
     }));
   });
 
-  const predicted = $derived(statistic.prediction);
+  const predicted = $derived(distribution.prediction);
 </script>
 
 <div class="histogram" style:height="{height}px">
