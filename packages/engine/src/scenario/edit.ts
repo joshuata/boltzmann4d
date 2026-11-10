@@ -145,6 +145,8 @@ export function scenarioProblems(scenario: Scenario): string[] {
   }
   // Particles at given positions are where the file wants them (2Dliquid is packed tight).
   if (species.every((s) => s.placed === s.count)) return problems;
+  // With walls or spawn regions, placement itself says exactly what fits (EDIT-6).
+  if (scenario.walls.length > 0 || scenario.spawnRegions.length > 0) return problems;
 
   const d = scenario.arena.dimensions;
   const [x, y, z] = scenario.arena.size;

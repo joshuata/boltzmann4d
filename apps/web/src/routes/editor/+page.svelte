@@ -1,48 +1,35 @@
-<!-- The simulation editor beside a preview of what it builds. Wide screens: the form on the
-     left, the simulation on the right. Phones: the form, then the simulation under it. -->
+<!-- The scenario editor (plan 0010). Run swaps the editor for the simulator running the
+     scenario; Back returns to the editor as it was (EDIT-18). The editor stays mounted while
+     the simulation runs, so nothing is lost. -->
 <script lang="ts">
   import type { Scenario } from '@boltzmann4d/engine/scenario';
   import { SimulationEditor } from '@boltzmann4d/simulation-editor';
   import { Simulator } from '@boltzmann4d/simulator';
-  import { tick } from 'svelte';
+  import { Button } from '@boltzmann4d/ui/button';
+  import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 
-  /** The scenario last run, as a new object each time so Run always restarts it. */
+  /** The scenario running, as a new object each time so Run always restarts it. */
   let running = $state.raw<{ name: string; scenario: Scenario } | null>(null);
-  let preview: HTMLElement;
-
-  async function run(scenario: Scenario, name: string) {
-    running = { name, scenario };
-    await tick();
-    // On phones the preview is below the form: bring it into view.
-    if (!matchMedia('(min-width: 1024px)').matches) {
-      preview.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }
 </script>
 
-<svelte:head><title>Simulation editor · Boltzmann 4D</title></svelte:head>
+<svelte:head>
+  <title>{running ? `${running.name} · ` : ''}Scenario editor · Boltzmann 4D</title>
+</svelte:head>
 
-<div class="lg:grid lg:h-full lg:grid-cols-[420px_1fr]">
-  <div class="space-y-4 px-4 py-6 lg:min-h-0 lg:overflow-y-auto lg:border-r">
-    <div class="space-y-1">
-      <h1 class="text-2xl font-semibold">Simulation editor</h1>
-      <p class="text-muted-foreground text-sm">
-        Set up the arena and particles, then run it here or download it.
-      </p>
-    </div>
-    <SimulationEditor onRun={run} />
-  </div>
-  <section
-    bind:this={preview}
-    aria-label="Preview"
-    class="h-[85dvh] scroll-mt-2 border-t lg:h-full lg:min-h-0 lg:border-t-0"
-  >
-    {#if running}
-      <Simulator scenario={running} />
-    {:else}
-      <div class="text-muted-foreground flex h-full items-center justify-center p-6 text-center">
-        Press Run to try the scenario here.
-      </div>
-    {/if}
-  </section>
+<div class={['lg:h-full lg:min-h-0', running && 'hidden']}>
+  <SimulationEditor onRun={(scenario, name) => (running = { name, scenario })} />
 </div>
+{#if running}
+  <div class="flex h-full min-h-0 flex-col">
+    <div class="flex items-center gap-3 border-b px-3 py-2">
+      <Button variant="outline" size="sm" onclick={() => (running = null)}>
+        <ArrowLeftIcon aria-hidden="true" />
+        Back to the editor
+      </Button>
+      <span class="truncate text-sm font-medium">Running {running.name}</span>
+    </div>
+    <div class="min-h-0 flex-1">
+      <Simulator scenario={running} />
+    </div>
+  </div>
+{/if}

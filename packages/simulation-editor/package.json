@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "license": "GPL-3.0-only",
-  "description": "Builds scenarios for the simulator (plan 0008).",
+  "description": "Builds scenarios for the simulator by drawing them (plan 0010).",
   "svelte": "./src/index.ts",
   "exports": {
     ".": {
