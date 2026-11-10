@@ -1,9 +1,18 @@
 import * as THREE from 'three';
 import type { RenderFrame, SceneInfo } from '../sim';
 
+/** Drawing-buffer size: CSS pixels plus the device pixel ratio. */
+export interface ViewSize {
+  width: number;
+  height: number;
+  pixelRatio: number;
+}
+
 export interface Renderer {
   /** Sets up the arena and particles; call before frames arrive (and again on reload). */
   setScene(scene: SceneInfo): void;
+  /** The canvas's on-screen size changed. */
+  setSize(size: ViewSize): void;
   /** Queues a frame; it is drawn on the next animation tick (MainGuiView.setNextFrameToDisplay). */
   setNextFrameToDisplay(frame: RenderFrame): void;
   dispose(): void;
@@ -14,14 +23,27 @@ const NM = 1e9;
 /** Space around the arena, as a fraction of its larger side. */
 const MARGIN = 0.04;
 
+// Schedules a draw for the next display refresh. Dedicated workers have
+// requestAnimationFrame in current browsers; fall back to a ~60 Hz timer.
+const requestDraw: (draw: () => void) => void =
+  typeof requestAnimationFrame === 'function'
+    ? (draw) => void requestAnimationFrame(draw)
+    : (draw) => void setTimeout(draw, 16);
+
 /**
  * 2D view: orthographic camera over the arena, one instanced circle per particle.
  * Will grow into the 1D/2D/3D renderer described in boltzmann3d docs/rendering-baseline.md
- * (periodic ghosts, colour modes, trace). Keeps rendering while the simulation is paused.
+ * (periodic ghosts, colour modes, trace).
+ *
+ * Uses no DOM APIs, so it runs on an OffscreenCanvas in the render worker as well as on
+ * the main thread. It only draws when something changed (a frame, the scene or the size),
+ * at most once per display refresh.
  */
-export function createRenderer(canvas: HTMLCanvasElement): Renderer {
+export function createRenderer(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  initialSize: ViewSize,
+): Renderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
@@ -35,11 +57,15 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   let radii: Float64Array = new Float64Array(0);
   let arena = { x: 1, y: 1 };
   let nextFrame: RenderFrame | null = null;
+  let size = initialSize;
+  let drawScheduled = false;
+  let disposed = false;
   const matrix = new THREE.Matrix4();
   const color = new THREE.Color();
 
   const fitCamera = () => {
-    const { clientWidth: w, clientHeight: h } = canvas;
+    const { width: w, height: h } = size;
+    renderer.setPixelRatio(size.pixelRatio);
     renderer.setSize(w, h, false);
     const aspect = w / h || 1;
     const margin = MARGIN * Math.max(arena.x, arena.y);
@@ -84,6 +110,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     }
     scene.add(particles);
     fitCamera();
+    scheduleDraw();
   };
 
   const displayFrame = (frame: RenderFrame) => {
@@ -101,26 +128,37 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     particles.instanceMatrix.needsUpdate = true;
   };
 
-  const observer = new ResizeObserver(fitCamera);
-  observer.observe(canvas);
-  fitCamera();
-
-  renderer.setAnimationLoop(() => {
+  const draw = () => {
+    drawScheduled = false;
+    if (disposed) return;
     if (nextFrame) {
       displayFrame(nextFrame);
       nextFrame = null;
     }
     renderer.render(scene, camera);
-  });
+  };
+  function scheduleDraw() {
+    if (drawScheduled || disposed) return;
+    drawScheduled = true;
+    requestDraw(draw);
+  }
+
+  fitCamera();
+  scheduleDraw();
 
   return {
     setScene,
+    setSize(next) {
+      size = next;
+      fitCamera();
+      scheduleDraw();
+    },
     setNextFrameToDisplay(frame) {
-      nextFrame = frame;
+      nextFrame = frame; // only the latest frame is drawn if several arrive between refreshes
+      scheduleDraw();
     },
     dispose() {
-      renderer.setAnimationLoop(null);
-      observer.disconnect();
+      disposed = true;
       walls?.geometry.dispose();
       particles?.dispose();
       circle.dispose();

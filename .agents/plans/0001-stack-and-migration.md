@@ -85,7 +85,7 @@ src/
    - Compare the TypeScript output against it within a set tolerance.
    - This is the main correctness gate.
 5. Port the statistics and Formulas, then test the histogram output against Maxwell–Boltzmann theory.
-6. Build the Worker and the Three.js renderer, following `docs/rendering-baseline.md` from boltzmann3d.
+6. Build the Worker and the Three.js renderer, following `docs/rendering-baseline.md` from boltzmann3d. _In progress: physics and rendering each run in their own worker (frames go physics → renderer directly); the 2D view draws the arena and particles. The rendering baseline (colour modes, periodic ghosts, trace, 3D) is still to do._
 7. Port the Svelte UI: main panel controls, then the settings dialogs, then charts.
 8. Port the remaining modes: piston, Maxwell demon, reactions, thermostat and trace.
 9. Deploy to GitHub Pages: set Vite's `base`, add a GitHub Actions workflow that builds, tests, lints and publishes `dist/`, and enable Pages for the repository. This can be set up early so every step above ships as it lands. _Done: the workflow and `base` are in place (`.github/workflows/ci.yml`), and Pages is enabled with GitHub Actions as its source._

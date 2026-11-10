@@ -23,7 +23,7 @@ It supports 1D, 2D and 3D arenas, pistons, thermostats, dividers and holes (effu
 | Rendering | Three.js | One engine for 1D/2D (orthographic camera) and 3D (perspective camera, lit instanced spheres). |
 | UI | Svelte 5 + Vite + TypeScript | The UI is mostly forms, dialogs and live readouts. |
 | Charts | Custom Canvas2D | Ports `StatPanel`, `HistogramBins` and `History`. |
-| Threading | Web Worker for physics | Mirrors `ThreadController`. Frames go to the main thread as transferable typed arrays. |
+| Threading | Physics worker + render worker | Physics mirrors `ThreadController`. Three.js draws on an `OffscreenCanvas` in its own worker; frames go physics → renderer directly over a `MessageChannel` as transferable typed arrays, so the main thread only runs the UI. `?render=main` (and browsers without `OffscreenCanvas`) draw on the main thread instead. |
 | Tooling | mise, pnpm, hk, Vitest, ESLint, Prettier, markdownlint-cli2 | mise pins tool versions; hk runs every linter and the pre-commit hook. |
 
 TypeScript is pinned to 6.0.x because typescript-eslint and svelte-check don't support TS 7 yet.
@@ -36,8 +36,8 @@ src/
   stats/    statistics + Formulas — port of model/statistics
   io/       .set file parsing (Ohm grammar) and loading, plus the bundled presets — from model/io
   utils/    shared pure helpers (unit conversions) — from utils
-  worker/   simulation Web Worker + message protocol
-  render/   Three.js scene (1D/2D/3D views, color modes, periodic ghosts, trace)
+  worker/   physics Web Worker + message protocol
+  render/   Three.js scene (1D/2D/3D views, color modes, periodic ghosts, trace) + render worker
   ui/       Svelte components (App.svelte = root)
   charts/   Canvas2D histogram / history plots
 ```

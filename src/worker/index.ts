@@ -1,11 +1,14 @@
 // Main-thread <-> simulation-worker message protocol (mirrors ThreadController.java).
-import type { RenderFrame, SceneInfo } from '../sim';
+// Frames don't come back here: they stream to the renderer over the `frames` port
+// (render/protocol.ts), so the main thread only handles controls and readouts.
 
-export type ToWorker = { type: 'play' } | { type: 'pause' } | { type: 'step' };
+export type ToWorker =
+  /** Sent once: where to stream scene and frames. The worker starts after this. */
+  | { type: 'connect'; frames: MessagePort }
+  | { type: 'play' }
+  | { type: 'pause' }
+  | { type: 'step' };
 
 export type FromWorker =
-  /** Sent once the simulation is built, before any frame. */
-  | { type: 'scene'; scene: SceneInfo }
-  /** `physicsMs`: wall-clock time the physics took for this frame. */
-  | { type: 'frame'; frame: RenderFrame; physicsMs: number }
-  | { type: 'error'; message: string };
+  /** `physicsMs`: wall-clock time the physics took for the latest frame. */
+  { type: 'timing'; physicsMs: number } | { type: 'error'; message: string };

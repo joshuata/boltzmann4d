@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createRenderer } from '../render';
   import PlayPauseButton from './PlayPauseButton.svelte';
   import { SimulationClient } from './simulation.svelte';
 
@@ -7,16 +6,11 @@
   let sim = $state<SimulationClient | null>(null);
 
   $effect(() => {
-    const renderer = createRenderer(canvas);
-    const client = new SimulationClient({
-      onScene: (scene) => renderer.setScene(scene),
-      onFrame: (frame) => renderer.setNextFrameToDisplay(frame),
-    });
+    const client = new SimulationClient(canvas);
     sim = client;
     return () => {
       sim = null;
       client.dispose();
-      renderer.dispose();
     };
   });
 </script>
@@ -48,7 +42,12 @@
     {#if sim?.error}
       <p class="error" role="alert">Simulation failed to start: {sim.error}</p>
     {:else if sim}
-      <p class="readout">Physics: {sim.physicsMs.toFixed(2)} ms/frame</p>
+      <p class="readout">
+        Physics: {sim.physicsMs.toFixed(2)} ms/frame · rendering on the {sim.renderThread ===
+        'worker'
+          ? 'render worker'
+          : 'main thread'}
+      </p>
     {/if}
   </aside>
 </main>
