@@ -14,7 +14,9 @@ export type ToWorker =
   | { type: 'load'; preset: string }
   | { type: 'play' }
   | { type: 'pause' }
-  | { type: 'step' };
+  | { type: 'step' }
+  /** Multiply the preset's simulation speed (kept across preset loads). */
+  | { type: 'rate'; scale: number };
 
 export type FromWorker =
   /**

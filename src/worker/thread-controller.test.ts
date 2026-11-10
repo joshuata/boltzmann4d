@@ -100,6 +100,22 @@ describe('ThreadController', () => {
     expect(lastTime()).toBe(100);
   });
 
+  it('multiplies the rate by the rate scale, starting from the next tick', () => {
+    start({ speed: 2, rateScale: 0.5 });
+    display.run(20, 10);
+    expect(lastTime()).toBe(20);
+    controller.setRateScale(10);
+    display.run(20, 10);
+    expect(frames.map((f) => f.time)).toEqual([10, 20, 220, 420]);
+  });
+
+  it('ignores rate scales that are not positive numbers', () => {
+    controller.setRateScale(0);
+    controller.setRateScale(Number.NaN);
+    display.run(20, 10);
+    expect(lastTime()).toBe(20);
+  });
+
   it('simulates at most MAX_TICK_MS per tick after a stall', () => {
     display.run(10, 10);
     display.now += 5000;
