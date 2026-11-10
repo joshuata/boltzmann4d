@@ -6,6 +6,8 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import StepForwardIcon from '@lucide/svelte/icons/step-forward';
   import { untrack } from 'svelte';
+  import ArenaOptions from './ui/ArenaOptions.svelte';
+  import PistonPanel from './ui/PistonPanel.svelte';
   import PlayPauseButton from './ui/PlayPauseButton.svelte';
   import RateSlider from './ui/RateSlider.svelte';
   import { rotateView } from './ui/rotate-view';
@@ -65,6 +67,13 @@
   <aside
     class="bg-muted/40 min-h-0 overflow-y-auto overscroll-contain border-t p-4 md:border-t-0 md:border-l"
   >
+    {#if sim?.arena}
+      <ArenaOptions
+        arena={sim.arena}
+        disabled={sim.loading}
+        onChange={(options) => sim?.setArenaOptions(options)}
+      />
+    {/if}
     <div class="flex gap-2" role="group" aria-label="Simulation controls">
       <PlayPauseButton
         paused={sim?.paused ?? false}
@@ -89,7 +98,14 @@
       onChange={(scale) => sim?.setRateScale(scale)}
     />
     {#if sim?.error}
-      <p class="text-destructive text-sm" role="alert">Simulation failed to start: {sim.error}</p>
+      <p class="text-destructive text-sm" role="alert">{sim.error}</p>
+    {/if}
+    {#if sim?.piston}
+      <PistonPanel
+        piston={sim.piston}
+        onMove={(level, mode, speed) => sim?.movePiston(level, mode, speed)}
+        onStop={() => sim?.stopPiston()}
+      />
     {/if}
     {#if sim?.statistics}
       {#await statisticsPanel then { default: StatisticsPanel }}
@@ -102,7 +118,9 @@
         <Collapsible.Trigger
           class="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 w-[calc(100%+0.5rem)] items-center justify-between rounded-md px-1 text-xs font-medium"
         >
-          {sim.loading ? 'Loading…' : `${sim.particleCount} particles`}
+          {sim.loading
+            ? 'Loading…'
+            : `${sim.particleCount} particles, ${sim.simulationFps.toFixed(0)} fps`}
           <ChevronDownIcon
             class={['size-4 transition-transform', detailsOpen && 'rotate-180']}
             aria-hidden="true"
@@ -110,9 +128,7 @@
         </Collapsible.Trigger>
         <Collapsible.Content class="text-muted-foreground space-y-1 text-xs tabular-nums">
           <p>
-            {sim.simulationFps.toFixed(0)} fps ({sim.drawnFps.toFixed(0)} drawn) · physics {sim.physicsMs.toFixed(
-              2,
-            )} ms/frame
+            {sim.drawnFps.toFixed(0)} frames drawn per second · physics {sim.physicsMs.toFixed(2)} ms/frame
           </p>
           <p>{sim.simulatedPsPerSecond.toFixed(1)} ps simulated per second</p>
           <p>Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}</p>

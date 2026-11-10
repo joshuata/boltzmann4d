@@ -3,9 +3,15 @@
 import { loadDefaultSettingsText, loadPresetText, loadSettings } from '@boltzmann4d/engine/io';
 import type { RenderStream } from '../render/protocol';
 import { Simulation, type SceneInfo } from '@boltzmann4d/engine/sim';
+import { DefaultParticleInfo, ParticleType } from '@boltzmann4d/engine/sim/particle-type';
 import { Statistics, statsContext } from '@boltzmann4d/engine/stats';
-import { ArenaType } from '@boltzmann4d/engine/sim/simulation-info';
-import type { FromWorker, ToWorker } from './index';
+import {
+  ArenaType,
+  DividerThermalMode,
+  PISTON_SHAFT_RADIUS,
+  PISTON_VALVE_RADIUS,
+} from '@boltzmann4d/engine/sim/simulation-info';
+import type { ArenaInfo, ArenaOptions, FromWorker, ToWorker } from './index';
 import { parseSimulationSpeed, ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
@@ -13,10 +19,14 @@ const post = (message: FromWorker) => scope.postMessage(message);
 /** Statistics are summarised about this often (real milliseconds), like the Java app. */
 const SUMMARY_INTERVAL_MS = 1000;
 
+/** The Reactions tab's defaults: forward and reverse activation energies, kJ/mol. */
+const DEFAULT_REACTIONS = { forward: 8.0, reverse: 4.0, suppressReverse: false };
+
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 let frames: MessagePort | null = null;
 let threadController: ThreadController | null = null;
+let running: Simulation | null = null;
 let paused = false;
 /** The user's speed multiplier on top of each preset's own speed. */
 let rateScale = 1;
@@ -28,10 +38,22 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
   switch (message.type) {
     case 'connect':
       frames = message.frames;
-      void load(message.preset);
+      void load(message.preset, message.arena);
       break;
     case 'load':
-      void load(message.preset);
+      void load(message.preset, message.arena);
+      break;
+    case 'movePiston':
+    case 'stopPiston':
+      try {
+        if (message.type === 'movePiston') {
+          running?.movePiston(message.level, message.mode, message.speed);
+        } else {
+          running?.stopPiston();
+        }
+      } catch (error) {
+        post({ type: 'error', message: `Piston: ${errorText(error)}` });
+      }
       break;
     case 'play':
       paused = false;
@@ -56,19 +78,91 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
  * simulation. If the preset can't be loaded or isn't supported yet, reports the error and
  * keeps the current simulation running. Paused stays paused.
  */
-async function load(preset?: string): Promise<void> {
+async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
   const generation = ++loadGeneration;
   let simulation: Simulation;
   let statistics: Statistics;
   let typeColors: number[];
   let viewingAngles: [number, number];
   let speed: number;
+  let arenaInfo: ArenaInfo;
   try {
     const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
-    const { settings } = loadSettings(text);
+    const { settings: loaded } = loadSettings(text);
+    const canHavePiston =
+      loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
+      loaded.arenaType === ArenaType.MOVABLE_PISTON;
+    const canConduct =
+      loaded.arenaType === ArenaType.DIVIDED_ARENA ||
+      loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+    const settings = { ...loaded };
+    if (canHavePiston && arena.piston !== undefined) {
+      settings.arenaType = arena.piston
+        ? ArenaType.MOVABLE_PISTON
+        : ArenaType.REFLECTING_BOUNDARIES;
+    }
+    if (canConduct && arena.conductingDivider !== undefined) {
+      settings.dividerThermalMode = arena.conductingDivider
+        ? DividerThermalMode.CONDUCTING
+        : DividerThermalMode.INSULATING;
+    }
+    // Reactions (as Java's Reactions tab): one species plus a "Reacted" copy of it that
+    // particles turn into. Presets with reaction_mode TRUE get them by default, with the
+    // tab's default activation energies (Java ignored the key).
+    const canReact = settings.dimension === 2 && settings.species.length === 1;
+    const reactions = canReact
+      ? arena.reactions !== undefined
+        ? arena.reactions
+        : settings.reactionMode
+          ? { ...DEFAULT_REACTIONS }
+          : null
+      : null;
+    if (reactions) {
+      const red = settings.species[0]!;
+      const empty = new Float64Array(0);
+      settings.species = [
+        red,
+        {
+          ...red,
+          type: new ParticleType(
+            red.type.particleMass,
+            red.type.particleRadius,
+            DefaultParticleInfo.BLUE,
+            'Reacted',
+          ),
+          positions: empty,
+          velocities: empty,
+        },
+      ];
+    }
+    const canHaveWells = settings.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
+    const wells = canHaveWells && arena.wells ? arena.wells : null;
+    const attractiveWall = canHaveWells && arena.attractiveWall ? arena.attractiveWall : null;
+    const simulationSettings = {
+      ...settings,
+      ...(wells ? { wells } : {}),
+      ...(attractiveWall ? { attractiveWall } : {}),
+      ...(reactions ? { reactions } : {}),
+    };
+    arenaInfo = {
+      canHavePiston,
+      canConduct,
+      canHaveWells,
+      canReact,
+      typeNames: settings.species.map((s) => s.type.displayName),
+      options: {
+        piston: settings.arenaType === ArenaType.MOVABLE_PISTON,
+        conductingDivider: settings.dividerThermalMode === DividerThermalMode.CONDUCTING,
+        wells,
+        attractiveWall,
+        reactions,
+      },
+    };
     speed = parseSimulationSpeed(settings.simulationSpeed);
     let stats: Statistics | null = null;
-    simulation = new Simulation(settings, { onEvent: (event) => stats?.notifyOfEvent(event) });
+    simulation = new Simulation(simulationSettings, {
+      onEvent: (event) => stats?.notifyOfEvent(event),
+    });
     typeColors = settings.species.map((s) => s.type.defaultColor);
     viewingAngles = settings.viewingAngles;
     statistics = stats = new Statistics(statsContext(settings), simulation.particles, {
@@ -95,7 +189,15 @@ async function load(preset?: string): Promise<void> {
     simulation,
     (frame, physicsMs) => {
       send({ type: 'frame', frame }, [frame.positions.buffer, frame.types.buffer]);
-      post({ type: 'timing', physicsMs, time: frame.time });
+      const piston = simulation.piston;
+      post({
+        type: 'timing',
+        physicsMs,
+        time: frame.time,
+        piston: piston
+          ? { level: piston.curLevel, moving: piston.isMoving(simulation.time) }
+          : undefined,
+      });
       const now = performance.now();
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
         lastSummary = now;
@@ -106,6 +208,7 @@ async function load(preset?: string): Promise<void> {
     { speed, rateScale },
   );
   threadController = controller;
+  running = simulation;
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
   threadController.showCurrentFrame();
@@ -113,6 +216,10 @@ async function load(preset?: string): Promise<void> {
     type: 'loaded',
     preset: preset ?? 'default',
     particles: simulation.particles.count,
+    arena: arenaInfo,
+    piston: simulation.piston
+      ? { maxLevel: simulation.maxPistonLevel(), arenaHeight: simulation.arena.ySize }
+      : undefined,
     dimension: simulation.dimension,
   });
 }
@@ -146,6 +253,9 @@ function sceneOf(
           edgeRadius: arena.edgeRadius,
           holeDiameter: hole ? arena.holeDiameter : undefined,
         }
+      : undefined,
+    piston: simulation.piston
+      ? { valveRadius: PISTON_VALVE_RADIUS, shaftRadius: PISTON_SHAFT_RADIUS }
       : undefined,
   };
 }

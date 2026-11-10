@@ -4,6 +4,7 @@
 // state. The TypeScript engine must reproduce them bit for bit.
 import { describe, expect, it } from 'vitest';
 import { Simulation, type InitialState } from './simulation';
+import type { PistonMode } from './piston';
 import { ArenaType } from './simulation-info';
 
 interface ParityFixture {
@@ -27,13 +28,29 @@ interface ParityFixture {
     positions: number[];
     velocities: number[];
   }[];
+  /** Square-well scenarios. */
+  wells?: { radiusMultiplier: number; depths: number[] };
+  /** Red↔blue reaction scenarios. */
+  reactions?: { forward: number; reverse: number; suppressReverse: boolean };
   frameDuration: number;
   frames: number;
+  /** Run-time actions, applied just before the given frame (scenario fixtures). */
+  actions?: ([number, 'movePiston', number, PistonMode, number] | [number, 'stopPiston'])[];
+  /** Piston and thermostat state at the end. */
+  piston?: { curLevel: number; targetLevel: number; deltaKE: number; thermostatEnabled: boolean };
   time: number;
   /** [type, time, part1, part2, side] per event, in order. */
   events: [number, number, number, number, number][];
   /** z and vz only for 3D presets. */
-  final: { x: number[]; y: number[]; vx: number[]; vy: number[]; z?: number[]; vz?: number[] };
+  final: {
+    x: number[];
+    y: number[];
+    vx: number[];
+    vy: number[];
+    colors?: number[];
+    z?: number[];
+    vz?: number[];
+  };
 }
 
 const fixtures = import.meta.glob<ParityFixture>('./parity/*.json', { import: 'default' });
@@ -42,6 +59,7 @@ const SUPPORTED = new Set<string>([
   ArenaType.PERIODIC_BOUNDARIES,
   ArenaType.DIVIDED_ARENA,
   ArenaType.DIVIDED_ARENA_WITH_HOLE,
+  ArenaType.MOVABLE_PISTON,
 ]);
 
 function initialState(f: ParityFixture): InitialState {
@@ -54,6 +72,8 @@ function initialState(f: ParityFixture): InitialState {
     holeDiameter: f.holeDiameter,
     maxwellDemonMode: f.maxwellDemonMode,
     dividerThermalMode: f.dividerThermalMode,
+    wells: f.wells,
+    reactions: f.reactions,
     holeEdges: f.edgeY && f.edgeZ ? { y: f.edgeY, z: f.edgeZ } : undefined,
     species: f.species.map((s) => ({
       type: { particleMass: s.mass, particleRadius: s.radius },
@@ -85,7 +105,14 @@ describe('parity with the Java app', () => {
         onEvent: (e) => events.push([e.type, e.time, e.part1, e.part2, e.side]),
       });
       sim.advanceToNextFrame(); // the first call only creates the first frame, as in Java
-      for (let i = 0; i < f.frames; i++) sim.advanceToNextFrame();
+      for (let i = 0; i < f.frames; i++) {
+        for (const action of f.actions ?? []) {
+          if (action[0] !== i) continue;
+          if (action[1] === 'movePiston') sim.movePiston(action[2], action[3], action[4]);
+          else sim.stopPiston();
+        }
+        sim.advanceToNextFrame();
+      }
 
       expect(events.length).toBe(f.events.length);
       // Compare event by event so a failure names the first divergence.
@@ -98,6 +125,13 @@ describe('parity with the Java app', () => {
       expect(Array.from(p.y)).toEqual(f.final.y);
       expect(Array.from(p.vx)).toEqual(f.final.vx);
       expect(Array.from(p.vy)).toEqual(f.final.vy);
+      if (f.final.colors) expect(Array.from(p.color)).toEqual(f.final.colors);
+      if (sim.piston && f.piston) {
+        expect(sim.piston.curLevel).toBe(f.piston.curLevel);
+        expect(sim.piston.targetLevel).toBe(f.piston.targetLevel);
+        expect(sim.thermostat.deltaKE).toBe(f.piston.deltaKE);
+        expect(sim.thermostat.enabled).toBe(f.piston.thermostatEnabled);
+      }
       if (f.dimension === 3) {
         expect(Array.from(p.z)).toEqual(f.final.z);
         expect(Array.from(p.vz)).toEqual(f.final.vz);

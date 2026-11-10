@@ -7,6 +7,8 @@
 ,"positions":[7.268093655860189E-9,4.6777613269758854E-8,2.2189361462587986E-8]
 ,"velocities":[55.58726242433679,-1611.0212837377933,0.0]}]
 ,"frameDuration":4.04706830433E-13,"frames":115,"time":4.6541285499794895E-11
+,"actions":[]
+,"piston":{"curLevel":0.0,"targetLevel":0.0,"deltaKE":0.0,"thermostatEnabled":false}
 ,"events":[
 [0,0.0,8,12,0]
 ,[0,0.0,10,27,0]
