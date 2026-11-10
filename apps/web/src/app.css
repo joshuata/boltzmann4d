@@ -3,3 +3,6 @@
 @import '@boltzmann4d/ui/theme.css';
 
 @source '../../../packages';
+
+/* Styles for rendered Markdown (the `prose` classes on docs pages). */
+@plugin '@tailwindcss/typography';

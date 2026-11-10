@@ -14,6 +14,7 @@
   import RateSlider from './ui/RateSlider.svelte';
   import ScaleBar from './ui/ScaleBar.svelte';
   import ViewOptions from './ui/ViewOptions.svelte';
+  import { missingBrowserFeatures } from './ui/browser-support';
   import { rotateView } from './ui/rotate-view';
   import { SimulationClient } from './ui/simulation.svelte';
   import type { ScenarioSource } from './worker';
@@ -43,8 +44,11 @@
   let sim = $state<SimulationClient | null>(null);
   /** The performance readouts under the particle count (frame rates, physics time, renderer). */
   let detailsOpen = $state(true);
+  /** Browser features the simulator needs but can't find (it doesn't start without them). */
+  const missing = missingBrowserFeatures();
 
   $effect(() => {
+    if (missing.length > 0) return;
     const client = new SimulationClient(
       canvas,
       untrack(() => source),
@@ -85,8 +89,25 @@
         if (sim && sim.dimension !== 3 && sim.holeOpen !== null) sim.setHoleOpen(!sim.holeOpen);
       }}
     ></canvas>
-    {#if sim && sim.dimension !== 3}
+    {#if sim && sim.dimension !== 3 && !sim.error}
       <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
+    {/if}
+    {#if missing.length > 0 || sim?.error}
+      <div class="bg-background/90 absolute inset-0 grid place-items-center p-4" role="alert">
+        <div class="max-w-sm space-y-3 text-center">
+          {#if missing.length > 0}
+            <p class="font-semibold">This browser can’t run the simulation</p>
+            <p class="text-muted-foreground text-sm">
+              It needs {missing.join(' and ')}. Try a recent version of Chrome, Edge, Firefox or
+              Safari, and check that hardware acceleration is turned on.
+            </p>
+          {:else}
+            <p class="font-semibold">The simulation stopped</p>
+            <p class="text-muted-foreground text-sm break-words">{sim?.error}</p>
+            <Button variant="outline" onclick={() => location.reload()}>Reload</Button>
+          {/if}
+        </div>
+      </div>
     {/if}
   </div>
   <aside
@@ -152,9 +173,6 @@
       disabled={!sim}
       onChange={(scale) => sim?.setRateScale(scale)}
     />
-    {#if sim?.error}
-      <p class="text-destructive text-sm" role="alert">{sim.error}</p>
-    {/if}
     {#if sim?.piston}
       <PistonPanel
         piston={sim.piston}
