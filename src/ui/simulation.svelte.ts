@@ -6,6 +6,7 @@
 // only runs the UI. Browsers that can't hand a canvas to a worker draw on the main
 // thread instead, fed through the same channel.
 import type { Renderer, ViewSize } from '../render';
+import type { Dimension } from '../sim';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '../stats/summary';
@@ -28,6 +29,8 @@ export class SimulationClient {
   preset = $state('default');
   /** Particles in the running simulation (0 until it has loaded). */
   particleCount = $state(0);
+  /** Dimension of the running simulation (3D views can be turned). */
+  dimension = $state<Dimension>(2);
   /** True while a preset is loading. */
   loading = $state(true);
   /** Latest statistics from the physics worker (about once a second); null until the first. */
@@ -129,6 +132,7 @@ export class SimulationClient {
         case 'loaded':
           this.preset = message.preset;
           this.particleCount = message.particles;
+          this.dimension = message.dimension;
           this.loading = false;
           this.error = null;
           break;
@@ -161,6 +165,16 @@ export class SimulationClient {
       '',
       `${location.pathname}${query.length ? `?${query.join('&')}` : ''}${location.hash}`,
     );
+  }
+
+  /** 3D: turns the view by these angles about the x and y axes, in degrees. */
+  rotate(aboutX: number, aboutY: number): void {
+    if (this.#renderWorker) {
+      const message: ToRenderWorker = { type: 'rotate', aboutX, aboutY };
+      this.#renderWorker.postMessage(message);
+    } else {
+      this.#mainRenderer?.rotate(aboutX, aboutY);
+    }
   }
 
   setPaused(paused: boolean): void {

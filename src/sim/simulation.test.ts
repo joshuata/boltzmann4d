@@ -42,7 +42,8 @@ function momentumScale(sim: Simulation): number {
 
 function expectNoOverlapsInside(sim: Simulation): void {
   const p = sim.particles;
-  const { xSize, ySize } = sim.arena;
+  const { xSize, ySize, zSize } = sim.arena;
+  const is3D = sim.dimension === 3;
   const reflecting = sim.arena.type === ArenaType.REFLECTING_BOUNDARIES;
   const slack = 1e-12 * Math.max(xSize, ySize);
   for (let i = 0; i < p.count; i++) {
@@ -52,24 +53,30 @@ function expectNoOverlapsInside(sim: Simulation): void {
       expect(p.x[i]).toBeLessThanOrEqual(xSize - r + slack);
       expect(p.y[i]).toBeGreaterThanOrEqual(r - slack);
       expect(p.y[i]).toBeLessThanOrEqual(ySize - r + slack);
+      if (is3D) {
+        expect(p.z[i]).toBeGreaterThanOrEqual(r - slack);
+        expect(p.z[i]).toBeLessThanOrEqual(zSize - r + slack);
+      }
     }
     for (let j = i + 1; j < p.count; j++) {
       // nearest image in periodic arenas
       let dx = Math.abs(p.x[i]! - p.x[j]!);
       let dy = Math.abs(p.y[i]! - p.y[j]!);
+      let dz = is3D ? Math.abs(p.z[i]! - p.z[j]!) : 0;
       if (!reflecting) {
         dx = Math.min(dx, xSize - dx);
         dy = Math.min(dy, ySize - dy);
+        if (is3D) dz = Math.min(dz, zSize - dz);
       }
-      expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(r + p.radius[j]! - slack);
+      expect(Math.hypot(dx, dy, dz)).toBeGreaterThanOrEqual(r + p.radius[j]! - slack);
     }
   }
 }
 
 describe('Simulation', () => {
-  const presets2D = presetNames.filter((name) => name.startsWith('2D') || name === 'default');
+  const presets = presetNames.filter((name) => !name.startsWith('1D'));
 
-  it.each(presets2D)('runs %s (if supported) conserving energy, without overlaps', async (name) => {
+  it.each(presets)('runs %s (if supported) conserving energy, without overlaps', async (name) => {
     const { settings } = loadSettings(await loadPresetText(name), { random: seededRandom(3) });
     if (!SUPPORTED.has(settings.arenaType)) {
       expect(() => new Simulation(settings)).toThrow(/not supported yet/);
@@ -147,7 +154,7 @@ describe('Simulation', () => {
 
   it('rejects arenas and dimensions not ported yet', () => {
     const init = syntheticGas({ count: 4 });
-    expect(() => new Simulation({ ...init, dimension: 3 })).toThrow(/3D/);
+    expect(() => new Simulation({ ...init, dimension: 1 })).toThrow(/1D/);
     expect(() => new Simulation({ ...init, arenaType: ArenaType.MOVABLE_PISTON })).toThrow(
       /not supported yet/,
     );

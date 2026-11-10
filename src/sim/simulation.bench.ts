@@ -15,6 +15,8 @@ async function preset(name: string): Promise<InitialState> {
 const scenes: [string, () => Promise<InitialState>][] = [
   ['2Dmixture (60, reflecting)', () => preset('2Dmixture')],
   ['2Dbrownian (200, periodic)', () => preset('2Dbrownian')],
+  ['3Dmixture (60, reflecting)', () => preset('3Dmixture')],
+  ['3Dbrownian (200, periodic)', () => preset('3Dbrownian')],
   ['synthetic (1000, reflecting)', async () => syntheticGas({ count: 1000 })],
   [
     'synthetic (1000, periodic)',

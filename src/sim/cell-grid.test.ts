@@ -22,9 +22,9 @@ describe('CellGrid', () => {
     // 0.99 so a 10-wide arena gets exactly 10 cells (cells are made a hair wider than asked).
     const periodic = new CellGrid(arena(ArenaType.PERIODIC_BOUNDARIES), 0, 0.99);
     const reflecting = new CellGrid(arena(ArenaType.REFLECTING_BOUNDARIES), 0, 0.99);
-    expect(periodic.neighbour(0, 0, -1, -1)).toBe(9 * 10 + 9);
-    expect(reflecting.neighbour(0, 0, -1, 0)).toBe(-1);
-    expect(reflecting.neighbour(4, 5, 1, 1)).toBe(6 * 10 + 5);
+    expect(periodic.neighbour(0, 0, 0, -1, -1, 0)).toBe(9 * 10 + 9);
+    expect(reflecting.neighbour(0, 0, 0, -1, 0, 0)).toBe(-1);
+    expect(reflecting.neighbour(4, 5, 0, 1, 1, 0)).toBe(6 * 10 + 5);
   });
 
   it('maps positions to cells, including periodic positions just below zero', () => {
@@ -34,6 +34,24 @@ describe('CellGrid', () => {
     expect(grid.columnOf(9.99)).toBe(9);
     expect(grid.columnOf(-0.2)).toBe(9);
     expect(grid.rowOf(10.5)).toBe(9); // clamped
+  });
+
+  it('adds a z axis in 3D, wrapping it in periodic arenas', () => {
+    const box = createArena(ArenaType.PERIODIC_BOUNDARIES, 10, 10, 5, -1, false, 3);
+    const grid = new CellGrid(box, 0, 0.99, 3);
+    expect([grid.nx, grid.ny, grid.nz]).toEqual([10, 10, 5]);
+    expect(grid.cellAt(1.5, 2.5, -0.1)).toBe((4 * 10 + 2) * 10 + 1);
+    expect(grid.neighbour(0, 0, 0, 0, 0, -1)).toBe(4 * 100);
+    // The neighbour table lists the same 27 cells as neighbour().
+    const cell = (2 * 10 + 3) * 10 + 4;
+    const listed = Array.from(grid.neighbours.subarray(cell * 27, cell * 27 + 27)).sort();
+    const expected: number[] = [];
+    for (const dz of [-1, 0, 1])
+      for (const dy of [-1, 0, 1])
+        for (const dx of [-1, 0, 1]) expected.push(grid.neighbour(4, 3, 2, dx, dy, dz));
+    expect(listed).toEqual(expected.sort());
+    // A 2D grid ignores z.
+    expect(new CellGrid(arena(ArenaType.PERIODIC_BOUNDARIES), 0, 0.99).nz).toBe(1);
   });
 
   it('keeps cell membership lists consistent', () => {

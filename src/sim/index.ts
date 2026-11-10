@@ -18,14 +18,22 @@ export interface SceneInfo {
   types: Uint16Array;
   /** Per particle type, 0xRRGGBB. */
   typeColors: number[];
-  /** Divided arenas: the divider's faces, and the hole's edge discs if it has one. */
+  /** Divided arenas: the divider's faces, and the hole's edge particles if it has one. */
   divider?: {
     leftX: number;
     rightX: number;
-    /** Centres of the two edge discs lining the hole (top, bottom); absent without a hole. */
-    edgeY?: readonly [number, number];
+    /**
+     * Centres of the edge particles lining the hole, all at x = (leftX + rightX) / 2: the
+     * two discs (top, bottom) in 2D, a ring in 3D. Absent without a hole.
+     */
+    edgeY?: Float64Array;
+    edgeZ?: Float64Array;
     edgeRadius: number;
+    /** The hole's diameter in meters; absent without a hole. */
+    holeDiameter?: number;
   };
+  /** 3D: the starting view rotation about the x and y axes, in degrees. */
+  viewingAngles?: readonly [number, number];
 }
 
 /** Snapshot of particle state handed to the renderer (mirrors RenderFrame.java). */
@@ -61,6 +69,15 @@ export {
 export { CellGrid } from './cell-grid';
 export { EventHeap } from './event-heap';
 export { Particles, type Arena } from './particles';
+export {
+  boundaryCollide3D,
+  collide3D,
+  initPeriodicFlags3D,
+  moveToTime3D,
+  predCol3D,
+  predictBoundary3D,
+  predictPair3D,
+} from './particle-3d';
 export {
   boundaryCollide2D,
   collide2D,

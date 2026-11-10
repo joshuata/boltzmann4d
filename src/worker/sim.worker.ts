@@ -61,6 +61,7 @@ async function load(preset?: string): Promise<void> {
   let simulation: Simulation;
   let statistics: Statistics;
   let typeColors: number[];
+  let viewingAngles: [number, number];
   let speed: number;
   try {
     const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
@@ -69,6 +70,7 @@ async function load(preset?: string): Promise<void> {
     let stats: Statistics | null = null;
     simulation = new Simulation(settings, { onEvent: (event) => stats?.notifyOfEvent(event) });
     typeColors = settings.species.map((s) => s.type.defaultColor);
+    viewingAngles = settings.viewingAngles;
     statistics = stats = new Statistics(statsContext(settings), simulation.particles, {
       forgetMultiplier: settings.forgetMultiplier,
       typeNames: settings.species.map((s) => s.type.displayName),
@@ -86,7 +88,7 @@ async function load(preset?: string): Promise<void> {
   const port = frames;
   const send = (message: RenderStream, transfer: Transferable[]) =>
     port.postMessage(message, transfer);
-  send({ type: 'scene', scene: sceneOf(simulation, typeColors) }, []);
+  send({ type: 'scene', scene: sceneOf(simulation, typeColors, viewingAngles) }, []);
 
   let lastSummary = -Infinity;
   const controller = new ThreadController(
@@ -107,14 +109,24 @@ async function load(preset?: string): Promise<void> {
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
   threadController.showCurrentFrame();
-  post({ type: 'loaded', preset: preset ?? 'default', particles: simulation.particles.count });
+  post({
+    type: 'loaded',
+    preset: preset ?? 'default',
+    particles: simulation.particles.count,
+    dimension: simulation.dimension,
+  });
 }
 
-function sceneOf(simulation: Simulation, typeColors: number[]): SceneInfo {
+function sceneOf(
+  simulation: Simulation,
+  typeColors: number[],
+  viewingAngles: [number, number],
+): SceneInfo {
   const p = simulation.particles;
   const arena = simulation.arena;
   const divided =
     arena.type === ArenaType.DIVIDED_ARENA || arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+  const hole = arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
   return {
     dimension: simulation.dimension,
     arenaXSize: arena.xSize,
@@ -124,12 +136,15 @@ function sceneOf(simulation: Simulation, typeColors: number[]): SceneInfo {
     radii: p.radius.slice(),
     types: p.type.slice(),
     typeColors,
+    viewingAngles,
     divider: divided
       ? {
           leftX: arena.barrierLeftX,
           rightX: arena.barrierRightX,
-          edgeY: arena.type === ArenaType.DIVIDED_ARENA_WITH_HOLE ? arena.edgeY : undefined,
+          edgeY: hole ? arena.edgeY.slice() : undefined,
+          edgeZ: hole ? arena.edgeZ.slice() : undefined,
           edgeRadius: arena.edgeRadius,
+          holeDiameter: hole ? arena.holeDiameter : undefined,
         }
       : undefined,
   };
