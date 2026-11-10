@@ -3,7 +3,12 @@
 import { loadDefaultSettingsText, loadPresetText, loadSettings } from '@boltzmann4d/engine/io';
 import type { RenderStream } from '../render/protocol';
 import type { SimulationSettings } from '@boltzmann4d/engine/io';
-import { Simulation, type ColorMode, type SceneInfo } from '@boltzmann4d/engine/sim';
+import {
+  Simulation,
+  type ColorMode,
+  type InitialState,
+  type SceneInfo,
+} from '@boltzmann4d/engine/sim';
 import { DefaultParticleInfo, ParticleType } from '@boltzmann4d/engine/sim/particle-type';
 import { averageVelocity, avgKineticEnergy } from '@boltzmann4d/engine/stats/formulas';
 import {
@@ -54,6 +59,13 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
     case 'load':
       void load(message.preset, message.arena);
       break;
+    case 'restart':
+      restart();
+      break;
+    case 'setHoleOpen':
+      // Takes effect at the start of the next frame (Physics.setArenaHoleOpen).
+      running?.setHoleOpen(message.open);
+      break;
     case 'movePiston':
     case 'stopPiston':
       try {
@@ -91,13 +103,8 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
  */
 async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
   const generation = ++loadGeneration;
-  let simulation: Simulation;
-  let statistics: Statistics;
-  let typeColors: number[];
-  let viewingAngles: [number, number];
-  let view: ViewSettings;
-  let speed: number;
-  let arenaInfo: ArenaInfo;
+  let prepared: Prepared;
+  let built: Built;
   try {
     const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
     const { settings: loaded } = loadSettings(text);
@@ -107,7 +114,9 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
     const canConduct =
       loaded.arenaType === ArenaType.DIVIDED_ARENA ||
       loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+    const canDemon = loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
     const settings = { ...loaded };
+    if (canDemon && arena.demon !== undefined) settings.maxwellDemonMode = arena.demon;
     if (canHavePiston && arena.piston !== undefined) {
       settings.arenaType = arena.piston
         ? ArenaType.MOVABLE_PISTON
@@ -156,34 +165,35 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
       ...(attractiveWall ? { attractiveWall } : {}),
       ...(reactions ? { reactions } : {}),
     };
-    arenaInfo = {
+    const arenaInfo: ArenaInfo = {
       canHavePiston,
       canConduct,
+      canDemon,
       canHaveWells,
       canReact,
       typeNames: settings.species.map((s) => s.type.displayName),
       options: {
         piston: settings.arenaType === ArenaType.MOVABLE_PISTON,
         conductingDivider: settings.dividerThermalMode === DividerThermalMode.CONDUCTING,
+        demon: canDemon && settings.maxwellDemonMode,
         wells,
         attractiveWall,
         reactions,
       },
     };
-    speed = parseSimulationSpeed(settings.simulationSpeed);
-    let stats: Statistics | null = null;
-    simulation = new Simulation(simulationSettings, {
-      onEvent: (event) => stats?.notifyOfEvent(event),
-    });
-    typeColors = settings.species.map((s) => s.type.defaultColor);
-    viewingAngles = settings.viewingAngles;
     const ctx = statsContext(settings);
-    view = viewOf(settings, ctx);
-    statistics = stats = new Statistics(ctx, simulation.particles, {
-      forgetMultiplier: settings.forgetMultiplier,
-      typeNames: settings.species.map((s) => s.type.displayName),
-      typeColors,
-    });
+    prepared = {
+      preset: preset ?? 'default',
+      settings,
+      simulationSettings,
+      ctx,
+      arenaInfo,
+      speed: parseSimulationSpeed(settings.simulationSpeed),
+      typeColors: settings.species.map((s) => s.type.defaultColor),
+      viewingAngles: settings.viewingAngles,
+      view: viewOf(settings, ctx),
+    };
+    built = build(prepared);
   } catch (error) {
     if (generation === loadGeneration) {
       post({ type: 'error', message: `Can't load ${preset ?? 'default'}: ${errorText(error)}` });
@@ -191,12 +201,74 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
     return;
   }
   if (generation !== loadGeneration || !frames) return;
+  start(prepared, built);
+}
 
-  threadController?.stopSimulationThreads();
+/** A loaded settings file with the user's arena options applied, ready to (re)build. */
+interface Prepared {
+  preset: string;
+  settings: SimulationSettings;
+  simulationSettings: InitialState;
+  ctx: StatsContext;
+  arenaInfo: ArenaInfo;
+  speed: number;
+  typeColors: number[];
+  viewingAngles: [number, number];
+  view: ViewSettings;
+}
+
+interface Built {
+  simulation: Simulation;
+  statistics: Statistics;
+}
+
+/** The last simulation started, so Restart can build it again from the same state. */
+let lastPrepared: Prepared | null = null;
+
+/** Builds the simulation and its statistics from the prepared state. */
+function build(prepared: Prepared): Built {
+  let stats: Statistics | null = null;
+  const simulation = new Simulation(prepared.simulationSettings, {
+    onEvent: (event) => stats?.notifyOfEvent(event),
+  });
+  const statistics = (stats = new Statistics(prepared.ctx, simulation.particles, {
+    forgetMultiplier: prepared.settings.forgetMultiplier,
+    typeNames: prepared.settings.species.map((s) => s.type.displayName),
+    typeColors: prepared.typeColors,
+  }));
+  return { simulation, statistics };
+}
+
+/**
+ * Restart (Physics.reset): the same starting positions and velocities again, rather than
+ * re-placing particles at random. Unlike Java's reset, a periodic arena's momentum is
+ * zeroed again, so the run repeats the first exactly (joshuata/boltzmann4d#24).
+ */
+function restart(): void {
+  if (!lastPrepared || !frames) return;
+  ++loadGeneration; // a load still in flight mustn't replace the restarted run
+  try {
+    start(lastPrepared, build(lastPrepared));
+  } catch (error) {
+    post({ type: 'error', message: `Can't restart: ${errorText(error)}` });
+  }
+}
+
+/** Runs a built simulation: streams its scene and frames, and reports it loaded. */
+function start(prepared: Prepared, { simulation, statistics }: Built): void {
   const port = frames;
+  if (!port) return;
+  lastPrepared = prepared;
+  threadController?.stopSimulationThreads();
   const send = (message: RenderStream, transfer: Transferable[]) =>
     port.postMessage(message, transfer);
-  send({ type: 'scene', scene: sceneOf(simulation, typeColors, viewingAngles, view) }, []);
+  send(
+    {
+      type: 'scene',
+      scene: sceneOf(simulation, prepared.typeColors, prepared.viewingAngles, prepared.view),
+    },
+    [],
+  );
 
   let lastSummary = -Infinity;
   const controller = new ThreadController(
@@ -215,6 +287,7 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
         piston: piston
           ? { level: piston.curLevel, moving: piston.isMoving(simulation.time) }
           : undefined,
+        holeOpen: simulation.arena.maxwellDemonMode ? simulation.holeOpen : undefined,
       });
       const now = performance.now();
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
@@ -223,7 +296,7 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
         post({ type: 'statistics', summary: statistics.summary(simulation.time) });
       }
     },
-    { speed, rateScale },
+    { speed: prepared.speed, rateScale },
   );
   threadController = controller;
   running = simulation;
@@ -232,16 +305,16 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
   threadController.showCurrentFrame();
   post({
     type: 'loaded',
-    preset: preset ?? 'default',
+    preset: prepared.preset,
     particles: simulation.particles.count,
-    arena: arenaInfo,
+    arena: prepared.arenaInfo,
     piston: simulation.piston
       ? { maxLevel: simulation.maxPistonLevel(), arenaHeight: simulation.arena.ySize }
       : undefined,
     dimension: simulation.dimension,
     view: {
-      colorMode: view.colorMode,
-      trace: view.trace,
+      colorMode: prepared.view.colorMode,
+      trace: prepared.view.trace,
       arenaWidth: simulation.arena.xSize,
       arenaHeight: simulation.arena.ySize,
     },

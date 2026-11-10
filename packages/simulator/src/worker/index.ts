@@ -12,6 +12,8 @@ import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 export interface ArenaOptions {
   piston?: boolean;
   conductingDivider?: boolean;
+  /** Maxwell's demon: the hole is closed until opened (arenas with a hole). */
+  demon?: boolean;
   /**
    * Attractive square wells between particles (non-periodic arenas): radius as a multiple
    * of the contact distance, and each species' depth in kJ/mol. null turns them off.
@@ -38,6 +40,8 @@ export interface PistonInfo {
 export interface ArenaInfo {
   canHavePiston: boolean;
   canConduct: boolean;
+  /** Arenas with a hole can have Maxwell's demon. */
+  canDemon: boolean;
   /** Square wells work in every arena but periodic ones (as in Java). */
   canHaveWells: boolean;
   /** Reactions need a single species (a reacted copy is added), as Java's dialog does. */
@@ -58,6 +62,10 @@ export type ToWorker =
   /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
   | { type: 'movePiston'; level: number; mode: PistonMode; speed: number }
   | { type: 'stopPiston' }
+  /** Back to the starting state of the running simulation (same positions). */
+  | { type: 'restart' }
+  /** Maxwell's demon: open or close the hole (from the next frame). */
+  | { type: 'setHoleOpen'; open: boolean }
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'step' }
@@ -75,6 +83,8 @@ export type FromWorker =
       time: number;
       /** Piston arenas: its level and whether it's moving, as of this frame. */
       piston?: { level: number; moving: boolean };
+      /** Maxwell's demon: whether the hole is open this frame. */
+      holeOpen?: boolean;
     }
   /** A preset finished loading and is now the running simulation. */
   | {
