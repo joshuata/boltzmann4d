@@ -29,8 +29,9 @@ export interface ArenaOptions {
    */
   wells?: { radiusMultiplier: number; depths: number[] } | null;
   /**
-   * Red↔blue reactions (one-species 2D scenarios): activation energies in kJ/mol. null turns
-   * them off; absent follows the scenario's reaction_mode.
+   * The Java reaction, species 0 + 0 ⇌ 1 + 1 (2D scenarios with one species or that rule
+   * already): activation energies in kJ/mol. null turns it off; absent follows the
+   * scenario's rules.
    */
   reactions?: { forward: number; reverse: number; suppressReverse: boolean } | null;
   /** A square well along the bottom wall: width in m, depth in kJ/mol. null turns it off. */
@@ -53,10 +54,15 @@ export interface ArenaInfo {
   canDemon: boolean;
   /** Square wells work in every arena but periodic ones (as in Java). */
   canHaveWells: boolean;
-  /** Reactions need a single species (a reacted copy is added), as Java's dialog does. */
+  /**
+   * Whether the Java reaction can be switched: a single species (a reacted copy is added),
+   * as Java's dialog requires, or that rule already.
+   */
   canReact: boolean;
   /** Species names, for per-species settings. */
   typeNames: string[];
+  /** Drawn gates (WALL-4): wall index, id, and points (x, y pairs in m) for tapping them. */
+  gates: { index: number; id: string; points: number[]; closed: boolean }[];
   options: ArenaOptions;
 }
 
@@ -75,11 +81,27 @@ export type ToWorker =
   | { type: 'restart' }
   /** Maxwell's demon: open or close the hole (from the next frame). */
   | { type: 'setHoleOpen'; open: boolean }
+  /** Open or close the gate that is drawn wall `index` (from the next frame). */
+  | { type: 'setGate'; index: number; open: boolean }
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'step' }
   /** Multiply the scenario's simulation speed (kept across loads). */
-  | { type: 'rate'; scale: number };
+  | { type: 'rate'; scale: number }
+  /**
+   * The kinds (species indices) the statistics should also cover (KIND-4), when they
+   * aren't a set tracked anyway; null for none. Reset by each load.
+   */
+  | { type: 'statKinds'; types: number[] | null };
+
+/** One particle kind of the running simulation, for legends and pickers (KIND-4, KIND-9). */
+export interface KindInfo {
+  name: string;
+  /** 0xRRGGBB. */
+  color: number;
+  /** See render/markers.ts. */
+  marker: string;
+}
 
 export type FromWorker =
   /**
@@ -94,6 +116,8 @@ export type FromWorker =
       piston?: { level: number; moving: boolean };
       /** Maxwell's demon: whether the hole is open this frame. */
       holeOpen?: boolean;
+      /** Drawn walls: the gates open this frame, by wall index. */
+      openGates?: number[];
     }
   /** A scenario finished loading and is now the running simulation. */
   | {
@@ -102,10 +126,14 @@ export type FromWorker =
       name: string;
       particles: number;
       dimension: Dimension;
+      /** Per species, in type order. */
+      kinds: KindInfo[];
       arena: ArenaInfo;
       piston?: PistonInfo;
       /** The scenario's view (colour mode, trace) and the arena's size, m. */
       view: {
+        /** Whether the scenario draws kinds' markers (KIND-9). */
+        markers: boolean;
         colorMode: ColorMode;
         trace: { enabled: boolean; pointSize: number };
         arenaWidth: number;

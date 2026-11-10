@@ -23,6 +23,13 @@ export class WeightedValueTracker {
     return Math.sqrt(this.sumSquares / this.totalWeight - mean * mean);
   }
 
+  /** Adds everything `other` has recorded, as if its values had been added here. */
+  addAll(other: WeightedValueTracker): void {
+    this.sumSquares += other.sumSquares;
+    this.sum += other.sum;
+    this.totalWeight += other.totalWeight;
+  }
+
   get weight(): number {
     return this.totalWeight;
   }

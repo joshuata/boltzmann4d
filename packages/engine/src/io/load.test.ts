@@ -58,11 +58,13 @@ describe('loadSetFile', () => {
       paused: false,
       simulationSpeed: '1x',
       statName: 'INSTANTANEOUS_SPEED',
-      statColor: 'BOTH',
+      statKinds: 'all',
       colorScheme: 'DARK',
       maxwellDemonMode: false,
     });
-    expect(scenario.abscissaLimits.get('COLLISION_RATE')?.red).toEqual([4.8144e-2, 0.14443]);
+    expect(scenario.abscissaLimits.get('COLLISION_RATE')?.species.get(0)).toEqual([
+      4.8144e-2, 0.14443,
+    ]);
 
     const [red, blue] = scenario.species;
     expect(red?.type).toMatchObject({
@@ -148,9 +150,10 @@ describe('loadSetFile', () => {
       // `#` starts a comment in .set files, so hex colours must use 0x.
       'color_scheme CUSTOM: 0xFF0000, 0x0000ff 0 0x808080 0x010203',
     );
-    expect(loadSetFile(text).scenario.customColors).toEqual({
-      red: 0xff0000,
-      blue: 0x0000ff,
+    const { scenario } = loadSetFile(text);
+    // The kinds' colours (the default file only has red particles).
+    expect(scenario.species.map((s) => s.type.defaultColor)).toEqual([0xff0000]);
+    expect(scenario.customColors).toEqual({
       background: 0,
       divider: 0x808080,
       walls3D: { left: 0x010203 },

@@ -18,7 +18,9 @@ export type ToRenderWorker =
   | { type: 'rotate'; aboutX: number; aboutY: number }
   /** Colour mode and trace (the View menu). */
   | { type: 'colorMode'; mode: ColorMode }
-  | { type: 'trace'; enabled: boolean; pointSize: number };
+  | { type: 'trace'; enabled: boolean; pointSize: number }
+  /** Kinds' markers on or off (KIND-9). */
+  | { type: 'markers'; enabled: boolean };
 
 /** Physics worker -> renderer, over the MessagePort. */
 export type RenderStream =

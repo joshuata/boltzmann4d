@@ -1,5 +1,5 @@
 // The statistics for one simulation (the statistics side of Physics.java): one instance
-// per statistic per non-empty set of particle types, fed by every event before it is
+// per statistic per set of particle types (statisticSubsets), fed by every event before it is
 // performed and sampled at frame boundaries.
 //
 // Instantaneous Speed is the only statistic so far (it is also the Java app's default).
@@ -7,13 +7,14 @@ import type { EventInfo } from '../sim/event';
 import { Collision } from '../sim/event';
 import type { Particles } from '../sim/particles';
 import {
-  allTypeSubsets,
+  statisticSubsets,
   collisionLifetime,
   predictCollisionRateForTypes,
   temperature,
 } from './formulas';
 import { InstantaneousSpeed } from './instantaneous-speed';
 import type { StatisticsSummary, StatisticSummary } from './summary';
+import { WeightedValueTracker } from './weighted-value-tracker';
 import type { StatsContext } from './stats-context';
 
 const PARTICLE = Collision.PARTICLE;
@@ -30,6 +31,8 @@ export interface StatisticsOptions {
   forgetMultiplier?: number;
   typeNames?: readonly string[];
   typeColors?: readonly number[];
+  /** Per type, its marker (KIND-9); absent when markers are off. */
+  typeMarkers?: readonly string[];
 }
 
 export class Statistics {
@@ -53,12 +56,16 @@ export class Statistics {
   private readonly particles: Particles;
   private readonly typeNames: readonly string[];
   private readonly typeColors: readonly number[];
+  private readonly typeMarkers: readonly string[] | undefined;
+  /** Predictions for subsets composed on request, by subset key. */
+  private readonly composed = new Map<string, InstantaneousSpeed>();
 
   constructor(ctx: StatsContext, particles: Particles, options: StatisticsOptions = {}) {
     this.ctx = ctx;
     this.particles = particles;
     this.typeNames = options.typeNames ?? ctx.types.map((_, t) => `Type ${t + 1}`);
     this.typeColors = options.typeColors ?? ctx.types.map(() => 0xffffff);
+    this.typeMarkers = options.typeMarkers;
     this.lastCollisionTime = new Float64Array(particles.count);
     const typeCount = ctx.types.length;
     this.cumulativeSquares = new Float64Array(typeCount);
@@ -70,7 +77,7 @@ export class Statistics {
       (options.forgetMultiplier ?? 4.0) *
       collisionLifetime(predictCollisionRateForTypes(ctx, allTypes, false));
 
-    this.speed = allTypeSubsets(ctx.types.length).map(
+    this.speed = statisticSubsets(ctx.types.length).map(
       (types) => new InstantaneousSpeed(ctx, types),
     );
     // Bins of every subset cover the union of their ranges, so they can be compared.
@@ -131,7 +138,11 @@ export class Statistics {
     });
   }
 
-  summary(time: number): StatisticsSummary {
+  /**
+   * What the UI shows: every tracked subset of types, plus `extraSubsets` (KIND-4's picker:
+   * any set of types), composed from the all-types data so they have its whole history.
+   */
+  summary(time: number, extraSubsets: readonly (readonly number[])[] = []): StatisticsSummary {
     const cumulativeT = this.temperatures('cumulative');
     const currentT = this.temperatures('current');
     const prediction = (s: InstantaneousSpeed, temperatures: Float64Array) => ({
@@ -160,12 +171,69 @@ export class Statistics {
         prediction: prediction(s, cumulativeT),
       },
     }));
+    const tracked = new Set(statistics.map((s) => s.types.join()));
+    for (const subset of extraSubsets) {
+      const types = [...new Set(subset)].filter((t) => t >= 0 && t < this.ctx.types.length);
+      types.sort((a, b) => a - b);
+      if (types.length === 0 || tracked.has(types.join())) continue;
+      tracked.add(types.join());
+      statistics.push(this.composeSubset(types, currentT, cumulativeT, prediction));
+    }
     return {
       time,
       forgotten: this.forgotten,
       typeNames: [...this.typeNames],
       typeColors: [...this.typeColors],
+      ...(this.typeMarkers && { typeMarkers: [...this.typeMarkers] }),
       statistics,
+    };
+  }
+
+  /**
+   * One subset's statistic from the all-types tracker: its types' rows of the histograms
+   * and their running sums combined; predictions from a tracker for the subset itself.
+   */
+  private composeSubset(
+    types: number[],
+    currentT: Float64Array,
+    cumulativeT: Float64Array,
+    prediction: (
+      s: InstantaneousSpeed,
+      t: Float64Array,
+    ) => StatisticSummary['current']['prediction'],
+  ): StatisticSummary {
+    const all = this.speed.at(-1)!; // every type, in order (statisticSubsets puts it last)
+    let view = this.composed.get(types.join());
+    if (!view) {
+      view = new InstantaneousSpeed(this.ctx, types);
+      this.composed.set(types.join(), view);
+    }
+    const combine = (trackers: WeightedValueTracker[]) => {
+      const sum = new WeightedValueTracker();
+      for (const t of types) sum.addAll(trackers[all.slotOfType[t]!]!);
+      return sum;
+    };
+    const current = combine(all.currentByType);
+    const cumulative = combine(all.cumulativeByType);
+    return {
+      id: 'INSTANTANEOUS_SPEED',
+      label: 'Instantaneous speed',
+      unit: 'm/s',
+      types,
+      range: [view.range.min, view.range.max],
+      binRange: [all.cumulative.range.min, all.cumulative.range.max],
+      current: {
+        binsByType: types.map((t) => Array.from(all.current.byType[all.slotOfType[t]!]!)),
+        average: current.average(),
+        width: current.width(),
+        prediction: prediction(view, currentT),
+      },
+      cumulative: {
+        binsByType: types.map((t) => Array.from(all.cumulative.byType[all.slotOfType[t]!]!)),
+        average: cumulative.average(),
+        width: cumulative.width(),
+        prediction: prediction(view, cumulativeT),
+      },
     };
   }
 

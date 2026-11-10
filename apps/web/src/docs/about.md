@@ -1,7 +1,7 @@
 ---
 title: About
 description: Where Boltzmann 4D comes from, who made it and its licence.
-order: 2
+order: 3
 ---
 
 Boltzmann 4D is a web version of [Boltzmann 3D](https://boltzmann3d.byu.edu/), a kinetic theory demonstrator from Brigham Young University. It runs the same event-driven hard-sphere physics in your browser, with nothing to install.

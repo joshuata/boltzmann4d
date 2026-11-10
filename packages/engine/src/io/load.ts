@@ -10,7 +10,7 @@ export type {
   Dimension,
   ParticleSpecies,
   ResolvedScenario,
-  StatColor,
+  StatKinds,
 } from '../scenario/resolve';
 export { calculateTotalKE } from '../scenario/resolve';
 

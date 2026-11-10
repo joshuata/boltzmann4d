@@ -1,34 +1,32 @@
-<!-- The simulation editor (plan 0008): build a scenario from a preset, a file or one kept in
-     this browser, check it as you type, run it, save it in this browser, and download it as
-     Boltzmann 4D JSON or a Boltzmann 3D .set file. Running is the page's job (onRun). -->
+<!-- The scenario editor (plan 0010): draw walls and spawn regions on the arena, set up kinds
+     and reactions, see problems as you edit, then run it, save it in this browser (plan 0008,
+     EDIT-19) or download it. Running is the page's job: it gets the scenario through onRun.
+
+     Wide screens: the canvas with its toolbar on the left, the panels on the right. Narrow
+     screens: the canvas on top and the panels below it, the toolbar always in view (EDIT-23). -->
 <script lang="ts">
   import {
     loadPresetScenario,
     readScenarioFile,
     ScenarioError,
     scenarioToSetFile,
+    setFileCompatibility,
     stringifyScenario,
     type Scenario,
   } from '@boltzmann4d/engine/scenario';
   import { presetCatalog } from '@boltzmann4d/engine/io/presets';
   import { Button } from '@boltzmann4d/ui/button';
-  import { Checkbox } from '@boltzmann4d/ui/checkbox';
+  import { Input } from '@boltzmann4d/ui/input';
   import DownloadIcon from '@lucide/svelte/icons/download';
-  import SaveIcon from '@lucide/svelte/icons/save';
-  import FileUpIcon from '@lucide/svelte/icons/file-up';
   import PlayIcon from '@lucide/svelte/icons/play';
-  import {
-    BOUNDARY_LABELS,
-    boundariesFor,
-    canConduct,
-    canDemon,
-    canReact,
-    checkForm,
-    formFromScenario,
-    keepsPositions,
-    type EditorForm,
-  } from './form';
-  import NumberField from './NumberField.svelte';
+  import SaveIcon from '@lucide/svelte/icons/save';
+  import ArenaPanel from './ArenaPanel.svelte';
+  import Canvas from './Canvas.svelte';
+  import { EditorState } from './editor.svelte';
+  import KindsPanel from './KindsPanel.svelte';
+  import ProblemsPanel from './ProblemsPanel.svelte';
+  import ReactionsPanel from './ReactionsPanel.svelte';
+  import RegionPanel from './RegionPanel.svelte';
   import {
     getDefaultScenario,
     getScenario,
@@ -37,14 +35,17 @@
     saveScenario,
     type SavedScenario,
   } from './scenario-store';
-  import SpeciesEditor from './SpeciesEditor.svelte';
+  import { blankScenario, parseKey } from './scenario-ops';
+  import { selectClass } from './styles';
+  import Toolbar from './Toolbar.svelte';
+  import WallPanel from './WallPanel.svelte';
 
   interface Props {
-    /** Runs the scenario (the page shows it next to the form). */
+    /** Runs the scenario (EDIT-18); the page shows the simulator. */
     onRun: (scenario: Scenario, name: string) => void;
     /**
      * A scenario kept in this browser to start from, read once when the editor opens.
-     * Without it the editor starts from the user's default, else the bundled default.
+     * Without it the editor starts from the user's default (FILE-2), else a blank arena.
      */
     startId?: string | null;
     /** After a save, e.g. so the page can point its URL at the saved scenario. */
@@ -53,61 +54,27 @@
 
   let { onRun, startId = null, onSaved }: Props = $props();
 
-  /** What the form started from: everything it doesn't show comes from here. */
-  let base = $state.raw<Scenario | null>(null);
-  let form = $state<EditorForm | null>(null);
-  /** The scenario's name: what it's saved as, and the file name for downloads. */
-  let name = $state('default');
+  const editor = new EditorState();
   /** Problems with the last file opened, or a preset that failed to load. */
   let loadProblems = $state.raw<string[]>([]);
   let fileInput: HTMLInputElement;
-  /** The kept scenario the form saves over, if it started from one. */
+  /** The kept scenario Save writes over, if the editor opened one or has saved. */
   let savedId = $state<string | null>(null);
   let kept = $state.raw<SavedScenario[]>([]);
-  /** The "Start from" choice: `preset:<name>`, `saved:<id>`, or `file` after opening one. */
-  let startValue = $state('preset:default');
   let saveStatus = $state<string | null>(null);
-
-  const check = $derived(base && form ? checkForm(base, $state.snapshot(form)) : null);
-  const errors = $derived(check?.fields ?? {});
 
   const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-  function start(
-    scenario: Scenario,
-    scenarioName: string,
-    from: { value: string; savedId?: string | null },
-  ) {
-    base = scenario;
-    form = formFromScenario(scenario);
-    name = scenarioName;
-    loadProblems = [];
+  /** Opens a scenario; `fromSaved` is the kept scenario it came from, if any. */
+  function open(scenario: Scenario, name: string, fromSaved: string | null = null) {
+    editor.open(scenario, name);
+    savedId = fromSaved;
     saveStatus = null;
-    savedId = from.savedId ?? null;
-    startValue = from.value;
+    loadProblems = [];
   }
 
-  async function startFromPreset(preset: string) {
-    try {
-      start(await loadPresetScenario(preset), preset, { value: `preset:${preset}` });
-    } catch (error) {
-      loadProblems = [message(error)];
-    }
-  }
-
-  function startFromSaved(entry: SavedScenario) {
-    start(entry.scenario, entry.name.replace(/\.(json|set)$/i, ''), {
-      value: `saved:${entry.id}`,
-      savedId: entry.id,
-    });
-  }
-
-  function startFrom(value: string) {
-    const [kind, ...rest] = value.split(':');
-    const key = rest.join(':');
-    if (kind === 'preset') return void startFromPreset(key);
-    const entry = kept.find((e) => e.id === key);
-    if (entry) startFromSaved(entry);
+  function openSaved(entry: SavedScenario) {
+    open(entry.scenario, entry.name.replace(/\.(json|set)$/i, ''), entry.id);
   }
 
   async function refreshKept() {
@@ -118,47 +85,40 @@
     }
   }
 
-  /** The startId scenario, else the user's default, else the bundled default (FILE-2). */
+  /** The startId scenario, else the user's default, else the blank arena already open. */
   async function init() {
     await refreshKept();
+    let problems: string[] = [];
     try {
       const wanted = startId ? await getScenario(startId) : null;
       if (startId && !(wanted && isReadable(wanted))) {
-        loadProblems = [
+        problems = [
           wanted
             ? `Can't open ${wanted.name}: ${wanted.problems.join('; ')}`
             : 'That scenario is no longer saved in this browser.',
         ];
       }
       const entry = wanted && isReadable(wanted) ? wanted : await getDefaultScenario();
-      if (entry) {
-        const problems = loadProblems;
-        startFromSaved(entry);
-        loadProblems = problems;
-        return;
-      }
+      if (entry) openSaved(entry);
     } catch {
-      // No storage in this browser: start from the bundled default.
+      // No storage in this browser: keep the blank arena.
     }
-    const problems = loadProblems;
-    await startFromPreset('default');
-    loadProblems = [...problems, ...loadProblems];
+    loadProblems = problems;
   }
 
+  void init();
+
+  /** Saves what's drawn; a scenario that fails the schema can't be stored. */
   async function save(asNew: boolean) {
-    const scenario = check?.scenario;
-    if (!scenario) return;
+    if (!editor.validation.success) return;
     try {
       const saved = await saveScenario({
         id: asNew ? undefined : (savedId ?? undefined),
-        name,
-        scenario,
+        name: editor.name,
+        scenario: editor.validation.scenario,
       });
       savedId = saved.id;
-      // The form now describes what's stored, so it starts from that.
-      base = saved.scenario;
       await refreshKept();
-      startValue = `saved:${saved.id}`;
       saveStatus = `Saved “${saved.name}” in this browser.`;
       onSaved?.(saved);
     } catch (error) {
@@ -166,11 +126,26 @@
     }
   }
 
+  // Particle placement is checked a moment after edits stop (it resolves the scenario).
+  $effect(() => {
+    void editor.validation;
+    const timer = setTimeout(() => editor.checkPlacement(), 250);
+    return () => clearTimeout(timer);
+  });
+
+  async function startFromPreset(name: string) {
+    try {
+      open(await loadPresetScenario(name), name);
+    } catch (error) {
+      loadProblems = [message(error)];
+    }
+  }
+
   async function startFromFile(file: File | undefined) {
     if (!file) return;
     try {
       const { scenario } = readScenarioFile(file.name, await file.text());
-      start(scenario, file.name.replace(/\.(json|set)$/i, ''), { value: 'file' });
+      open(scenario, file.name.replace(/\.(json|set)$/i, ''));
     } catch (error) {
       loadProblems =
         error instanceof ScenarioError
@@ -179,25 +154,40 @@
     }
   }
 
-  void init();
-
-  function setDimensions(d: 1 | 2 | 3) {
-    if (!form) return;
-    form.dimensions = d;
-    if (!boundariesFor(d).includes(form.boundary)) form.boundary = 'DIVIDED';
+  function startFrom(value: string) {
+    if (value === 'blank') {
+      open(blankScenario(), 'New scenario');
+    } else if (value === 'file') {
+      fileInput.click();
+    } else if (value.startsWith('saved:')) {
+      const entry = kept.find((e) => `saved:${e.id}` === value);
+      if (entry) openSaved(entry);
+    } else {
+      void startFromPreset(value);
+    }
   }
+
+  const setCheck = $derived(editor.validation.success ? setFileCompatibility(editor.validation.scenario) : null); // prettier-ignore
 
   function download(text: string, extension: string, type: string) {
     const url = URL.createObjectURL(new Blob([text], { type }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${name.trim() || 'scenario'}.${extension}`;
+    link.download = `${editor.name.trim() || 'scenario'}.${extension}`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
-  const selectClass =
-    'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-2.5 text-base shadow-xs outline-none focus-visible:ring-3 md:text-sm';
+  /** The selection, sorted into walls and regions, for the inspector. */
+  const selected = $derived.by(() => {
+    const walls: string[] = [];
+    const regions: string[] = [];
+    for (const key of editor.selection) {
+      const { type, id } = parseKey(key);
+      (type === 'wall' ? walls : regions).push(id);
+    }
+    return { walls, regions };
+  });
 </script>
 
 <input
@@ -211,19 +201,23 @@
   }}
 />
 
-<div class="space-y-5">
-  <section class="space-y-2" aria-labelledby="start-heading">
-    <h2 id="start-heading" class="text-sm font-semibold">Start from</h2>
-    <div class="flex flex-wrap gap-2">
+<div class="flex flex-col lg:h-full lg:min-h-0">
+  <!-- Start from, name, run and download. -->
+  <div class="flex flex-wrap items-end gap-2 border-b px-3 py-2">
+    <div class="min-w-40 flex-1 space-y-1 sm:max-w-64">
+      <label for="start-from" class="text-xs font-medium">Start from</label>
       <select
-        class={[selectClass, 'min-w-0 flex-1']}
-        aria-label="Scenario to start from"
-        value={startValue}
-        onchange={(e) => startFrom(e.currentTarget.value)}
+        id="start-from"
+        class={selectClass}
+        value=""
+        onchange={(e) => {
+          startFrom(e.currentTarget.value);
+          e.currentTarget.value = '';
+        }}
       >
-        {#if startValue === 'file'}
-          <option value="file">{name} (opened file)</option>
-        {/if}
+        <option value="" disabled>Choose…</option>
+        <option value="blank">A blank 2D arena</option>
+        <option value="file">A file on this computer…</option>
         {#if kept.length > 0}
           <optgroup label="Kept in this browser">
             {#each kept as entry (entry.id)}
@@ -233,195 +227,113 @@
         {/if}
         <optgroup label="Presets">
           {#each presetCatalog as preset (preset.name)}
-            <option value="preset:{preset.name}">{preset.label} ({preset.dimensions}D)</option>
+            <option value={preset.name}>{preset.label} ({preset.dimensions}D)</option>
           {/each}
         </optgroup>
       </select>
-      <Button variant="outline" onclick={() => fileInput.click()}>
-        <FileUpIcon aria-hidden="true" />
-        Open a file
-      </Button>
     </div>
-    {#if loadProblems.length > 0}
-      <ul class="text-destructive list-none space-y-0.5 text-sm break-words" role="alert">
-        {#each loadProblems as problem, i (i)}<li>{problem}</li>{/each}
-      </ul>
-    {/if}
-  </section>
-
-  {#if form}
-    <fieldset class="space-y-3 rounded-lg border p-3">
-      <legend class="px-1 text-sm font-semibold">Arena</legend>
-      <div class="space-y-1">
-        <span class="text-sm font-medium" id="dimensions-label">Dimensions</span>
-        <div class="flex gap-2" role="radiogroup" aria-labelledby="dimensions-label">
-          {#each [1, 2, 3] as const as d (d)}
-            <Button
-              variant={form.dimensions === d ? 'default' : 'outline'}
-              role="radio"
-              aria-checked={form.dimensions === d}
-              onclick={() => setDimensions(d)}
-            >
-              {d}D
-            </Button>
-          {/each}
-        </div>
-      </div>
-      <div class={['grid gap-3', form.dimensions === 3 ? 'grid-cols-3' : 'grid-cols-2']}>
-        <NumberField
-          id="size-x"
-          label="Width"
-          unit="nm"
-          bind:value={form.size[0]}
-          error={errors['size.0']}
-        />
-        {#if form.dimensions > 1}
-          <NumberField
-            id="size-y"
-            label="Height"
-            unit="nm"
-            bind:value={form.size[1]}
-            error={errors['size.1']}
-          />
-        {/if}
-        {#if form.dimensions === 3}
-          <NumberField
-            id="size-z"
-            label="Depth"
-            unit="nm"
-            bind:value={form.size[2]}
-            error={errors['size.2']}
-          />
-        {/if}
-      </div>
-      <div class="space-y-1">
-        <label for="boundary" class="text-sm font-medium">Walls</label>
-        <select id="boundary" class={selectClass} bind:value={form.boundary}>
-          {#each boundariesFor(form.dimensions) as boundary (boundary)}
-            <option value={boundary}>{BOUNDARY_LABELS[boundary]}</option>
-          {/each}
-        </select>
-      </div>
-      {#if form.boundary === 'HOLE'}
-        <NumberField
-          id="hole-size"
-          label="Hole diameter"
-          unit="nm"
-          bind:value={form.holeSize}
-          step={1}
-          error={errors.holeSize}
-        />
-      {/if}
-      {#if canConduct(form)}
-        <div class="flex min-h-8 items-center gap-2">
-          <Checkbox id="conducting" bind:checked={form.conductingDivider} />
-          <label for="conducting" class="text-sm">Divider conducts heat</label>
-        </div>
-      {/if}
-      {#if canDemon(form)}
-        <div class="flex min-h-8 items-center gap-2">
-          <Checkbox id="demon" bind:checked={form.maxwellDemon} />
-          <label for="demon" class="text-sm">Maxwell's demon (the hole starts closed)</label>
-        </div>
-      {/if}
-    </fieldset>
-
-    {@const positions = base ? keepsPositions(base, form) : true}
-    <SpeciesEditor color="red" bind:species={form.red} {errors} keepsPositions={positions} />
-    <SpeciesEditor color="blue" bind:species={form.blue} {errors} keepsPositions={positions} />
-    {#if !positions && (form.red.placed > 0 || form.blue.placed > 0)}
-      <p class="text-muted-foreground -mt-2 text-xs">
-        The arena changed, so every particle is placed at random.
-      </p>
-    {/if}
-
-    <fieldset class="space-y-1 rounded-lg border p-3">
-      <legend class="px-1 text-sm font-semibold">Starting</legend>
-      {#if canReact(form)}
-        <div class="flex min-h-8 items-center gap-2">
-          <Checkbox id="reaction" bind:checked={form.reaction} />
-          <label for="reaction" class="text-sm">Reactions: red turns blue, and back</label>
-        </div>
-      {/if}
-      <div class="flex min-h-8 items-center gap-2">
-        <Checkbox id="paused" bind:checked={form.paused} />
-        <label for="paused" class="text-sm">Start paused</label>
-      </div>
-    </fieldset>
-
-    {#if check && check.problems.length > 0}
-      <ul
-        class="border-destructive/50 text-destructive list-disc space-y-0.5 rounded-md border p-3 pl-7 text-sm break-words"
-        role="alert"
-      >
-        {#each check.problems as problem, i (i)}<li>{problem}</li>{/each}
-      </ul>
-    {/if}
-
-    <div class="space-y-3">
+    <div class="min-w-40 flex-1 space-y-1 sm:max-w-64">
+      <label for="scenario-name" class="text-xs font-medium">Name</label>
+      <Input
+        id="scenario-name"
+        value={editor.name}
+        autocomplete="off"
+        oninput={(e) => (editor.name = e.currentTarget.value)}
+      />
+    </div>
+    <div class="ml-auto flex flex-wrap gap-2">
       <Button
-        size="lg"
-        class="w-full"
-        disabled={!check?.scenario}
-        onclick={() => check?.scenario && onRun(check.scenario, name)}
+        disabled={!editor.runnable}
+        title={editor.runnable ? 'Run this scenario' : 'Fix the problems listed to run it'}
+        onclick={() => editor.runnable && onRun(editor.runnable, editor.name)}
       >
         <PlayIcon aria-hidden="true" />
         Run
       </Button>
-      <div class="space-y-1">
-        <label for="scenario-name" class="text-sm font-medium">Name</label>
-        <input id="scenario-name" class={selectClass} bind:value={name} autocomplete="off" />
-      </div>
-      <div class="flex flex-wrap gap-2">
+      <Button
+        variant="secondary"
+        disabled={!editor.validation.success}
+        title={savedId ? 'Save over the scenario kept in this browser' : 'Keep it in this browser'}
+        onclick={() => void save(false)}
+      >
+        <SaveIcon aria-hidden="true" />
+        Save
+      </Button>
+      {#if savedId}
         <Button
-          variant="secondary"
-          class="flex-1"
-          disabled={!check?.scenario}
-          onclick={() => void save(false)}
+          variant="outline"
+          disabled={!editor.validation.success}
+          onclick={() => void save(true)}
         >
-          <SaveIcon aria-hidden="true" />
-          {savedId ? 'Save' : 'Save in this browser'}
+          Save as new
         </Button>
-        {#if savedId}
-          <Button
-            variant="outline"
-            class="flex-1"
-            disabled={!check?.scenario}
-            onclick={() => void save(true)}
-          >
-            Save as new
-          </Button>
-        {/if}
-      </div>
-      {#if saveStatus}
-        <p class="text-muted-foreground text-sm" role="status">{saveStatus}</p>
       {/if}
-      <div class="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          class="flex-1"
-          disabled={!check?.scenario}
-          onclick={() =>
-            check?.scenario &&
-            download(stringifyScenario(check.scenario), 'json', 'application/json')}
-        >
-          <DownloadIcon aria-hidden="true" />
-          Download .json
-        </Button>
-        <Button
-          variant="outline"
-          class="flex-1"
-          disabled={!check?.scenario}
-          onclick={() =>
-            check?.scenario && download(scenarioToSetFile(check.scenario), 'set', 'text/plain')}
-        >
-          <DownloadIcon aria-hidden="true" />
-          Download .set
-        </Button>
-      </div>
-      <p class="text-muted-foreground text-xs">
-        .json is this app's format; .set files also open in the Boltzmann 3D desktop app.
-      </p>
+      <Button
+        variant="outline"
+        disabled={!editor.validation.success}
+        onclick={() =>
+          editor.validation.success &&
+          download(stringifyScenario(editor.validation.scenario), 'json', 'application/json')}
+      >
+        <DownloadIcon aria-hidden="true" />
+        .json
+      </Button>
+      <Button
+        variant="outline"
+        disabled={!setCheck || setCheck.problems.length > 0}
+        title={setCheck && setCheck.problems.length > 0
+          ? `Can't be a .set file: ${setCheck.problems.join('; ')}`
+          : 'Download for the Boltzmann 3D desktop app'}
+        onclick={() =>
+          editor.validation.success &&
+          download(scenarioToSetFile(editor.validation.scenario), 'set', 'text/plain')}
+      >
+        <DownloadIcon aria-hidden="true" />
+        .set
+      </Button>
     </div>
-  {/if}
+    {#if saveStatus}
+      <p class="text-muted-foreground w-full text-sm" role="status">{saveStatus}</p>
+    {/if}
+    {#if loadProblems.length > 0}
+      <ul class="text-destructive w-full list-none space-y-0.5 text-sm break-words" role="alert">
+        {#each loadProblems as problem, i (i)}<li>{problem}</li>{/each}
+      </ul>
+    {/if}
+  </div>
+
+  <div class="flex flex-col lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[1fr_360px]">
+    <div class="sticky top-0 z-10 flex h-[50dvh] min-h-0 flex-col lg:static lg:h-auto">
+      <Toolbar {editor} />
+      <div class="min-h-0 flex-1">
+        <Canvas {editor} />
+      </div>
+    </div>
+    <aside
+      class="space-y-5 border-t p-3 lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l"
+      aria-label="Settings"
+    >
+      <ProblemsPanel {editor} />
+      {#if selected.walls.length > 0 && selected.regions.length === 0}
+        <WallPanel {editor} ids={selected.walls} />
+      {:else if selected.regions.length === 1 && selected.walls.length === 0}
+        <RegionPanel {editor} id={selected.regions[0]!} />
+      {:else if editor.selection.length > 0}
+        <p class="text-muted-foreground text-sm">
+          {editor.selection.length} shapes selected. Drag or use the arrow keys to move them; Delete removes
+          them.
+        </p>
+      {:else}
+        <ArenaPanel {editor} />
+      {/if}
+      <KindsPanel {editor} />
+      <ReactionsPanel {editor} />
+      {#if setCheck && setCheck.problems.length > 0}
+        <p class="text-muted-foreground text-xs">
+          Download as .json: a .set file can't hold this scenario ({setCheck.problems.join('; ')}).
+        </p>
+      {/if}
+    </aside>
+  </div>
+  <p class="sr-only" aria-live="polite">{editor.announcement}</p>
 </div>

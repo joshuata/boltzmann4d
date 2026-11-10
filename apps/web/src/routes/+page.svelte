@@ -17,13 +17,7 @@
   });
 </script>
 
-<svelte:head>
-  <title>Boltzmann 4D</title>
-  <meta
-    name="description"
-    content="A kinetic theory demonstrator in the browser: an event-driven hard-sphere gas in 2D and 3D."
-  />
-</svelte:head>
+<svelte:head><title>Boltzmann 4D</title></svelte:head>
 
 <div class="mx-auto max-w-4xl space-y-8 px-4 py-6">
   <div class="space-y-3">

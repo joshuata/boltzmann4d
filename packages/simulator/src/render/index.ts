@@ -24,6 +24,8 @@ export interface Renderer {
   setColorMode(mode: ColorMode): void;
   /** Trace mode: accumulate particle marks of `pointSize` pixels (2D). */
   setTrace(enabled: boolean, pointSize: number): void;
+  /** Whether kinds' markers are drawn (KIND-9; 2D). */
+  setMarkers(enabled: boolean): void;
   /** Simulation frames drawn so far (frames replaced before a refresh aren't counted). */
   framesDrawn(): number;
   dispose(): void;
@@ -56,6 +58,7 @@ export function createRenderer(
   let view: View | null = null;
   let colorMode: ColorMode | null = null;
   let trace: { enabled: boolean; pointSize: number } | null = null;
+  let markers: boolean | null = null;
   let nextFrame: RenderFrame | null = null;
   let size = initialSize;
   let drawScheduled = false;
@@ -98,6 +101,7 @@ export function createRenderer(
       // The user's choices outlast a reload; until they make one, the settings file's.
       if (colorMode) view.setColorMode(colorMode);
       if (trace) view.setTrace(trace.enabled, trace.pointSize);
+      if (markers !== null) view.setMarkers?.(markers);
       scene.add(view.root);
       nextFrame = null;
       fit();
@@ -124,6 +128,11 @@ export function createRenderer(
     setTrace(enabled, pointSize) {
       trace = { enabled, pointSize };
       view?.setTrace(enabled, pointSize);
+      scheduleDraw();
+    },
+    setMarkers(enabled) {
+      markers = enabled;
+      view?.setMarkers?.(enabled);
       scheduleDraw();
     },
     framesDrawn: () => drawnCount,

@@ -27,7 +27,7 @@ Teachers and students can build their own simulation (arena, species, counts, te
 1. Engine (first PR, done): JSON schema and types for scenarios, a validator with readable errors, and `.set ⇄ JSON` conversion with round-trip tests over every bundled preset.
 2. Worker protocol (done): `connect`/`load` take a `ScenarioSource`, a bundled preset or a scenario object, and `<Simulator>` takes a `scenario` prop. Presets are converted to scenarios when loaded (`loadPresetScenario`).
 3. Site (done): `/upload` opens a `.json` or `.set` file (FILE-1's file picker, or drag and drop), lists every problem if it can't, and runs it. Storing it moves to step 5.
-4. Simulation editor (done, first version): `/editor` starts from any preset or an opened file and edits:
+4. Simulation editor (done, first version; plan 0010 replaces it with a WYSIWYG editor with drawn walls, spawn regions and up to 10 particle kinds): `/editor` starts from any preset or an opened file and edits:
    - the arena: dimensions (SIM-7), size (SIM-10), walls (SIM-12–17, no hole in 1D), hole diameter, conducting divider;
    - red and blue particles: count, mass, radius, temperature, within the PART-1–4 limits;
    - Maxwell's demon (SIM-24, with a hole) and reactions (SIM-25, 2D with one species);

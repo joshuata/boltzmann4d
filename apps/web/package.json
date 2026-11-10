@@ -7,9 +7,9 @@
   "description": "The Boltzmann 4D site: choose a simulation, upload settings, open the editor.",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && node list-offline-files.js",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p tsconfig.service-worker.json"
   },
   "dependencies": {
     "@boltzmann4d/engine": "workspace:*",

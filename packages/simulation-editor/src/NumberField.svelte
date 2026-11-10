@@ -1,11 +1,15 @@
-<!-- A labelled number input with its unit and, when out of range, the problem. -->
+<!-- A labelled number field with its unit and, when out of range, the problem. Controlled:
+     it shows `value` and reports each valid number typed through `onValue`, so every edit
+     goes through the editor's undo history. -->
 <script lang="ts">
   import { Input } from '@boltzmann4d/ui/input';
+  import { untrack } from 'svelte';
 
   interface Props {
     id: string;
     label: string;
     value: number;
+    onValue: (value: number) => void;
     unit?: string;
     error?: string;
     step?: number | 'any';
@@ -17,7 +21,8 @@
   let {
     id,
     label,
-    value = $bindable(),
+    value,
+    onValue,
     unit,
     error,
     step = 'any',
@@ -25,6 +30,16 @@
     max,
     disabled = false,
   }: Props = $props();
+
+  // What's typed, kept while it isn't a number yet ("1.", "-", "") so typing isn't undone.
+  let text = $state('');
+  // When the value changes from elsewhere (undo, another field), show it.
+  $effect(() => {
+    const current = value;
+    untrack(() => {
+      if (text === '' || Number(text) !== current) text = String(current);
+    });
+  });
 </script>
 
 <div class="space-y-1">
@@ -34,7 +49,13 @@
       {id}
       type="number"
       inputmode="decimal"
-      bind:value
+      value={text}
+      oninput={(event) => {
+        text = event.currentTarget.value;
+        const number = event.currentTarget.valueAsNumber;
+        if (Number.isFinite(number)) onValue(number);
+      }}
+      onblur={() => (text = String(value))}
       {step}
       {min}
       {max}

@@ -5,5 +5,5 @@
     "types": ["$app/types", "vite/client"]
   },
   "include": ["src", "*"],
-  "exclude": ["src/service-worker"]
+  "exclude": ["src/service-worker.ts"]
 }

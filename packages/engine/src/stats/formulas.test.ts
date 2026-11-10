@@ -3,6 +3,7 @@ import { syntheticGas } from '../sim/scenes';
 import { ArenaType } from '../sim/simulation-info';
 import {
   allTypeSubsets,
+  statisticSubsets,
   avgKineticEnergy,
   avgRelativeVelocity,
   averageVelocity,
@@ -196,5 +197,12 @@ describe('real-gas correction and subsets', () => {
   it('lists every non-empty subset of types once, in a fixed order', () => {
     expect(allTypeSubsets(2)).toEqual([[0], [1], [0, 1]]);
     expect(allTypeSubsets(3)).toHaveLength(7);
+  });
+
+  it('keeps statistics for every subset up to 3 types, else each type and all (KIND-4)', () => {
+    expect(statisticSubsets(2)).toEqual(allTypeSubsets(2));
+    expect(statisticSubsets(3)).toEqual(allTypeSubsets(3));
+    expect(statisticSubsets(4)).toEqual([[0], [1], [2], [3], [0, 1, 2, 3]]);
+    expect(statisticSubsets(10)).toHaveLength(11);
   });
 });
