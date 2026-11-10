@@ -1,4 +1,4 @@
-// Turns validated settings (./schema.ts) into the SimulationSettings the simulation runs:
+// Turns a validated scenario (./schema.ts) into the ResolvedScenario the simulation runs:
 // unit conversion to SI, randomly placed particles, and temperature scaling. Based on
 // model/io/Load.java (loadNewSetFile), with these deliberate differences:
 // - Settings that Java read and then discarded (paused, speed, statistic choice, abscissa
@@ -13,7 +13,7 @@ import type { DividerThermalMode } from '../sim/simulation-info';
 import { avgKineticEnergy, speed as speedFromEnergy } from '../stats/formulas';
 import { convert, Energy } from '../utils/units';
 import { parseHexColor } from './set-convert';
-import type { Boundary, ParticleGroup, Settings } from './schema';
+import type { Boundary, ParticleGroup, Scenario } from './schema';
 
 export type Dimension = 1 | 2 | 3;
 export type StatColor = 'RED' | 'BLUE' | 'BOTH';
@@ -45,7 +45,7 @@ export interface CustomColors {
   walls3D: Partial<Record<'left' | 'right' | 'top' | 'bottom' | 'front' | 'back', number>>;
 }
 
-export interface SimulationSettings {
+export interface ResolvedScenario {
   // Physics
   dimension: Dimension;
   arenaType: ArenaType;
@@ -103,12 +103,12 @@ const ARENA_TYPES: Record<Boundary, ArenaType> = {
 
 const nmToM = (nm: number) => convert('nm', 'm', nm);
 
-/** Builds the simulation's starting state from validated settings. */
-export function resolveSettings(
-  settings: Settings,
+/** Builds the simulation's starting state from a validated scenario. */
+export function resolveScenario(
+  scenario: Scenario,
   { random = Math.random }: ResolveOptions = {},
-): SimulationSettings {
-  const { arena: a, modes, run, statistics: st, display } = settings;
+): ResolvedScenario {
+  const { arena: a, modes, run, statistics: st, display } = scenario;
   const arena = { x: nmToM(a.size[0]), y: nmToM(a.size[1]), z: nmToM(a.size[2]) };
   const colors = display.customColors;
   const wallNames = ['left', 'right', 'top', 'bottom', 'front', 'back'] as const;
@@ -123,7 +123,7 @@ export function resolveSettings(
     holeDiameter: nmToM(Math.round(a.holeSize)),
     maxwellDemonMode: modes.maxwellDemon,
     reactionMode: modes.reaction,
-    species: resolveSpecies(settings.particleGroups, a.dimensions, arena, random),
+    species: resolveSpecies(scenario.particleGroups, a.dimensions, arena, random),
 
     paused: run.paused,
     simulationSpeed: run.speed,

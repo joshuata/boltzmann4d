@@ -10,7 +10,7 @@
 // https://www.speedscope.app.
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { loadSettings } from '@boltzmann4d/engine/io/load';
+import { loadSetFile } from '@boltzmann4d/engine/io/load';
 import { seededRandom, syntheticGas } from '@boltzmann4d/engine/sim/scenes';
 import { Simulation, type InitialState } from '@boltzmann4d/engine/sim/simulation';
 import { ArenaType } from '@boltzmann4d/engine/sim/simulation-info';
@@ -43,7 +43,7 @@ if (values.particles) {
     `../packages/engine/src/io/simsettingsfiles/presets/${preset}.set`,
     import.meta.url,
   );
-  init = loadSettings(readFileSync(path, 'utf8'), { random: seededRandom(seed) }).settings;
+  init = loadSetFile(readFileSync(path, 'utf8'), { random: seededRandom(seed) }).scenario;
   label = preset;
 }
 

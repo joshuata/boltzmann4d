@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadPresetText, loadSettings } from '../io';
+import { loadPresetText, loadSetFile } from '../io';
 import { seededRandom } from './scenes';
 import { Simulation, type InitialState } from './simulation';
 import { ArenaType } from './simulation-info';
@@ -9,8 +9,8 @@ async function withWells(
   radiusMultiplier: number,
   depths: number[],
 ): Promise<InitialState> {
-  const { settings } = loadSettings(await loadPresetText(preset), { random: seededRandom(4) });
-  return { ...settings, wells: { radiusMultiplier, depths } };
+  const { scenario } = loadSetFile(await loadPresetText(preset), { random: seededRandom(4) });
+  return { ...scenario, wells: { radiusMultiplier, depths } };
 }
 
 /** Runs `events` events, then moves everyone to the last event's time. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadPresetText, loadSettings, presetNames } from '../io';
+import { loadPresetText, loadSetFile, presetNames } from '../io';
 import { Collision, MAX_TIME, createEvent, type EventInfo } from './event';
 import {
   boundaryCollide2D,
@@ -77,12 +77,12 @@ describe('Simulation', () => {
   const presets = presetNames.filter((name) => !name.startsWith('1D'));
 
   it.each(presets)('runs %s (if supported) conserving energy, without overlaps', async (name) => {
-    const { settings } = loadSettings(await loadPresetText(name), { random: seededRandom(3) });
-    if (!SUPPORTED.has(settings.arenaType)) {
-      expect(() => new Simulation(settings)).toThrow(/not supported yet/);
+    const { scenario } = loadSetFile(await loadPresetText(name), { random: seededRandom(3) });
+    if (!SUPPORTED.has(scenario.arenaType)) {
+      expect(() => new Simulation(scenario)).toThrow(/not supported yet/);
       return;
     }
-    const sim = new Simulation(settings);
+    const sim = new Simulation(scenario);
     const energy = sim.kineticEnergy();
     let last = 0;
     for (let k = 0; k < 2000; k++) {
@@ -261,11 +261,11 @@ describe('conducting divider', () => {
   }
 
   it('conserves energy and carries heat from the hot side to the cold side', async () => {
-    const { settings } = loadSettings(await loadPresetText('2Dhotcold'), {
+    const { scenario } = loadSetFile(await loadPresetText('2Dhotcold'), {
       random: seededRandom(3),
     });
-    const conducting = { ...settings, dividerThermalMode: DividerThermalMode.CONDUCTING };
-    const insulating = new Simulation(settings);
+    const conducting = { ...scenario, dividerThermalMode: DividerThermalMode.CONDUCTING };
+    const insulating = new Simulation(scenario);
     const sim = new Simulation(conducting);
     const energy = sim.kineticEnergy();
     const [hot, cold] = sideEnergies(sim);

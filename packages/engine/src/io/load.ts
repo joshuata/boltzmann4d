@@ -1,21 +1,21 @@
-// Loads a `.set` file: converts it to JSON settings (../settings/set-convert.ts), then
-// resolves those into SimulationSettings (../settings/resolve.ts). JSON settings files take
+// Loads a `.set` file: converts it to a JSON scenario (../scenario/set-convert.ts), then
+// resolves that into a ResolvedScenario (../scenario/resolve.ts). JSON scenario files take
 // the same path from the validation step on, so both formats run identically.
-import { resolveSettings, type ResolveOptions, type SimulationSettings } from '../settings/resolve';
-import { setToSettings } from '../settings/set-convert';
+import { resolveScenario, type ResolveOptions, type ResolvedScenario } from '../scenario/resolve';
+import { setFileToScenario } from '../scenario/set-convert';
 
 export type {
   AbscissaLimits,
   CustomColors,
   Dimension,
   ParticleSpecies,
-  SimulationSettings,
+  ResolvedScenario,
   StatColor,
-} from '../settings/resolve';
-export { calculateTotalKE } from '../settings/resolve';
+} from '../scenario/resolve';
+export { calculateTotalKE } from '../scenario/resolve';
 
 export interface LoadResult {
-  settings: SimulationSettings;
+  scenario: ResolvedScenario;
   /** Header version, e.g. `V2.43`. */
   version: string;
   /** Non-fatal problems worth showing the user. */
@@ -24,7 +24,7 @@ export interface LoadResult {
 
 export type LoadOptions = ResolveOptions;
 
-export function loadSettings(text: string, options: LoadOptions = {}): LoadResult {
-  const { settings, version, warnings } = setToSettings(text);
-  return { settings: resolveSettings(settings, options), version, warnings };
+export function loadSetFile(text: string, options: LoadOptions = {}): LoadResult {
+  const { scenario, version, warnings } = setFileToScenario(text);
+  return { scenario: resolveScenario(scenario, options), version, warnings };
 }

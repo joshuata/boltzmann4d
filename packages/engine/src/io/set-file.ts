@@ -160,7 +160,7 @@ export interface SetFile {
 
 export function parseSetFile(text: string): SetFile {
   const match = grammar.match(text);
-  if (match.failed()) throw new SetFileError(match.shortMessage ?? 'Invalid settings file');
+  if (match.failed()) throw new SetFileError(match.shortMessage ?? 'Invalid .set file');
 
   const fill = (group: SetGroup, entries: Entry[]) => {
     for (const entry of entries) {

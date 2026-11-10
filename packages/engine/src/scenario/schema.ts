@@ -1,16 +1,16 @@
-// The web app's settings format: a JSON document describing a simulation before it runs.
+// The web app's scenario format: a JSON document describing a simulation before it runs.
 //
 // It mirrors the `.set` format (see ./set-convert.ts) so the two convert both ways without
 // loss: the same sections, the same units (nm, amu, K, m/s), and particles described as
 // recipes (randomly placed blocks) plus optional explicitly placed particles. Positions for
-// randomly placed particles are generated when the settings are resolved (./resolve.ts).
+// randomly placed particles are generated when the scenario is resolved (./resolve.ts).
 //
 // Enumerated values use the `.set` spelling (`PERIODIC`, `BOTH`, `RED`, ...).
 import * as z from 'zod';
 import { DividerThermalMode, MAXIMUM_INITIAL_TEMPERATURE } from '../sim/simulation-info';
 
-export const SETTINGS_FORMAT = 'boltzmann4d-settings';
-export const SETTINGS_VERSION = 1;
+export const SCENARIO_FORMAT = 'boltzmann4d-scenario';
+export const SCENARIO_VERSION = 1;
 
 const finite = () => z.number();
 const nonNegative = () => z.number().min(0);
@@ -90,13 +90,13 @@ export const CustomColorsSchema = z.object({
   walls3D: z.array(hexColor).max(6).default([]),
 });
 
-export const SettingsSchema = z
+export const ScenarioSchema = z
   .object({
-    format: z.literal(SETTINGS_FORMAT, {
-      error: `Not a Boltzmann 4D settings file (format must be "${SETTINGS_FORMAT}")`,
+    format: z.literal(SCENARIO_FORMAT, {
+      error: `Not a Boltzmann 4D scenario file (format must be "${SCENARIO_FORMAT}")`,
     }),
-    version: z.literal(SETTINGS_VERSION, {
-      error: `Unsupported settings version (this app reads version ${SETTINGS_VERSION})`,
+    version: z.literal(SCENARIO_VERSION, {
+      error: `Unsupported scenario version (this app reads version ${SCENARIO_VERSION})`,
     }),
     arena: z.object({
       dimensions: z.union([z.literal(1), z.literal(2), z.literal(3)], {
@@ -149,8 +149,8 @@ export const SettingsSchema = z
       tracePointSize: finite(),
     }),
   })
-  .superRefine((settings, ctx) => {
-    if (settings.display.colorScheme === 'CUSTOM' && !settings.display.customColors) {
+  .superRefine((scenario, ctx) => {
+    if (scenario.display.colorScheme === 'CUSTOM' && !scenario.display.customColors) {
       ctx.addIssue({
         code: 'custom',
         path: ['display', 'customColors'],
@@ -159,55 +159,55 @@ export const SettingsSchema = z
     }
   });
 
-/** Settings as written in a file: fields with defaults may be left out. */
-export type SettingsInput = z.input<typeof SettingsSchema>;
-/** Validated settings, with defaults filled in. */
-export type Settings = z.output<typeof SettingsSchema>;
-export type ParticleGroup = Settings['particleGroups'][number];
+/** A scenario as written in a file: fields with defaults may be left out. */
+export type ScenarioInput = z.input<typeof ScenarioSchema>;
+/** A validated scenario, with defaults filled in. */
+export type Scenario = z.output<typeof ScenarioSchema>;
+export type ParticleGroup = Scenario['particleGroups'][number];
 export type ParticleColor = z.output<typeof ParticleColorSchema>;
 
-export class SettingsError extends Error {
-  /** One line per problem, each starting with its path in the settings, e.g. `arena.size[0]`. */
+export class ScenarioError extends Error {
+  /** One line per problem, each starting with its path in the scenario, e.g. `arena.size[0]`. */
   readonly problems: string[];
 
   constructor(problems: string[]) {
     super(problems.join('\n'));
-    this.name = 'SettingsError';
+    this.name = 'ScenarioError';
     this.problems = problems;
   }
 }
 
 export type ValidationResult =
-  { success: true; settings: Settings } | { success: false; problems: string[] };
+  { success: true; scenario: Scenario } | { success: false; problems: string[] };
 
 /** Checks a parsed JSON value against the schema, with one readable line per problem. */
-export function validateSettings(value: unknown): ValidationResult {
-  const result = SettingsSchema.safeParse(value);
-  if (result.success) return { success: true, settings: result.data };
+export function validateScenario(value: unknown): ValidationResult {
+  const result = ScenarioSchema.safeParse(value);
+  if (result.success) return { success: true, scenario: result.data };
   return { success: false, problems: result.error.issues.map(describeIssue) };
 }
 
-/** Like validateSettings, but throws a SettingsError. */
-export function parseSettings(value: unknown): Settings {
-  const result = validateSettings(value);
-  if (!result.success) throw new SettingsError(result.problems);
-  return result.settings;
+/** Like validateScenario, but throws a ScenarioError. */
+export function parseScenario(value: unknown): Scenario {
+  const result = validateScenario(value);
+  if (!result.success) throw new ScenarioError(result.problems);
+  return result.scenario;
 }
 
-/** Parses and validates the text of a `.json` settings file. */
-export function parseSettingsJson(text: string): Settings {
+/** Parses and validates the text of a `.json` scenario file. */
+export function parseScenarioJson(text: string): Scenario {
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch (error) {
-    throw new SettingsError([`Not valid JSON: ${(error as Error).message}`]);
+    throw new ScenarioError([`Not valid JSON: ${(error as Error).message}`]);
   }
-  return parseSettings(value);
+  return parseScenario(value);
 }
 
-/** Pretty-printed JSON for a settings file. */
-export function stringifySettings(settings: SettingsInput): string {
-  return `${JSON.stringify(settings, null, 2)}\n`;
+/** Pretty-printed JSON for a scenario file. */
+export function stringifyScenario(scenario: ScenarioInput): string {
+  return `${JSON.stringify(scenario, null, 2)}\n`;
 }
 
 function describeIssue(issue: z.core.$ZodIssue): string {

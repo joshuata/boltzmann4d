@@ -1,8 +1,8 @@
-// Simulation Web Worker entry: builds the Simulation from a settings file, paces it with
+// Simulation Web Worker entry: builds the Simulation from a scenario (a preset .set file for now), paces it with
 // ThreadController, and streams frames to the renderer over the port it is given.
-import { loadDefaultSettingsText, loadPresetText, loadSettings } from '@boltzmann4d/engine/io';
+import { loadDefaultSetFileText, loadPresetText, loadSetFile } from '@boltzmann4d/engine/io';
 import type { RenderStream } from '../render/protocol';
-import type { SimulationSettings } from '@boltzmann4d/engine/io';
+import type { ResolvedScenario } from '@boltzmann4d/engine/io';
 import {
   Simulation,
   type ColorMode,
@@ -106,8 +106,8 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
   let prepared: Prepared;
   let built: Built;
   try {
-    const text = preset ? await loadPresetText(preset) : await loadDefaultSettingsText();
-    const { settings: loaded } = loadSettings(text);
+    const text = preset ? await loadPresetText(preset) : await loadDefaultSetFileText();
+    const { scenario: loaded } = loadSetFile(text);
     const canHavePiston =
       loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
       loaded.arenaType === ArenaType.MOVABLE_PISTON;
@@ -115,33 +115,33 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
       loaded.arenaType === ArenaType.DIVIDED_ARENA ||
       loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
     const canDemon = loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
-    const settings = { ...loaded };
-    if (canDemon && arena.demon !== undefined) settings.maxwellDemonMode = arena.demon;
+    const scenario = { ...loaded };
+    if (canDemon && arena.demon !== undefined) scenario.maxwellDemonMode = arena.demon;
     if (canHavePiston && arena.piston !== undefined) {
-      settings.arenaType = arena.piston
+      scenario.arenaType = arena.piston
         ? ArenaType.MOVABLE_PISTON
         : ArenaType.REFLECTING_BOUNDARIES;
     }
     if (canConduct && arena.conductingDivider !== undefined) {
-      settings.dividerThermalMode = arena.conductingDivider
+      scenario.dividerThermalMode = arena.conductingDivider
         ? DividerThermalMode.CONDUCTING
         : DividerThermalMode.INSULATING;
     }
     // Reactions (as Java's Reactions tab): one species plus a "Reacted" copy of it that
     // particles turn into. Presets with reaction_mode TRUE get them by default, with the
     // tab's default activation energies (Java ignored the key).
-    const canReact = settings.dimension === 2 && settings.species.length === 1;
+    const canReact = scenario.dimension === 2 && scenario.species.length === 1;
     const reactions = canReact
       ? arena.reactions !== undefined
         ? arena.reactions
-        : settings.reactionMode
+        : scenario.reactionMode
           ? { ...DEFAULT_REACTIONS }
           : null
       : null;
     if (reactions) {
-      const red = settings.species[0]!;
+      const red = scenario.species[0]!;
       const empty = new Float64Array(0);
-      settings.species = [
+      scenario.species = [
         red,
         {
           ...red,
@@ -156,11 +156,11 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
         },
       ];
     }
-    const canHaveWells = settings.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
+    const canHaveWells = scenario.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
     const wells = canHaveWells && arena.wells ? arena.wells : null;
     const attractiveWall = canHaveWells && arena.attractiveWall ? arena.attractiveWall : null;
-    const simulationSettings = {
-      ...settings,
+    const initialState = {
+      ...scenario,
       ...(wells ? { wells } : {}),
       ...(attractiveWall ? { attractiveWall } : {}),
       ...(reactions ? { reactions } : {}),
@@ -171,27 +171,27 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
       canDemon,
       canHaveWells,
       canReact,
-      typeNames: settings.species.map((s) => s.type.displayName),
+      typeNames: scenario.species.map((s) => s.type.displayName),
       options: {
-        piston: settings.arenaType === ArenaType.MOVABLE_PISTON,
-        conductingDivider: settings.dividerThermalMode === DividerThermalMode.CONDUCTING,
-        demon: canDemon && settings.maxwellDemonMode,
+        piston: scenario.arenaType === ArenaType.MOVABLE_PISTON,
+        conductingDivider: scenario.dividerThermalMode === DividerThermalMode.CONDUCTING,
+        demon: canDemon && scenario.maxwellDemonMode,
         wells,
         attractiveWall,
         reactions,
       },
     };
-    const ctx = statsContext(settings);
+    const ctx = statsContext(scenario);
     prepared = {
       preset: preset ?? 'default',
-      settings,
-      simulationSettings,
+      scenario,
+      initialState,
       ctx,
       arenaInfo,
-      speed: parseSimulationSpeed(settings.simulationSpeed),
-      typeColors: settings.species.map((s) => s.type.defaultColor),
-      viewingAngles: settings.viewingAngles,
-      view: viewOf(settings, ctx),
+      speed: parseSimulationSpeed(scenario.simulationSpeed),
+      typeColors: scenario.species.map((s) => s.type.defaultColor),
+      viewingAngles: scenario.viewingAngles,
+      view: viewOf(scenario, ctx),
     };
     built = build(prepared);
   } catch (error) {
@@ -204,11 +204,11 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
   start(prepared, built);
 }
 
-/** A loaded settings file with the user's arena options applied, ready to (re)build. */
+/** A loaded scenario with the user's arena options applied, ready to (re)build. */
 interface Prepared {
   preset: string;
-  settings: SimulationSettings;
-  simulationSettings: InitialState;
+  scenario: ResolvedScenario;
+  initialState: InitialState;
   ctx: StatsContext;
   arenaInfo: ArenaInfo;
   speed: number;
@@ -228,12 +228,12 @@ let lastPrepared: Prepared | null = null;
 /** Builds the simulation and its statistics from the prepared state. */
 function build(prepared: Prepared): Built {
   let stats: Statistics | null = null;
-  const simulation = new Simulation(prepared.simulationSettings, {
+  const simulation = new Simulation(prepared.initialState, {
     onEvent: (event) => stats?.notifyOfEvent(event),
   });
   const statistics = (stats = new Statistics(prepared.ctx, simulation.particles, {
-    forgetMultiplier: prepared.settings.forgetMultiplier,
-    typeNames: prepared.settings.species.map((s) => s.type.displayName),
+    forgetMultiplier: prepared.scenario.forgetMultiplier,
+    typeNames: prepared.scenario.species.map((s) => s.type.displayName),
     typeColors: prepared.typeColors,
   }));
   return { simulation, statistics };
@@ -363,8 +363,8 @@ function sceneOf(
   };
 }
 
-/** The settings file's view settings and the colour-mode limits (MainGuiFullView). */
-function viewOf(settings: SimulationSettings, ctx: StatsContext): ViewSettings {
+/** The scenario's view settings and the colour-mode limits (MainGuiFullView). */
+function viewOf(scenario: ResolvedScenario, ctx: StatsContext): ViewSettings {
   const all = ctx.types.map((_, t) => t);
   const speed = weightedAverage(ctx, all, (t) =>
     averageVelocity(ctx.types[t]!.initialTemperature, ctx.types[t]!.mass * AMU_KG, ctx.dimension),
@@ -372,11 +372,11 @@ function viewOf(settings: SimulationSettings, ctx: StatsContext): ViewSettings {
   const energy = weightedAverage(ctx, all, (t) =>
     convert('J', 'kJ/mol', avgKineticEnergy(ctx.types[t]!.initialTemperature, ctx.dimension)),
   );
-  const mode = settings.coloringMode;
+  const mode = scenario.coloringMode;
   return {
     colorLimits: { speed: 2.5 * speed, energy: 2.5 * energy },
     colorMode: mode === 'SPEED' || mode === 'KE' ? mode : 'NORMAL',
-    trace: { enabled: settings.traceMode, pointSize: settings.tracePointSize || 2 },
+    trace: { enabled: scenario.traceMode, pointSize: scenario.tracePointSize || 2 },
   };
 }
 

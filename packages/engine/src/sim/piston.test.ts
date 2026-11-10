@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadPresetText, loadSettings } from '../io';
+import { loadPresetText, loadSetFile } from '../io';
 import { Collision } from './event';
 import { compressionLimitPercent, Piston, PistonMode } from './piston';
 import { seededRandom } from './scenes';
@@ -7,8 +7,8 @@ import { Simulation, type InitialState } from './simulation';
 import { ArenaType } from './simulation-info';
 
 async function pistonArena(): Promise<InitialState> {
-  const { settings } = loadSettings(await loadPresetText('default'), { random: seededRandom(2) });
-  return { ...settings, arenaType: ArenaType.MOVABLE_PISTON };
+  const { scenario } = loadSetFile(await loadPresetText('default'), { random: seededRandom(2) });
+  return { ...scenario, arenaType: ArenaType.MOVABLE_PISTON };
 }
 
 /** Runs frames, checking that every particle stays below the piston face. */

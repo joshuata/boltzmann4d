@@ -1,4 +1,4 @@
-// The settings files shipped with Boltzmann 3D, copied verbatim into simsettingsfiles/.
+// The .set files shipped with Boltzmann 3D, copied verbatim into simsettingsfiles/.
 // Loaded lazily so they stay out of the main bundle until someone opens one.
 
 const presetLoaders = import.meta.glob<string>('./simsettingsfiles/presets/*.set', {
@@ -21,8 +21,8 @@ export async function loadPresetText(name: string): Promise<string> {
   return load();
 }
 
-/** The settings the Java app opens with. */
-export async function loadDefaultSettingsText(): Promise<string> {
+/** The scenario the Java app opens with. */
+export async function loadDefaultSetFileText(): Promise<string> {
   return (await import('./simsettingsfiles/default.set?raw')).default;
 }
 

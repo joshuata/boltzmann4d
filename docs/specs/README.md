@@ -23,7 +23,7 @@ The manual describes the 2009 program; the Java code in `vendor/boltzmann3d` is 
 | [predictions.md](predictions.md) | The theoretical values the app displays: formulas for 1D, 2D, 3D, mixtures, real gases, finite systems, reactions, adiabatic changes |
 | [display-and-controls.md](display-and-controls.md) | Clock, speed, zoom, restart / pause / advance / reverse, colouring, trajectory trace, 3D view, options |
 | [files-and-output.md](files-and-output.md) | Loading and saving `.set` files, the bundled presets, CSV output |
-| [scenarios.md](scenarios.md) | Classroom experiments from the manual and worksheets, written as end-to-end acceptance checks |
+| [stories.md](stories.md) | Classroom experiments from the manual and worksheets, written as end-to-end acceptance checks |
 
 ## Conventions
 

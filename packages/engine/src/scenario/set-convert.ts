@@ -1,18 +1,18 @@
 // Converts between `.set` files (Boltzmann 3D's format, read by model/io/Load.java) and the
-// JSON settings in ./schema.ts. Both directions keep every setting the loader reads, so
+// JSON scenarios in ./schema.ts. Both directions keep every setting the loader reads, so
 // `.set → JSON → .set` loses nothing and the result still loads in the Java app (FILE-6).
 import { parseSetFile, SetFileError, type SetGroup } from '../io/set-file';
 import {
-  SETTINGS_FORMAT,
-  SETTINGS_VERSION,
-  validateSettings,
+  SCENARIO_FORMAT,
+  SCENARIO_VERSION,
+  validateScenario,
   type ParticleGroup,
-  type Settings,
-  type SettingsInput,
+  type Scenario,
+  type ScenarioInput,
 } from './schema';
 
 export interface SetConversion {
-  settings: Settings;
+  scenario: Scenario;
   /** Header version, e.g. `V2.43`. */
   version: string;
   /** Non-fatal problems worth showing the user. */
@@ -22,12 +22,12 @@ export interface SetConversion {
 /** The header version written to `.set` files: the last Boltzmann 3D release. */
 export const SET_FILE_VERSION = 'V2.43';
 
-/** Reads a `.set` file into validated settings. Throws SetFileError on any problem. */
-export function setToSettings(text: string): SetConversion {
+/** Reads a `.set` file into a validated scenario. Throws SetFileError on any problem. */
+export function setFileToScenario(text: string): SetConversion {
   const file = parseSetFile(text);
   const warnings: string[] = [];
   if (file.formatName.toLowerCase() !== 'boltzmann3d') {
-    warnings.push('Missing Boltzmann3D header; this may not be a settings file.');
+    warnings.push('Missing Boltzmann3D header; this may not be a scenario file.');
   }
 
   const gs = file.root.group('GlobalSettings');
@@ -35,18 +35,18 @@ export function setToSettings(text: string): SetConversion {
   const colorSchemeValues = gs.values('color_scheme');
   const colorScheme = (colorSchemeValues[0] ?? '').toUpperCase().replace(/:$/, '');
 
-  const input: SettingsInput = {
-    format: SETTINGS_FORMAT,
-    version: SETTINGS_VERSION,
+  const input: ScenarioInput = {
+    format: SCENARIO_FORMAT,
+    version: SCENARIO_VERSION,
     arena: {
       dimensions: gs.number('dimensions') as 1 | 2 | 3,
       size: [gs.number('size', 0), gs.number('size', 1), gs.number('size', 2)],
-      boundary: upper('boundary') as Settings['arena']['boundary'],
+      boundary: upper('boundary') as Scenario['arena']['boundary'],
       holeSize: gs.number('hole_size'),
       ...(gs.has('divider_thermal_mode') && {
         dividerThermalMode: upper(
           'divider_thermal_mode',
-        ) as Settings['arena']['dividerThermalMode'],
+        ) as Scenario['arena']['dividerThermalMode'],
       }),
       ...(gs.has('piston_speed') && { pistonSpeed: gs.number('piston_speed') }),
     },
@@ -61,7 +61,7 @@ export function setToSettings(text: string): SetConversion {
     },
     statistics: {
       name: gs.string('stat_name'),
-      color: upper('stat_color') as Settings['statistics']['color'],
+      color: upper('stat_color') as Scenario['statistics']['color'],
       cumulative: gs.boolean('cumulative'),
       width: gs.boolean('width'),
       history: gs.boolean('history'),
@@ -69,7 +69,7 @@ export function setToSettings(text: string): SetConversion {
       forgetTime: gs.number('forget_time'),
       pressurePredictionMode: upper(
         'pressure_prediction_mode',
-      ) as Settings['statistics']['pressurePredictionMode'],
+      ) as Scenario['statistics']['pressurePredictionMode'],
       abscissaLimits: readAbscissaLimits(file.root.optionalGroup('AbscissaLimits')),
     },
     display: {
@@ -83,12 +83,12 @@ export function setToSettings(text: string): SetConversion {
     },
   };
 
-  const result = validateSettings(input);
+  const result = validateScenario(input);
   if (!result.success) throw new SetFileError(result.problems.join('\n'));
-  return { settings: result.settings, version: file.version, warnings };
+  return { scenario: result.scenario, version: file.version, warnings };
 }
 
-function readParticleGroup(pg: SetGroup): SettingsInput['particleGroups'][number] {
+function readParticleGroup(pg: SetGroup): ScenarioInput['particleGroups'][number] {
   return {
     color: pg.string('color').toUpperCase() as ParticleGroup['color'],
     mass: pg.number('mass'),
@@ -107,10 +107,10 @@ function readParticleGroup(pg: SetGroup): SettingsInput['particleGroups'][number
   };
 }
 
-function readAbscissaLimits(group: SetGroup | undefined): Settings['statistics']['abscissaLimits'] {
-  const limits: Settings['statistics']['abscissaLimits'] = {};
+function readAbscissaLimits(group: SetGroup | undefined): Scenario['statistics']['abscissaLimits'] {
+  const limits: Scenario['statistics']['abscissaLimits'] = {};
   for (const st of group?.groups('StatLimits') ?? []) {
-    const entry: Settings['statistics']['abscissaLimits'][string] = {};
+    const entry: Scenario['statistics']['abscissaLimits'][string] = {};
     for (const key of ['both', 'red', 'blue'] as const) {
       const property = `${key}_limits`;
       // `+ 0` turns the files' `-0.00000` into 0, which JSON can represent (-0 it can't).
@@ -122,7 +122,7 @@ function readAbscissaLimits(group: SetGroup | undefined): Settings['statistics']
 }
 
 /** `color_scheme CUSTOM: red blue background divider [left right top bottom front back]`. */
-function readCustomColors(values: string[]): NonNullable<Settings['display']['customColors']> {
+function readCustomColors(values: string[]): NonNullable<Scenario['display']['customColors']> {
   const colors = values
     .slice(1)
     .join(' ')
@@ -177,8 +177,8 @@ function formatNumber(value: number): string {
 const formatBoolean = (value: boolean) => (value ? 'TRUE' : 'FALSE');
 const colorName = (color: ParticleGroup['color']) => (color === 'RED' ? 'Red' : 'Blue');
 
-/** Writes settings as a `.set` file in the layout of the bundled presets. */
-export function settingsToSet(settings: Settings): string {
+/** Writes a scenario as a `.set` file in the layout of the bundled presets. */
+export function scenarioToSetFile(scenario: Scenario): string {
   const lines: string[] = [`#Boltzmann3D ${SET_FILE_VERSION}`, ''];
   let depth = 0;
   const line = (text: string) => lines.push(`${'  '.repeat(depth)}${text}`);
@@ -202,7 +202,7 @@ export function settingsToSet(settings: Settings): string {
     lines.push('');
   };
 
-  const { arena, modes, run, statistics, display } = settings;
+  const { arena, modes, run, statistics, display } = scenario;
   group('GlobalSettings', () => {
     property('size', ...arena.size);
     property('dimensions', arena.dimensions);
@@ -255,7 +255,7 @@ export function settingsToSet(settings: Settings): string {
     );
   }
 
-  for (const pg of settings.particleGroups) {
+  for (const pg of scenario.particleGroups) {
     group('ParticleGroup', () => {
       property('color', colorName(pg.color));
       property('radius', pg.radius);
