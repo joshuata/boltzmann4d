@@ -4,13 +4,13 @@ A phased plan for bringing the requirements in `docs/specs/` into the app. Each 
 
 ## Context
 
-`docs/specs/` lists what the app must do, with requirement IDs and 28 classroom scenarios (`SCN-*`). Today the app covers part of it: 2D and 3D hard-sphere physics (walls, periodic, divider, hole, the demon gate without a UI toggle; the conducting divider in 2D), loading bundled presets, play/pause/step, a rate slider, and the Instantaneous Speed histogram with Red/Blue/Both, checked against kinetic theory (plans 0002–0005, and 0004 steps 1–4). There are no particle controls, restart, pressure, 1D, piston, reactions, reverse, trace, colouring, save or export.
+`docs/specs/` lists what the app must do, with requirement IDs and 28 classroom scenarios (`SCN-*`). Today the app covers part of it: 2D and 3D hard-sphere physics (walls, periodic, divider, hole, the demon gate); in 2D also the conducting divider, the movable piston with its thermostat, pair wells, the attractive wall and red↔blue reactions, turned on from the sidebar's Arena box; Restart and the demon's open/close toggle; loading bundled presets from a SvelteKit site with 2D/3D menus; play/pause/step, a rate slider and collapsible performance readouts; colour by type, speed or KE (2D and 3D), trace (2D), the demon's closed hole and a scale bar; and the Instantaneous Speed histogram with Red/Blue/Both, checked against kinetic theory (plans 0002, 0003, 0004 steps 1–4, 0005 steps 1–7, 0007). There are no particle controls, pressure, 1D, 3D piston or reactions, reverse, 3D trace, coloured histogram bars, save or export.
 
 The aim is to **enable the learning outcomes, not replicate the desktop app exactly**. Phases are ordered by the classroom scenarios they unlock, and each one says where it deliberately simplifies the desktop UI.
 
 ### Relation to plan 0005 (finish 2D)
 
-Plan 0005 ports the remaining 2D physics modes (thermostat and piston, pair wells, attractive wall and heat reservoir, reactions), the 2D rendering baseline (colour modes, trace, palettes, ruler) and some run-time controls (hole toggle, speed, restart). This roadmap doesn't repeat that work. Where a phase below needs one of those, it builds on plan 0005's 2D port and adds what the specs still need: the 3D (and 1D) counterpart, the learning-facing controls and readouts, and the scenario checks. Where a plan 0005 step and a phase here cover the same control (restart, hole toggle, trace, colour modes), whichever lands first does it and the other cites it.
+Plan 0005 ports the remaining 2D physics modes (thermostat and piston, pair wells, attractive wall and heat reservoir, reactions; all done except the heat reservoir), the 2D rendering baseline (colour modes, trace, palettes, ruler) and some run-time controls (hole toggle, speed, restart). This roadmap doesn't repeat that work. Where a phase below needs one of those, it builds on plan 0005's 2D port and adds what the specs still need: the 3D (and 1D) counterpart, the learning-facing controls and readouts, and the scenario checks. Where a plan 0005 step and a phase here cover the same control (restart, hole toggle, trace, colour modes), whichever lands first does it and the other cites it.
 
 ## Guiding rules
 
@@ -49,7 +49,7 @@ _Not started._ Finishes plan 0004 step 5.
 
 - **Requirements:** STAT-1, 3–5, 7–17, 19–23; PRED-1–7, 11; VIEW-4; OPT-4.
 - **Unlocks:** SCN-3, 4, 5, 6; history plots for SCN-7–13.
-- **Work:** the remaining statistics (velocity components, kinetic energy, free path, time per collision, collision rate, the per-particle averages) behind a plot picker; the Width toggle; editable axis limits that clear only that plot's cumulative data; a history view; the forget-time option; finite-system corrections (with Java bug 2 fixed, see plan 0004); Color by Speed / KE for particles (2D from plan 0005 step 6; add 3D) and the matching bar colours.
+- **Work:** the remaining statistics (velocity components, kinetic energy, free path, time per collision, collision rate, the per-particle averages) behind a plot picker; the Width toggle; editable axis limits that clear only that plot's cumulative data; a history view; the forget-time option; finite-system corrections (with Java bug 2 fixed, see plan 0004); the histogram bar colours matching Color by Speed / KE (particle colouring is done in 2D and 3D, plan 0005 step 6).
 - **Simplify:** history may cover the last 150 summaries rather than frames; per-particle-average plots show a note instead of offering a cumulative view (STAT-18); stepping plots with + and − is optional.
 
 ### Phase 4: Chaos, reversibility and trajectories
@@ -58,7 +58,7 @@ _Not started._
 
 - **Requirements:** SIM-4, 32; CTRL-2 (doubling steps), CTRL-6; VIEW-5.
 - **Unlocks:** SCN-21, 22; the trace for SCN-15 and `2Dliquid`.
-- **Work:** `reverse()` in `Simulation` (flip velocities, re-predict); trace mode in `packages/simulator/src/render` with dot size and Clear (2D from plan 0005 step 6; add dot sprites in 3D); a `2Dequal` test that the halves match and then diverge around 95–120 ps.
+- **Work:** `reverse()` in `Simulation` (flip velocities, re-predict); trace in 3D (dot sprites) and a Clear control (2D trace with `trace_point_size` is done, plan 0005 step 6); a `2Dequal` test that the halves match and then diverge around 95–120 ps.
 
 ### Phase 5: 1D
 
@@ -74,7 +74,7 @@ _Not started._
 
 - **Requirements:** SIM-17, 19–23; OPT-6; PART-13; PRED-15.
 - **Unlocks:** SCN-24, 25; the piston route through SCN-7.
-- **Work:** plan 0005 step 2 ports `Piston`, `PistonState`, `Thermostat*` and `WallController` for 2D with scripted parity fixtures; this phase adds the 3D piston (with fixtures) and draws it in 3D; a target-volume slider and Move Piston; adiabatic or isothermal; the live piston temperature, a "Thermostat active" indicator and the adiabatic prediction.
+- **Work:** plan 0005 step 2 ported `Piston`, `PistonState`, `Thermostat*` and `WallController` for 2D with scripted parity fixtures, plus a 2D piston panel (adiabatic, isothermal, instantaneous, stop); this phase adds the 3D piston (with fixtures) and draws it in 3D; a target-volume slider and Move Piston; adiabatic or isothermal; the live piston temperature, a "Thermostat active" indicator and the adiabatic prediction.
 - **Simplify:** one piston panel holds the level control (SIM-23) and the Options entries.
 
 ### Phase 7: Reactions
@@ -83,7 +83,7 @@ _Not started._
 
 - **Requirements:** SIM-25–29; PRED-12–14; the Number of Particles plot (STAT-1).
 - **Unlocks:** SCN-26, 27.
-- **Work:** plan 0005 step 5 ports 2D reactions; this phase adds them to `Particle3D`, with scripted `ParityDump` fixtures (Java's preset loader runs `2Dequil`/`3Dequil` without reactions, so the presets alone can't check them), and decides how those presets switch reaction mode on for SCN-26 while their existing reaction-free parity fixtures stay as they are; the partition-function prediction in `formulas.ts`, tested against 13.3 and 14.1; an energy diagram with editable `E_f` and `E_r` and "suppress reverse"; the counts history as reaction mode's default plot.
+- **Work:** plan 0005 step 5 ported 2D reactions (scripted `2Dreactions` fixtures, since Java's preset loader runs `2Dequil`/`3Dequil` without reactions), and `reaction_mode TRUE` now turns them on for `2Dequil`; this phase adds them to `Particle3D` with scripted `ParityDump` fixtures and does the same for `3Dequil`; the partition-function prediction in `formulas.ts`, tested against 13.3 and 14.1; an energy diagram with editable `E_f` and `E_r` and "suppress reverse"; the counts history as reaction mode's default plot.
 - **Simplify:** the diagram can be a plain SVG with draggable levels and number fields; it needn't match the Java dialog.
 
 ### Phase 8: Save, share and export
@@ -100,10 +100,10 @@ _Not started._
 _Not started._ Each item is optional; schedule by demand.
 
 - RDF plot and sampling (STAT-1 RDF, STAT-2, 24; OPT-5), useful for discussing `2Dliquid`.
-- Energy wells (SIM-33), the attractive wall and heat reservoir in 3D, and the 3D conducting divider: in the Java code, but no scenario uses them (2D is plan 0005 steps 1, 3 and 4).
+- Energy wells (SIM-33), the attractive wall and heat reservoir in 3D, and the 3D conducting divider: in the Java code, but no scenario uses them (2D is plan 0005 steps 1, 3 and 4; the 2D heat reservoir waits on #34).
 - View options: light scheme, custom colours, lighting toggle, display off for fast accumulation (VIEW-1–3).
 - Non-zero total momentum on periodic arenas (SIM-31).
-- Help and About with links and licence credits (HELP-1); a collapsible advanced area for the fps readouts (ADV-1, 2).
+- Help and About with links and licence credits (HELP-1). The collapsible advanced area for the fps readouts (ADV-1, 2) is done: the sidebar's performance readouts collapse and sit last.
 - A warning for mixed blue masses or radii (PART-11).
 
 ## Scenario → phase

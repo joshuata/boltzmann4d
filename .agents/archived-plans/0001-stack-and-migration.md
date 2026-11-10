@@ -1,5 +1,7 @@
 # boltzmann4d: Stack Choice and Migration Plan
 
+_Archived 2026-11-09: the stack, scaffold, parser, parity harness, statistics core, workers and deployment are done. The open migration items are owned by later plans: 1D, colour modes, trace and the remaining UI by plan 0006 (Phases 1–5), and the remaining 2D rendering and controls by plan 0005 (steps 6–8)._
+
 ## Scope of this session
 
 1. Write `AGENTS.md` and `CLAUDE.md`, and create the `.agents/plans/` and `.agents/archived-plans/` folders, with a `.gitkeep` in `archived-plans`.
@@ -87,7 +89,7 @@ src/
 5. Port the statistics and Formulas, then test the histogram output against Maxwell–Boltzmann theory.
 6. Build the Worker and the Three.js renderer, following `docs/rendering-baseline.md` from boltzmann3d. _In progress: physics and rendering each run in their own worker (frames go physics → renderer directly); the 2D view draws the arena and particles. 2D and 3D views draw the arena, divider and particles, with periodic images; the 3D view turns by drag or arrow keys (plan 0005). Colour modes and trace are still to do._
 7. Port the Svelte UI: main panel controls, then the settings dialogs, then charts. _Steps 7 and 8 are now scheduled by the feature specs in plan 0006._
-8. Port the remaining modes: piston, Maxwell demon, reactions, thermostat and trace. _2D and 3D divided arenas, holes and the Maxwell demon gate are done (parity-checked; the demon has no UI toggle yet), and so is the 2D conducting divider. Piston, reactions, thermostat, wells and trace remain._
+8. Port the remaining modes: piston, Maxwell demon, reactions, thermostat and trace. _2D and 3D divided arenas, holes and the Maxwell demon gate are done (parity-checked; the demon has no UI toggle yet), and so is the 2D conducting divider. In 2D the piston, thermostat, wells, attractive wall and reactions are done too (plan 0005); trace and the 3D counterparts remain (plan 0006)._
 9. Deploy to GitHub Pages: set Vite's `base`, add a GitHub Actions workflow that builds, tests, lints and publishes `dist/`, and enable Pages for the repository. This can be set up early so every step above ships as it lands. _Done: the workflow and `base` are in place (`.github/workflows/ci.yml`), and Pages is enabled with GitHub Actions as its source._
 
 ## Verification
