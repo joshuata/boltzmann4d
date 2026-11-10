@@ -1,0 +1,6 @@
+{
+  // The service worker runs with WebWorker types and no DOM, so it gets its own config
+  // (SvelteKit's preset) and is excluded from tsconfig.json.
+  "extends": "$app/tsconfig/service-worker",
+  "include": ["src/service-worker.ts"]
+}
