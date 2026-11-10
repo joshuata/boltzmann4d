@@ -125,10 +125,12 @@ describe('speed statistics against kinetic theory', () => {
     const { stats, ctx } = run(hot, 200_000);
     const tLight = measuredTemperature(stats.speed[0]!, ctx.types[0]!.mass);
     const tHeavy = measuredTemperature(stats.speed[1]!, ctx.types[1]!.mass);
-    expect(tLight / tHeavy).toBeCloseTo(1, 1.5);
+    // Within ±3%: one finite run fluctuates by ~2% (it differs a little between machines),
+    // while species that kept their starting temperatures would be 4× apart.
+    expect(tLight / tHeavy).toBeCloseTo(1, 1.2);
     // ... the count-weighted mean of the starting temperatures, since energy is conserved.
     const tStart = (ctx.types[0]!.initialTemperature + ctx.types[1]!.initialTemperature) / 2;
-    expect((tLight + tHeavy) / 2 / tStart).toBeCloseTo(1, 1.5);
+    expect((tLight + tHeavy) / 2 / tStart).toBeCloseTo(1, 1.2);
 
     // Predictions use the measured temperatures (#23), so they describe this gas: each
     // species and the mix match, bin by bin. (At the starting temperatures they were
