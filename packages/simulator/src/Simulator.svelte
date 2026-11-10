@@ -55,21 +55,21 @@
   class="grid h-full min-h-0 grid-rows-[min(55dvh,90vw)_1fr] overflow-hidden md:grid-cols-[1fr_320px] md:grid-rows-1"
 >
   <div class="relative min-h-0 min-w-0">
-  <canvas
-    bind:this={canvas}
-    class={[
-      'block size-full min-h-0 min-w-0',
-      sim?.dimension === 3 && 'cursor-grab touch-none active:cursor-grabbing',
-    ]}
-    use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
-    tabindex={sim?.dimension === 3 ? 0 : -1}
-    aria-label={sim?.dimension === 3
-      ? 'Simulation arena; drag or use the arrow keys to turn it'
-      : 'Simulation arena'}
-  ></canvas>
-  {#if sim && sim.dimension !== 3}
-    <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
-  {/if}
+    <canvas
+      bind:this={canvas}
+      class={[
+        'block size-full min-h-0 min-w-0',
+        sim?.dimension === 3 && 'cursor-grab touch-none active:cursor-grabbing',
+      ]}
+      use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
+      tabindex={sim?.dimension === 3 ? 0 : -1}
+      aria-label={sim?.dimension === 3
+        ? 'Simulation arena; drag or use the arrow keys to turn it'
+        : 'Simulation arena'}
+    ></canvas>
+    {#if sim && sim.dimension !== 3}
+      <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
+    {/if}
   </div>
   <aside
     class="bg-muted/40 min-h-0 overflow-y-auto overscroll-contain border-t p-4 md:border-t-0 md:border-l"
