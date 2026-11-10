@@ -1,8 +1,12 @@
-// Simulation Web Worker entry: builds the Simulation from a scenario (a preset .set file for now), paces it with
-// ThreadController, and streams frames to the renderer over the port it is given.
-import { loadDefaultSetFileText, loadPresetText, loadSetFile } from '@boltzmann4d/engine/io';
+// Simulation Web Worker entry: builds the Simulation from a scenario (a bundled preset or one
+// the page supplies), paces it with ThreadController, and streams frames to the renderer over the port it is given.
+import {
+  loadPresetScenario,
+  parseScenario,
+  resolveScenario,
+  type ResolvedScenario,
+} from '@boltzmann4d/engine/scenario';
 import type { RenderStream } from '../render/protocol';
-import type { ResolvedScenario } from '@boltzmann4d/engine/io';
 import {
   Simulation,
   type ColorMode,
@@ -27,7 +31,7 @@ import {
   PISTON_SHAFT_RADIUS,
   PISTON_VALVE_RADIUS,
 } from '@boltzmann4d/engine/sim/simulation-info';
-import type { ArenaInfo, ArenaOptions, FromWorker, ToWorker } from './index';
+import type { ArenaInfo, ArenaOptions, FromWorker, ScenarioSource, ToWorker } from './index';
 import { parseSimulationSpeed, ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
@@ -44,7 +48,7 @@ let frames: MessagePort | null = null;
 let threadController: ThreadController | null = null;
 let running: Simulation | null = null;
 let paused = false;
-/** The user's speed multiplier on top of each preset's own speed. */
+/** The user's speed multiplier on top of each scenario's own speed. */
 let rateScale = 1;
 /** Bumped per load request, so a slow load can't replace a newer one. */
 let loadGeneration = 0;
@@ -54,10 +58,10 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
   switch (message.type) {
     case 'connect':
       frames = message.frames;
-      void load(message.preset, message.arena);
+      void load(message.source, message.arena);
       break;
     case 'load':
-      void load(message.preset, message.arena);
+      void load(message.source, message.arena);
       break;
     case 'restart':
       restart();
@@ -97,17 +101,23 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
 };
 
 /**
- * Loads a preset (default.set when absent) and starts running it, replacing the current
- * simulation. If the preset can't be loaded or isn't supported yet, reports the error and
+ * Loads a scenario (the default preset when absent) and starts running it, replacing the
+ * current simulation. If it can't be loaded or isn't supported yet, reports the error and
  * keeps the current simulation running. Paused stays paused.
  */
-async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
+async function load(
+  source: ScenarioSource = { kind: 'preset', name: 'default' },
+  arena: ArenaOptions = {},
+): Promise<void> {
   const generation = ++loadGeneration;
   let prepared: Prepared;
   let built: Built;
   try {
-    const text = preset ? await loadPresetText(preset) : await loadDefaultSetFileText();
-    const { scenario: loaded } = loadSetFile(text);
+    const loaded = resolveScenario(
+      source.kind === 'preset'
+        ? await loadPresetScenario(source.name)
+        : parseScenario(source.scenario),
+    );
     const canHavePiston =
       loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
       loaded.arenaType === ArenaType.MOVABLE_PISTON;
@@ -183,7 +193,7 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
     };
     const ctx = statsContext(scenario);
     prepared = {
-      preset: preset ?? 'default',
+      name: source.name,
       scenario,
       initialState,
       ctx,
@@ -196,7 +206,7 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
     built = build(prepared);
   } catch (error) {
     if (generation === loadGeneration) {
-      post({ type: 'error', message: `Can't load ${preset ?? 'default'}: ${errorText(error)}` });
+      post({ type: 'error', message: `Can't load ${source.name}: ${errorText(error)}` });
     }
     return;
   }
@@ -206,7 +216,7 @@ async function load(preset?: string, arena: ArenaOptions = {}): Promise<void> {
 
 /** A loaded scenario with the user's arena options applied, ready to (re)build. */
 interface Prepared {
-  preset: string;
+  name: string;
   scenario: ResolvedScenario;
   initialState: InitialState;
   ctx: StatsContext;
@@ -305,7 +315,7 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
   threadController.showCurrentFrame();
   post({
     type: 'loaded',
-    preset: prepared.preset,
+    name: prepared.name,
     particles: simulation.particles.count,
     arena: prepared.arenaInfo,
     piston: simulation.piston

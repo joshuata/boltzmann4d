@@ -30,3 +30,4 @@ export {
   type ResolvedScenario,
   type ParticleSpecies,
 } from './resolve';
+export { loadPresetScenario, readScenarioFile, type ScenarioFile } from './sources';

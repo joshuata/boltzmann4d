@@ -4,9 +4,18 @@
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
 import type { ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
+import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
 
 /**
- * Changes to a preset's arena that keep its particle placement valid: a reflecting arena
+ * What to run: a bundled preset by file name without `.set` (`default` is the scenario the
+ * Java app opens with), or a scenario the page supplies, e.g. from a file the user opened.
+ * `name` labels it in messages.
+ */
+export type ScenarioSource =
+  { kind: 'preset'; name: string } | { kind: 'scenario'; name: string; scenario: ScenarioInput };
+
+/**
+ * Changes to a scenario's arena that keep its particle placement valid: a reflecting arena
  * can get the movable piston, and a divided arena's divider can conduct heat.
  */
 export interface ArenaOptions {
@@ -20,8 +29,8 @@ export interface ArenaOptions {
    */
   wells?: { radiusMultiplier: number; depths: number[] } | null;
   /**
-   * Red↔blue reactions (one-species 2D presets): activation energies in kJ/mol. null turns
-   * them off; absent follows the preset's reaction_mode.
+   * Red↔blue reactions (one-species 2D scenarios): activation energies in kJ/mol. null turns
+   * them off; absent follows the scenario's reaction_mode.
    */
   reactions?: { forward: number; reverse: number; suppressReverse: boolean } | null;
   /** A square well along the bottom wall: width in m, depth in kJ/mol. null turns it off. */
@@ -36,7 +45,7 @@ export interface PistonInfo {
   arenaHeight: number;
 }
 
-/** Which arena options a loaded preset can take, and which are on. */
+/** Which arena options a loaded scenario can take, and which are on. */
 export interface ArenaInfo {
   canHavePiston: boolean;
   canConduct: boolean;
@@ -53,12 +62,12 @@ export interface ArenaInfo {
 
 export type ToWorker =
   /**
-   * Sent once: where to stream scene and frames, and which preset to load (default.set
-   * when absent). The worker starts after this.
+   * Sent once: where to stream scene and frames, and what to run (the default preset when
+   * absent). The worker starts after this.
    */
-  | { type: 'connect'; frames: MessagePort; preset?: string; arena?: ArenaOptions }
-  /** Replace the running simulation with a bundled preset (keeps play/pause). */
-  | { type: 'load'; preset: string; arena?: ArenaOptions }
+  | { type: 'connect'; frames: MessagePort; source?: ScenarioSource; arena?: ArenaOptions }
+  /** Replace the running simulation (keeps play/pause). */
+  | { type: 'load'; source: ScenarioSource; arena?: ArenaOptions }
   /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
   | { type: 'movePiston'; level: number; mode: PistonMode; speed: number }
   | { type: 'stopPiston' }
@@ -69,7 +78,7 @@ export type ToWorker =
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'step' }
-  /** Multiply the preset's simulation speed (kept across preset loads). */
+  /** Multiply the scenario's simulation speed (kept across loads). */
   | { type: 'rate'; scale: number };
 
 export type FromWorker =
@@ -86,10 +95,11 @@ export type FromWorker =
       /** Maxwell's demon: whether the hole is open this frame. */
       holeOpen?: boolean;
     }
-  /** A preset finished loading and is now the running simulation. */
+  /** A scenario finished loading and is now the running simulation. */
   | {
       type: 'loaded';
-      preset: string;
+      /** The source's name. */
+      name: string;
       particles: number;
       dimension: Dimension;
       arena: ArenaInfo;
