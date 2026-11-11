@@ -15,6 +15,9 @@
   import { untrack } from 'svelte';
   import ArenaOptions from './ui/ArenaOptions.svelte';
   import ArenaSize from './ui/ArenaSize.svelte';
+  import BoundaryButtons from './ui/BoundaryButtons.svelte';
+  import ClockReadout from './ui/ClockReadout.svelte';
+  import ParticlesPanel from './ui/ParticlesPanel.svelte';
   import PistonPanel from './ui/PistonPanel.svelte';
   import PlayPauseButton from './ui/PlayPauseButton.svelte';
   import PressurePanel from './ui/PressurePanel.svelte';
@@ -23,7 +26,7 @@
   import ViewOptions from './ui/ViewOptions.svelte';
   import { missingBrowserFeatures } from './ui/browser-support';
   import { arenaPoint, distanceToPolyline } from './ui/arena-point';
-  import { rotateView } from './ui/rotate-view';
+  import { rotateView, wasDragged } from './ui/rotate-view';
   import { SimulationClient } from './ui/simulation.svelte';
   import type { ScenarioSource } from './worker';
 
@@ -111,10 +114,15 @@
       use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
       tabindex={sim?.dimension === 3 ? 0 : -1}
       aria-label={sim?.dimension === 3
-        ? 'Simulation arena; drag or use the arrow keys to turn it'
-        : 'Simulation arena'}
+        ? 'Simulation arena; drag or use the arrow keys to turn it, tap to add a particle'
+        : 'Simulation arena; tap to drop a particle'}
       onclick={(event) => {
-        if (!sim || sim.dimension === 3) return;
+        if (!sim || sim.loading) return;
+        // 3D: a tap adds a particle at random (PART-8); dragging turns the view.
+        if (sim.dimension === 3) {
+          if (!wasDragged(canvas)) sim.addParticle();
+          return;
+        }
         // A drawn gate within a few pixels opens or closes (WALL-4).
         if (sim.arena && sim.arena.gates.length > 0) {
           const box = canvas.getBoundingClientRect();
@@ -134,7 +142,19 @@
           }
         }
         // Maxwell's demon (2D): clicking the arena opens or closes the hole, as in Java.
-        if (sim.holeOpen !== null) sim.setHoleOpen(!sim.holeOpen);
+        if (sim.holeOpen !== null) {
+          sim.setHoleOpen(!sim.holeOpen);
+          return;
+        }
+        // Otherwise a tap drops a particle of the Particles panel's kind there (PART-8).
+        const box = canvas.getBoundingClientRect();
+        const at = arenaPoint(
+          event.clientX - box.left,
+          event.clientY - box.top,
+          box,
+          sim.arenaSize,
+        );
+        sim.addParticle([at.x, at.y]);
       }}
     ></canvas>
     {#if sim && sim.dimension !== 3 && !sim.error}
@@ -204,6 +224,17 @@
       />
     {/if}
     {#if sim?.arena}
+      <ParticlesPanel
+        {sim}
+        showMarkers={sim.markers && sim.dimension !== 3}
+        tap={sim.dimension === 3 ? 'random' : sim.holeOpen !== null ? 'other' : 'drop'}
+      />
+      <BoundaryButtons
+        boundary={sim.arena.boundary}
+        drawnWalls={sim.arena.drawnWalls}
+        disabled={sim.loading}
+        onChange={(boundary) => sim?.setBoundary(boundary)}
+      />
       <ArenaOptions
         arena={sim.arena}
         disabled={sim.loading}
@@ -217,6 +248,7 @@
       />
     {/if}
     <div class="flex flex-wrap gap-2" role="group" aria-label="Simulation controls">
+      <ClockReadout time={sim?.time ?? 0} />
       <PlayPauseButton
         paused={sim?.paused ?? false}
         disabled={!sim}
@@ -244,13 +276,14 @@
       >
         <RewindIcon aria-hidden="true" />
       </Button>
-      <!-- Restart (Physics.reset): the same starting positions and velocities again. -->
+      <!-- Restart (CTRL-3, PART-14): particles placed anew, the clock at zero, the Particles
+           panel's pending values applied. -->
       <Button
         variant="outline"
         size="icon-lg"
         disabled={!sim || sim.loading}
         aria-label="Restart"
-        title="Restart from the starting state"
+        title="Restart: place the particles anew at random, clock to zero"
         onclick={() => sim?.restart()}
       >
         <RotateCcwIcon aria-hidden="true" />

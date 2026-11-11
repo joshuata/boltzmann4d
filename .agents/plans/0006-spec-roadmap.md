@@ -24,7 +24,7 @@ Plan 0005 ports the remaining 2D physics modes (thermostat and piston, pair well
 
 ### Phase 1: Set up and run your own gas
 
-_Not started._ The core classroom loop.
+_Done_ (plan 0014, archived; setup itself moved to the scenario editor, plans 0008 and 0010): adding particles at a point or at random, removing the newest, the Particles panel with pending edits, boundary-mode buttons with mid-run arena switches, the clock, Left/Right counts, Restart with new placement and zero momentum, scenarios that load paused. Not done: the editor's drop-particle tool (EDIT-8). Collapsible panels (STAT-25), file loading (FILE-1, 3, 4) and zoom (CTRL-7) are being finished in their own sessions. The core classroom loop.
 
 - **Requirements:** PART-1–9, 12, 14–16; CTRL-1, 3; SIM-6, 12–16, 24 (demon toggle), 30; FILE-1 (user file picker), FILE-3, 4; STAT-25; CTRL-7 (fit-to-view default).
 - **Unlocks:** STORY-1, 2, 8, 10, 14, 15, 16, 17, 18, 19, 20, 28 (except Color by KE, Phase 3).

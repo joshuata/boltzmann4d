@@ -2,7 +2,7 @@
 // Frames don't come back here: they stream to the renderer over the `frames` port
 // (render/protocol.ts), so the main thread only handles controls and readouts.
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
-import type { ColorMode, Dimension } from '@boltzmann4d/engine/sim';
+import type { Census, ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
 import type { PressureReading } from '@boltzmann4d/engine/stats/pressure';
@@ -45,6 +45,37 @@ export interface ArenaOptions {
   size?: [number, number, number];
 }
 
+/** The boundary modes the sidebar's buttons switch between mid-run (SIM-12–16). */
+export type BoundaryMode = 'PERIODIC' | 'REFLECTING' | 'DIVIDED' | 'HOLE';
+
+/** The Particles panel's values for one kind, applied by Restart (PART-14, PART-15). */
+export interface KindSetup {
+  /** The scenario kind's id. */
+  kind: string;
+  /** amu. */
+  mass: number;
+  /** nm. */
+  radius: number;
+  /** K. */
+  temperature: number;
+}
+
+/** One of the scenario's kinds, for the Particles panel (whether or not it has particles). */
+export interface SetupKind {
+  id: string;
+  name: string;
+  /** 0xRRGGBB. */
+  color: number;
+  marker: string;
+  /** As running: amu, nm. */
+  mass: number;
+  radius: number;
+  /** The scenario's starting temperature for it, K (300 when it has no particles). */
+  temperature: number;
+  /** Its species index in the running simulation, or −1 while it has no particles. */
+  species: number;
+}
+
 /** What the sidebar needs to offer a piston arena's controls. */
 export interface PistonInfo {
   /** Highest level the piston may be pushed to (fraction of the arena height). */
@@ -70,7 +101,9 @@ export interface ArenaInfo {
   typeNames: string[];
   /** The arena's side lengths x, y, z in nm, as running. */
   size: [number, number, number];
-  /** Whether the scenario has drawn walls (the pressure readout ignores them). */
+  /** The arena's boundary mode (piston arenas are reflecting ones with a piston). */
+  boundary: BoundaryMode | 'PISTON';
+  /** Whether the scenario has drawn walls (the pressure readout ignores them; no periodic). */
   drawnWalls: boolean;
   /** Drawn gates (WALL-4): wall index, id, and points (x, y pairs in m) for tapping them. */
   gates: { index: number; id: string; points: number[]; closed: boolean }[];
@@ -94,12 +127,35 @@ export type ToWorker =
       arena?: ArenaOptions;
       pressureAveragingTime?: number;
       forgetMultiplier?: number;
+      /** A newly chosen scenario (not an arena change): it may start paused (FILE-4). */
+      fresh?: boolean;
     }
   /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
   | { type: 'movePiston'; level: number; mode: PistonMode; speed: number }
   | { type: 'stopPiston' }
-  /** Back to the starting state of the running simulation (same positions). */
-  | { type: 'restart' }
+  /**
+   * Restart (CTRL-3, PART-14): the clock to zero and every particle placed anew at random,
+   * each kind with its present count and the panel's mass, radius and temperature.
+   */
+  | { type: 'restart'; kinds?: KindSetup[] }
+  /**
+   * Add one particle of a kind (PART-7, PART-8) at `temperature` K: at a point (x, y in m;
+   * 2D taps) or at random. The run carries on; a point that's taken is refused (`notice`).
+   */
+  | { type: 'addParticle'; kind: string; at?: [number, number]; temperature: number }
+  /** Remove the kind's newest particle (PART-9). */
+  | { type: 'removeParticle'; kind: string }
+  /**
+   * Set the kind's number of particles (PART-1, 8, 9): adds at random at `temperature` K,
+   * or removes the newest. Adds as many as fit (a `notice` says when that's fewer).
+   */
+  | { type: 'setCount'; kind: string; count: number; temperature: number }
+  /**
+   * Switch the boundary mode (SIM-12–16): carries on when the particles fit the new arena
+   * (opening a divided box's hole, removing its divider), else restarts; a switch to the
+   * divided box restarts with every particle on the left (SIM-14).
+   */
+  | { type: 'setBoundary'; boundary: BoundaryMode }
   /** Maxwell's demon: open or close the hole (from the next frame). */
   | { type: 'setHoleOpen'; open: boolean }
   /** Open or close the gate that is drawn wall `index` (from the next frame). */
@@ -155,6 +211,15 @@ export type FromWorker =
   /** A scenario finished loading and is now the running simulation. */
   | {
       type: 'loaded';
+      /**
+       * An edit of the same run (particles added or removed, the arena switched): the
+       * clock carries on and the user's choices stay.
+       */
+      continued: boolean;
+      /** Whether it runs paused (a fresh load follows the scenario, FILE-4). */
+      paused: boolean;
+      /** Every kind the scenario has, for the Particles panel. */
+      setupKinds: SetupKind[];
       /** The source's name. */
       name: string;
       particles: number;
@@ -190,4 +255,11 @@ export type FromWorker =
   | { type: 'statistics'; summary: StatisticsSummary }
   /** The pressure readout, a few times a second and after each step. */
   | { type: 'pressure'; reading: PressureReading }
+  /**
+   * Particle counts and temperatures (PART-12, PART-16) and the clock (CTRL-1, s), with the
+   * pressure readout. Per species, as `loaded.kinds`.
+   */
+  | { type: 'census'; time: number; census: Census }
+  /** Something the user asked for couldn't be done (a taken spot, no room); the run is fine. */
+  | { type: 'notice'; message: string }
   | { type: 'error'; message: string };

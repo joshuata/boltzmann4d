@@ -4,9 +4,9 @@ The program control area, View menu, Simulation menu options and the advanced ar
 
 ## Program controls
 
-- **CTRL-1** Clock: simulated time since restart, in ps.
+- **CTRL-1** Clock: simulated time since restart, in ps. _Web port:_ done: a readout beside the play controls.
 - **CTRL-2** Simulation speed: 1× by default, doubling per step up to 2048×. At high speeds particles move too far per frame to follow; that's expected. _Web port:_ a slider in doubling steps from ⅛× to 2048×; above a few hundred × the physics may not keep up in real time and simply runs as fast as it can.
-- **CTRL-3** Restart (see `particles.md` PART-14).
+- **CTRL-3** Restart (see `particles.md` PART-14). _Web port:_ done.
 - **CTRL-4** Pause / Play toggle. While paused the user can change settings, add particles and inspect plots.
 - **CTRL-5** Advance: one frame forward, only while paused.
 - **CTRL-6** Reverse (see `simulation.md` SIM-32). _Web port:_ a button beside Restart; it works while running or paused.

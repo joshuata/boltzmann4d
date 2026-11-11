@@ -14,6 +14,13 @@
 // keep Java's placement and its random draws exactly.
 //
 import type { ReactionRule } from '../sim/reactions';
+import {
+  PLACEMENT_ATTEMPTS,
+  PlacementSpace,
+  randomVelocity,
+  velocityFromAngles,
+  zeroMomentum,
+} from '../sim/placement';
 import { distanceToSegment, type WallPhysics, type WallShape } from '../sim/segment-walls';
 import { ParticleType } from '../sim/particle-type';
 import { ARENA_DIVIDER_RADIUS, ArenaType } from '../sim/simulation-info';
@@ -122,6 +129,14 @@ export interface ResolvedWall extends WallShape {
 export interface ResolveOptions {
   /** Source of uniform [0, 1) numbers for random placement and directions. */
   random?: () => number;
+  /**
+   * Restart (PART-14, SIM-30): shift each randomly placed group's velocities to zero total
+   * momentum, keeping their kinetic energy. Java only does this in periodic arenas, so a
+   * `.set` file's first run keeps Java's velocities.
+   */
+  zeroMomentum?: boolean;
+  /** Divided arenas: place every kind on the left (SIM-14's switch to a divided box). */
+  allOnLeft?: boolean;
 }
 
 const ARENA_TYPES: Record<Boundary, ArenaType> = {
@@ -137,21 +152,19 @@ const nmToM = (nm: number) => convert('nm', 'm', nm);
 /** Builds the simulation's starting state from a validated scenario. */
 export function resolveScenario(
   scenario: Scenario,
-  { random = Math.random }: ResolveOptions = {},
+  options: ResolveOptions = {},
 ): ResolvedScenario {
-  const { arena: a, modes, run, statistics: st, display, kinds } = scenario;
+  const { arena: a, modes, run, statistics: st, display } = scenario;
   const arena = { x: nmToM(a.size[0]), y: nmToM(a.size[1]), z: nmToM(a.size[2]) };
   const colors = display.customColors;
   const wallNames = ['left', 'right', 'top', 'bottom', 'front', 'back'] as const;
   const rules = scenario.reactions.filter((r) => r.enabled);
-  const kindColor = (index: number) => {
-    const kind = kinds[index];
-    return kind?.color !== undefined
-      ? parseHexColor(kind.color)
-      : (paletteColor(display.palette, index) ?? 0xffffff);
-  };
+  const kindColor = (index: number) => kindColorOf(scenario, index);
 
-  const species = resolveSpecies(scenario, rules, kindColor, arena, random);
+  const species = resolveSpecies(scenario, rules, kindColor, arena, {
+    random: Math.random,
+    ...options,
+  });
   const speciesIndex = new Map(species.map((s, i) => [s.kindId, i]));
   // Kinds left out (no particles, no reaction makes them) can't be shown; -1 drops them.
   const speciesOf = (kind: string) => speciesIndex.get(kind) ?? -1;
@@ -225,6 +238,32 @@ export function resolveScenario(
   };
 }
 
+/** A kind's colour: its own, or the palette's for its place (0xRRGGBB). */
+function kindColorOf(scenario: Scenario, index: number): number {
+  const kind = scenario.kinds[index];
+  return kind?.color !== undefined
+    ? parseHexColor(kind.color)
+    : (paletteColor(scenario.display.palette, index) ?? 0xffffff);
+}
+
+/**
+ * A kind as a species with no particles yet, as resolveScenario would make it: for adding
+ * particles of a kind the running gas doesn't have (PART-7).
+ */
+export function emptySpecies(scenario: Scenario, kindId: string): ParticleSpecies {
+  const index = scenario.kinds.findIndex((k) => k.id === kindId);
+  const kind = scenario.kinds[index];
+  if (!kind) throw new RangeError(`No kind ${kindId}`);
+  return {
+    kindId,
+    marker: MARKERS[index]!,
+    type: new ParticleType(kind.mass, nmToM(kind.radius), kindColorOf(scenario, index), kind.name),
+    initialTemperature: NaN,
+    positions: new Float64Array(0),
+    velocities: new Float64Array(0),
+  };
+}
+
 /** A wall's kind (WALL-4) as the simulation takes it: SI units, species indices. */
 function wallPhysics(kind: WallKind, speciesOf: (kind: string) => number): WallPhysics {
   switch (kind.type) {
@@ -254,7 +293,11 @@ function resolveSpecies(
   rules: Scenario['reactions'],
   kindColor: (index: number) => number,
   arena: { x: number; y: number; z: number },
-  random: () => number,
+  {
+    random,
+    zeroMomentum = false,
+    allOnLeft = false,
+  }: ResolveOptions & Required<Pick<ResolveOptions, 'random'>>,
 ): ParticleSpecies[] {
   const dimension = scenario.arena.dimensions;
   const builders = new Map<string, SpeciesBuilder>(
@@ -275,10 +318,14 @@ function resolveSpecies(
       ? new Placer(scenario, builders, arena, random)
       : null;
   for (const population of scenario.populations) {
-    const side = randomSide(scenario.arena.boundary, kindIndex.get(population.kind)!, arena.x);
+    const side = randomSide(
+      scenario.arena.boundary,
+      allOnLeft ? 0 : kindIndex.get(population.kind)!,
+      arena.x,
+    );
     const species = builders.get(population.kind)!;
     const place = placer?.forPopulation(population, side, species.type.displayName);
-    placePopulation(population, species, dimension, arena, side, random, place);
+    placePopulation(population, species, dimension, arena, side, random, place, zeroMomentum);
   }
 
   const reacting = new Set(rules.flatMap((r) => [...r.reactants, ...r.products]));
@@ -306,6 +353,7 @@ function placePopulation(
   side: { min: number; max: number } | undefined,
   random: () => number,
   place?: (radius: number, placed: number, total: number) => number[],
+  zeroMomentumOfRandom = false,
 ): void {
   const radius = species.type.particleRadius;
   const firstInGroup = species.velocities.length;
@@ -348,6 +396,11 @@ function placePopulation(
     );
     species.initialTemperature = population.temperature;
   }
+  if (zeroMomentumOfRandom) {
+    // SIM-30: only the randomly given velocities (placed particles keep theirs).
+    const random = species.velocities.slice(firstInGroup, firstInGroup + total);
+    zeroMomentum(random, Array<number>(random.length).fill(species.type.particleMass));
+  }
 }
 
 /**
@@ -365,29 +418,6 @@ function randomSide(
   if (boundary === 'HOLE') return left;
   if (boundary !== 'DIVIDED') return undefined;
   return kindIndex === 0 ? left : { min: width / 2 + ARENA_DIVIDER_RADIUS, max: width };
-}
-
-/** theta is the azimuth, phi the polar angle; 1D keeps only the sign of cos(theta). */
-function velocityFromAngles(
-  speed: number,
-  theta: number,
-  phi: number,
-  dimension: Dimension,
-): number[] {
-  if (dimension === 1) return [Math.cos(theta) < 0.0 ? -speed : speed, 0, 0];
-  if (dimension === 2) return [Math.cos(theta) * speed, Math.sin(theta) * speed, 0];
-  return [
-    Math.sin(phi) * Math.cos(theta) * speed,
-    Math.sin(phi) * Math.sin(theta) * speed,
-    Math.cos(phi) * speed,
-  ];
-}
-
-/** Uniformly random direction (uniform on the sphere in 3D). */
-function randomVelocity(speed: number, dimension: Dimension, random: () => number): number[] {
-  const theta = random() * 2.0 * Math.PI;
-  const phi = Math.acos(1 - 2 * random());
-  return velocityFromAngles(speed, theta, phi, dimension);
 }
 
 /** Combined kinetic energy in J; velocities in m/s, mass from the particle type in amu. */
@@ -425,35 +455,30 @@ function scaleVelocitiesToTemperature(
   }
 }
 
-/** Attempts at a random spot per particle before a region counts as full (EDIT-6). */
-const PLACEMENT_ATTEMPTS = 2000;
-
 /**
  * Places particles uniformly at random in a spawn region or the arena (EDIT-3): the whole
  * disc inside the shape, clear of drawn walls and the divider, and not overlapping any
  * particle placed before (explicitly placed ones count from the start).
  */
 class Placer {
-  /** Placed particles: x, y, radius (m). */
-  private readonly placed: number[] = [];
-  /** Wall segments as x1, y1, x2, y2 (m). */
-  private readonly segments: number[] = [];
+  /** The box, divider, drawn walls and particles placed so far (sim/placement.ts). */
+  private readonly space: PlacementSpace;
   private readonly regions: Map<string, { name: string; points: [number, number][] }>;
-  private readonly dividerX: number | null;
 
   constructor(
-    private readonly scenario: Scenario,
+    scenario: Scenario,
     builders: Map<string, SpeciesBuilder>,
     private readonly arena: { x: number; y: number },
     private readonly random: () => number,
   ) {
+    const segments: number[] = [];
     for (const wall of scenario.walls) {
       const pts = wall.points;
       const count = wall.closed ? pts.length : pts.length - 1;
       for (let k = 0; k < count; k++) {
         const [x1, y1] = pts[k]!;
         const [x2, y2] = pts[(k + 1) % pts.length]!;
-        this.segments.push(nmToM(x1), nmToM(y1), nmToM(x2), nmToM(y2));
+        segments.push(nmToM(x1), nmToM(y1), nmToM(x2), nmToM(y2));
       }
     }
     this.regions = new Map(
@@ -468,11 +493,22 @@ class Placer {
       }),
     );
     const boundary = scenario.arena.boundary;
-    this.dividerX = boundary === 'DIVIDED' || boundary === 'HOLE' ? arena.x / 2 : null;
+    // Nothing starts in a divider's hole: particles start on one side of it.
+    this.space = new PlacementSpace({
+      dimension: 2,
+      arenaType:
+        boundary === 'DIVIDED' || boundary === 'HOLE'
+          ? ArenaType.DIVIDED_ARENA
+          : ArenaType.REFLECTING_BOUNDARIES,
+      xSize: arena.x,
+      ySize: arena.y,
+      zSize: 0,
+      segments,
+    });
     for (const population of scenario.populations) {
       const radius = builders.get(population.kind)!.type.particleRadius;
       for (const p of population.particles) {
-        this.placed.push(nmToM(p.position[0]), nmToM(p.position[1]), radius);
+        this.space.add(nmToM(p.position[0]), nmToM(p.position[1]), 0, radius);
       }
     }
   }
@@ -526,7 +562,7 @@ class Placer {
       const x = this.random() * (xHi - xLo) + xLo;
       const y = this.random() * (yHi - yLo) + yLo;
       if (this.fits(shape, x, y, radius)) {
-        this.placed.push(x, y, radius);
+        this.space.add(x, y, 0, radius);
         return [x, y, 0];
       }
     }
@@ -541,21 +577,12 @@ class Placer {
       const [x2, y2] = shape[(k + 1) % n]!;
       if (distanceToSegment(x, y, x1, y1, x2, y2) < radius) return false;
     }
-    if (this.dividerX !== null && Math.abs(x - this.dividerX) < ARENA_DIVIDER_RADIUS + radius) {
-      return false;
-    }
-    const s = this.segments;
-    for (let k = 0; k < s.length; k += 4) {
-      if (distanceToSegment(x, y, s[k]!, s[k + 1]!, s[k + 2]!, s[k + 3]!) < radius) return false;
-    }
-    const p = this.placed;
-    for (let k = 0; k < p.length; k += 3) {
-      const reach = radius + p[k + 2]!;
-      const dx = x - p[k]!;
-      const dy = y - p[k + 1]!;
-      if (dx * dx + dy * dy < reach * reach) return false;
-    }
-    return true;
+    const space = this.space;
+    return (
+      space.clearOfDivider(x, y, 0, radius) &&
+      space.clearOfSegments(x, y, radius) &&
+      space.clearOfParticles(x, y, 0, radius)
+    );
   }
 }
 

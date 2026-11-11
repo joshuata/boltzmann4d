@@ -34,7 +34,7 @@ Three prefixes keep the IDs citable from tests and plans: **KIND** for particle 
 - **EDIT-5** With no regions drawn, the whole arena is the region (as in `.set` files, FILE-3).
 - **EDIT-6** If a region's particles can't all be placed without overlap, the editor says which region and how many fit, rather than silently lowering the count (unlike PART-1). The total over all regions is at most 999 particles (PART-1).
 - **EDIT-7** A run starts the same way every time from the same scenario and seed; Restart draws new positions (PART-14).
-- **EDIT-8** The user can also drop single particles at a point, with a kind, speed and optional direction (the `.set` format's explicitly placed particles).
+- **EDIT-8** The user can also drop single particles at a point, with a kind, speed and optional direction (the `.set` format's explicitly placed particles). _Web port:_ not built yet (follow-up). In a running simulation the Particles panel drops particles by tapping (PART-8).
 
 ## Drawn walls
 
