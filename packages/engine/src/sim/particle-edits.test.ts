@@ -113,7 +113,7 @@ async function randomGas(
   const scenario = await loadPresetScenario('default');
   const gas = withSpecies(
     scenario,
-    'red',
+    'a',
     { count: 50, mass: 2, radius: 1, temperature: 300 },
     { keepPlaced: false },
   );
@@ -321,10 +321,10 @@ describe('restart placement (SIM-14, SIM-30)', () => {
     const red = divided.populations[0]!;
     const twoKinds: Scenario = {
       ...divided,
-      kinds: [...divided.kinds, { ...divided.kinds[0]!, id: 'blue', name: 'Blue' }].filter(
+      kinds: [...divided.kinds, { ...divided.kinds[0]!, id: 'b', name: 'Type B' }].filter(
         (k, i, all) => all.findIndex((o) => o.id === k.id) === i,
       ),
-      populations: [...divided.populations, { ...red, kind: 'blue' }],
+      populations: [...divided.populations, { ...red, kind: 'b' }],
     };
     const normal = census(resolveScenario(twoKinds, { random: seededRandom(2) }));
     expect(normal.right!.at(-1)).toBeGreaterThan(0);

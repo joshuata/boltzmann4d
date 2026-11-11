@@ -14,6 +14,7 @@ markdownlint-cli2 = "0.24"
 # GitHub CLI: 2.103 is the first with `gh issue artifact` (plans attached to issues; see
 # the feature-plan skill).
 gh = "2.103"
+apm = "0.35.0"
 
 # Install node_modules whenever package.json or pnpm-lock.yaml changed. `auto` runs this
 # before every `mise run` / `mise exec`; it is skipped when node_modules is up to date.
@@ -22,7 +23,8 @@ auto = true
 
 [hooks]
 # `mise install` doesn't run deps providers itself, so trigger them once tools are in place.
-postinstall = "mise deps"
+# Then deploy the skills and MCP config pinned in apm.lock.yaml (the skills are gitignored).
+postinstall = "mise deps && apm install --frozen"
 
 [tasks.dev]
 description = "Start the SvelteKit dev server (apps/web)"

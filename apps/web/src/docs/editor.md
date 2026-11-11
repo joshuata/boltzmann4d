@@ -55,7 +55,7 @@ Particles that aren't in a region fill the whole arena: set those in the Arena p
 
 ## Particle kinds
 
-The **Particle kinds** panel lists up to ten kinds, each with a name, mass, radius and colour. Colours come from the palette chosen in the Arena panel; the default palette is easy to tell apart for people with colour-blindness. Each kind also has a marker (a ring, a dot, a cross and so on) so kinds can be told apart without colour. If you choose your own colour, the editor warns you when it's hard to tell from another kind's.
+The **Particle kinds** panel lists up to ten kinds, each with a name, mass, radius and colour. New kinds are called Type A, Type B and so on; rename one to give it a friendly name such as Argon or Oxygen, which the simulator then shows everywhere. Colours come from the palette chosen in the Arena panel; the default palette is easy to tell apart for people with colour-blindness. Each kind also has a marker (a ring, a dot, a cross and so on) so kinds can be told apart without colour. If you choose your own colour, the editor warns you when it's hard to tell from another kind's.
 
 A kind can't be removed while a region, wall or reaction uses it; the editor says which.
 
@@ -72,6 +72,6 @@ As you edit, the editor checks the scenario. Anything that stops it from running
 - **Run** starts the simulation with the scenario as it is now. **Back to the editor** returns to where you were.
 - **Save** keeps the scenario in this browser under its name, so it's in **Start from** and on the [Your scenarios](../upload) page next time. Once saved, **Save** writes over it and **Save as new** keeps a copy. Nothing leaves your computer.
 - **.json** downloads the scenario as a Boltzmann 4D file, which you can open again here or send to someone else to open on the [Upload](../upload) page.
-- **.set** downloads a file for the Boltzmann 3D desktop program, when the scenario fits it: no drawn walls or spawn regions, at most two kinds, and no reactions other than red turning blue.
+- **.set** downloads a file for the Boltzmann 3D desktop program, when the scenario fits it: no drawn walls or spawn regions, at most two kinds, and no reactions other than the first kind turning into the second.
 
 On a phone, the arena stays at the top of the screen and the panels scroll underneath it.

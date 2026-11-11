@@ -34,7 +34,7 @@
   const fmt = (value: number) =>
     Number.isFinite(value) ? value.toLocaleString('en-US', { maximumSignificantDigits: 3 }) : '—';
   const key = (types: number[]) => types.join(',');
-  const label = (t: number) => summary.typeNames[t] ?? `Type ${t + 1}`;
+  const label = (t: number) => summary.typeNames[t] ?? `Type ${String.fromCharCode(65 + t)}`;
   const ps = (seconds: number) => seconds * 1e12;
 
   /** Every plot offered: the statistics, then the pressure in each region (STAT-1). */

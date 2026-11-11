@@ -65,7 +65,7 @@
       }
     },
     {
-      // Agent skills (.agents/skills/**, .claude/skills/**). Same prose shape
+      // Agent skills (.apm/skills/**). Same prose shape
       // as AGENTS.md, plus YAML frontmatter ahead of the title.
       "filter": ["**/skills/**/*.md"],
       "combine": "merge",

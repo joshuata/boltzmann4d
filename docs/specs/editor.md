@@ -11,10 +11,10 @@ Three prefixes keep the IDs citable from tests and plans: **KIND** for particle 
 
 ## Particle kinds
 
-- **KIND-1** A scenario has 1 to 10 particle kinds. Each has a name, a mass (PART-2's range), a radius (PART-3's range) and a colour. Kinds replace red and blue (PART-5): a `.set` file's red and blue become kinds 1 and 2.
-- **KIND-2** Names are short (up to 20 characters), unique in the scenario, and default to letters (`A`, `B`, …). Migrated `.set` scenarios name them Red and Blue.
+- **KIND-1** A scenario has 1 to 10 particle kinds. Each has a name, a mass (PART-2's range), a radius (PART-3's range) and a colour. Kinds replace red and blue (PART-5): a `.set` file's red and blue become kinds 1 and 2 (Type A and Type B).
+- **KIND-2** A kind's name is its friendly name (an alias such as `Argon`): short (up to 20 characters), unique in the scenario, and shown wherever the app names the kind. Names default to `Type A`, `Type B`, …, the label used for kinds rather than colours, so a kind keeps making sense under any palette. Migrated `.set` scenarios name red and blue Type A and Type B.
 - **KIND-3** A kind can't be removed while a spawn region, wall or reaction uses it; the editor says which ones do.
-- **KIND-4** Wherever the app shows red, blue or both today (statistics selectors, legends, readouts, pressures by type), it shows the scenario's kinds instead: all kinds, or any subset the user picks. With the two kinds of a migrated `.set` file this is the same Red / Blue / Both choice as before.
+- **KIND-4** Wherever the app shows red, blue or both today (statistics selectors, legends, readouts, pressures by type), it shows the scenario's kinds instead: all kinds, or any subset the user picks. With the two kinds of a migrated `.set` file this is the Java app's Red / Blue / Both choice, as Type A / Type B / all.
 - **KIND-5** Predictions that assume one species or a red/blue mixture (`predictions.md`) generalize to N kinds where the formulas do (mixtures of ideal gases, equipartition). Where a prediction has no N-kind form the app says so rather than showing a wrong number.
 
 ## Colours and accessibility
@@ -54,7 +54,7 @@ Three prefixes keep the IDs citable from tests and plans: **KIND** for particle 
 
 - **KIND-13** Reactions are a table of rules. Each rule names two reactant kinds and two product kinds (`A + A → B + B`, `A + B → C + C`, …), a forward and a reverse activation energy, and whether the reverse reaction is suppressed. A pair colliding with more than the forward activation energy along their line of centres becomes the products and loses `E_f − E_r` (SIM-26); the products colliding above the reverse energy turn back, unless suppressed. A particle that reacts keeps its own mass and radius and changes only its kind (its colour, marker and which statistics count it), as in SIM-26: a change of radius could make particles overlap. The editor warns when a product kind's mass or radius differs from its reactant's, since the product kind's own values then only apply to particles spawned as that kind.
 - **KIND-14** Each pair of kinds has at most one reaction, counting a rule's products as the reactants of its reverse: with `A + A → B + B` in the table, the editor refuses a second rule for `A + A` or for `B + B` (unless the first rule's reverse is suppressed and the new rule is the only one for `B + B`), and says which rule conflicts.
-- **KIND-15** The Java app's reaction mode (SIM-25–29) is the single rule Red + Red → Blue + Blue, and behaves exactly as it does today. The energy diagram, counts and predictions of SIM-28 are shown when the scenario has that one rule; other rule tables show live counts per kind.
+- **KIND-15** The Java app's reaction mode (SIM-25–29) is the single rule Type A + Type A → Type B + Type B (red to blue), and behaves exactly as it does today. The energy diagram, counts and predictions of SIM-28 are shown when the scenario has that one rule; other rule tables show live counts per kind.
 
 ## Editing
 
@@ -72,7 +72,7 @@ Three prefixes keep the IDs citable from tests and plans: **KIND** for particle 
 
 - **EDIT-18** Run opens the simulator with the scenario as it is now; the user can come back to the editor and keep editing.
 - **EDIT-19** Save stores the scenario by name in the browser (plan 0008, FILE-2). Download saves a `.json` scenario file.
-- **EDIT-20** A scenario can also be downloaded as `.set` when the Java app can represent it (box arena, no drawn walls or spawn regions, at most two kinds, no rules other than Red + Red → Blue + Blue). Otherwise the editor says what stops it, and offers `.json` (FILE-6 holds for every scenario that came from `.set`).
+- **EDIT-20** A scenario can also be downloaded as `.set` when the Java app can represent it (box arena, no drawn walls or spawn regions, at most two kinds, no rules other than first kind + first kind → second kind + second kind). The first kind is written as red and the second as blue; names other than Type A and Type B are lost. Otherwise the editor says what stops it, and offers `.json` (FILE-6 holds for every scenario that came from `.set`).
 
 ## Devices and accessibility
 

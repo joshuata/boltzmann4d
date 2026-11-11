@@ -121,7 +121,7 @@ export function withSpecies(
         : [],
     particles: placed,
   };
-  // In kind order, as the simulation orders species (red before blue).
+  // In kind order, as the simulation orders species (Type A before Type B).
   const order = new Map(kinds.map((k, i) => [k.id, i]));
   const populations = [...others, population].sort(
     (a, b) => order.get(a.kind)! - order.get(b.kind)!,

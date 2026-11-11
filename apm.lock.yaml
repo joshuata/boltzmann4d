@@ -1,0 +1,529 @@
+lockfile_version: '1'
+apm_version: 0.35.0
+dependencies:
+- repo_url: huntabyte/shadcn-svelte
+  name: shadcn-svelte
+  host: github.com
+  resolved_commit: 3c4152d7d3904e76f6f756ec8ffca7c9ec72f977
+  version: unknown
+  package_type: skill_bundle
+  deployed_files:
+  - .agents/skills/shadcn-svelte
+  - .agents/skills/shadcn-svelte/SKILL.md
+  - .agents/skills/shadcn-svelte/agents/openai.yml
+  - .agents/skills/shadcn-svelte/assets/shadcn-svelte-small.png
+  - .agents/skills/shadcn-svelte/assets/shadcn-svelte.png
+  - .agents/skills/shadcn-svelte/assets/showcase/color-pair.svelte
+  - .agents/skills/shadcn-svelte/assets/showcase/preview-state.ts
+  - .agents/skills/shadcn-svelte/assets/showcase/preview-states.css
+  - .agents/skills/shadcn-svelte/assets/showcase/state-matrix.svelte
+  - .agents/skills/shadcn-svelte/cli.md
+  - .agents/skills/shadcn-svelte/customization.md
+  - .agents/skills/shadcn-svelte/design-system-page.md
+  - .agents/skills/shadcn-svelte/design-system.md
+  - .agents/skills/shadcn-svelte/evals/evals.json
+  - .agents/skills/shadcn-svelte/rules/composition.md
+  - .agents/skills/shadcn-svelte/rules/forms.md
+  - .agents/skills/shadcn-svelte/rules/icons.md
+  - .agents/skills/shadcn-svelte/rules/styling.md
+  - .agents/skills/shadcn-svelte/scripts/showcase-coverage.mjs
+  - .agents/skills/shadcn-svelte/scripts/showcase-coverage.test.mjs
+  - .claude/skills/shadcn-svelte
+  - .claude/skills/shadcn-svelte/SKILL.md
+  - .claude/skills/shadcn-svelte/agents/openai.yml
+  - .claude/skills/shadcn-svelte/assets/shadcn-svelte-small.png
+  - .claude/skills/shadcn-svelte/assets/shadcn-svelte.png
+  - .claude/skills/shadcn-svelte/assets/showcase/color-pair.svelte
+  - .claude/skills/shadcn-svelte/assets/showcase/preview-state.ts
+  - .claude/skills/shadcn-svelte/assets/showcase/preview-states.css
+  - .claude/skills/shadcn-svelte/assets/showcase/state-matrix.svelte
+  - .claude/skills/shadcn-svelte/cli.md
+  - .claude/skills/shadcn-svelte/customization.md
+  - .claude/skills/shadcn-svelte/design-system-page.md
+  - .claude/skills/shadcn-svelte/design-system.md
+  - .claude/skills/shadcn-svelte/evals/evals.json
+  - .claude/skills/shadcn-svelte/rules/composition.md
+  - .claude/skills/shadcn-svelte/rules/forms.md
+  - .claude/skills/shadcn-svelte/rules/icons.md
+  - .claude/skills/shadcn-svelte/rules/styling.md
+  - .claude/skills/shadcn-svelte/scripts/showcase-coverage.mjs
+  - .claude/skills/shadcn-svelte/scripts/showcase-coverage.test.mjs
+  deployed_file_hashes:
+    .agents/skills/shadcn-svelte/SKILL.md: sha256:1c11b03e380578beb93807b46f3a0c4b243e1aeeef27e8782fe8bf2c8dfcf862
+    .agents/skills/shadcn-svelte/agents/openai.yml: sha256:39293434702908c2b54a57ef4512f06d0195b43d6a13154d91d577bbd4d3fad7
+    .agents/skills/shadcn-svelte/assets/shadcn-svelte-small.png: sha256:ab571a7acd192a769531b5ea5e2105f40128b52e90fbdeb31e712d5fd18f6350
+    .agents/skills/shadcn-svelte/assets/shadcn-svelte.png: sha256:256a06954d29e566b01695f0fa3574c0a6d69991098e756d8cc0704ee376ce3f
+    .agents/skills/shadcn-svelte/assets/showcase/color-pair.svelte: sha256:9b4dadaf371664d01d211279a968be10e920f4a269101944c0225777d9d6d504
+    .agents/skills/shadcn-svelte/assets/showcase/preview-state.ts: sha256:aed90272d955fd4f111d35873d2390cde1a63db159f823b5de9834ba08eec368
+    .agents/skills/shadcn-svelte/assets/showcase/preview-states.css: sha256:a11cc8ce59fa3d4c15e610014c44e7954ae277ee41b9201fb03ea75ec8b12f22
+    .agents/skills/shadcn-svelte/assets/showcase/state-matrix.svelte: sha256:af76035583bde0f3e846f9510b133e16a5e4b5bec4bf6f771d8090eab7ee3816
+    .agents/skills/shadcn-svelte/cli.md: sha256:01a82fbd642d3bf0850264d0dad8890ac9c5c12e004aa61860979cdaa00f8013
+    .agents/skills/shadcn-svelte/customization.md: sha256:47b7a33b50fa9eb4ec57475b268cb7ee2698e6ee135ae46aba5d67587656abf8
+    .agents/skills/shadcn-svelte/design-system-page.md: sha256:6aab986a6ab26b703d809cebb48f55d56ab87934e4f1cbf701abd8d51fba4190
+    .agents/skills/shadcn-svelte/design-system.md: sha256:c30aca83ec50a6310c40ae8ed5d6979e81bb30675525bd2c52a4042ce65bd20e
+    .agents/skills/shadcn-svelte/evals/evals.json: sha256:9be80d29deaddfe1d5152023942306c3b7a88a9d12e5e0021cfde44dd2018853
+    .agents/skills/shadcn-svelte/rules/composition.md: sha256:e14fe6271369db30706b859a3de6805eeba2c14d41920508633d2f7dcea93bd0
+    .agents/skills/shadcn-svelte/rules/forms.md: sha256:614363e74742e97acb775c8030d738635da230f8ccd8c5fa1d12171e68bfd318
+    .agents/skills/shadcn-svelte/rules/icons.md: sha256:cd291c6bf9b916b0e5d625eaf2ee1699e1dda4bbf7802a2c07ef18182a04d848
+    .agents/skills/shadcn-svelte/rules/styling.md: sha256:62d661d54f36f0188a123a7f0dd30ea20c37f6ca2843404f3eaa0ba1ac77f575
+    .agents/skills/shadcn-svelte/scripts/showcase-coverage.mjs: sha256:0eb7b7fc17d95ea35344c144ecabcc75a0f48aa85afd9429f4ca55da2de78d14
+    .agents/skills/shadcn-svelte/scripts/showcase-coverage.test.mjs: sha256:f1758071607e9f32469b1781eff653736c69552292118aab5c4bebe149ca175c
+    .claude/skills/shadcn-svelte/SKILL.md: sha256:1c11b03e380578beb93807b46f3a0c4b243e1aeeef27e8782fe8bf2c8dfcf862
+    .claude/skills/shadcn-svelte/agents/openai.yml: sha256:39293434702908c2b54a57ef4512f06d0195b43d6a13154d91d577bbd4d3fad7
+    .claude/skills/shadcn-svelte/assets/shadcn-svelte-small.png: sha256:ab571a7acd192a769531b5ea5e2105f40128b52e90fbdeb31e712d5fd18f6350
+    .claude/skills/shadcn-svelte/assets/shadcn-svelte.png: sha256:256a06954d29e566b01695f0fa3574c0a6d69991098e756d8cc0704ee376ce3f
+    .claude/skills/shadcn-svelte/assets/showcase/color-pair.svelte: sha256:9b4dadaf371664d01d211279a968be10e920f4a269101944c0225777d9d6d504
+    .claude/skills/shadcn-svelte/assets/showcase/preview-state.ts: sha256:aed90272d955fd4f111d35873d2390cde1a63db159f823b5de9834ba08eec368
+    .claude/skills/shadcn-svelte/assets/showcase/preview-states.css: sha256:a11cc8ce59fa3d4c15e610014c44e7954ae277ee41b9201fb03ea75ec8b12f22
+    .claude/skills/shadcn-svelte/assets/showcase/state-matrix.svelte: sha256:af76035583bde0f3e846f9510b133e16a5e4b5bec4bf6f771d8090eab7ee3816
+    .claude/skills/shadcn-svelte/cli.md: sha256:01a82fbd642d3bf0850264d0dad8890ac9c5c12e004aa61860979cdaa00f8013
+    .claude/skills/shadcn-svelte/customization.md: sha256:47b7a33b50fa9eb4ec57475b268cb7ee2698e6ee135ae46aba5d67587656abf8
+    .claude/skills/shadcn-svelte/design-system-page.md: sha256:6aab986a6ab26b703d809cebb48f55d56ab87934e4f1cbf701abd8d51fba4190
+    .claude/skills/shadcn-svelte/design-system.md: sha256:c30aca83ec50a6310c40ae8ed5d6979e81bb30675525bd2c52a4042ce65bd20e
+    .claude/skills/shadcn-svelte/evals/evals.json: sha256:9be80d29deaddfe1d5152023942306c3b7a88a9d12e5e0021cfde44dd2018853
+    .claude/skills/shadcn-svelte/rules/composition.md: sha256:e14fe6271369db30706b859a3de6805eeba2c14d41920508633d2f7dcea93bd0
+    .claude/skills/shadcn-svelte/rules/forms.md: sha256:614363e74742e97acb775c8030d738635da230f8ccd8c5fa1d12171e68bfd318
+    .claude/skills/shadcn-svelte/rules/icons.md: sha256:cd291c6bf9b916b0e5d625eaf2ee1699e1dda4bbf7802a2c07ef18182a04d848
+    .claude/skills/shadcn-svelte/rules/styling.md: sha256:62d661d54f36f0188a123a7f0dd30ea20c37f6ca2843404f3eaa0ba1ac77f575
+    .claude/skills/shadcn-svelte/scripts/showcase-coverage.mjs: sha256:0eb7b7fc17d95ea35344c144ecabcc75a0f48aa85afd9429f4ca55da2de78d14
+    .claude/skills/shadcn-svelte/scripts/showcase-coverage.test.mjs: sha256:f1758071607e9f32469b1781eff653736c69552292118aab5c4bebe149ca175c
+  content_hash: sha256:41f5d512696647d5f7598097083f67a1a5fa88ef33fe404321c1278ec64b4f4e
+deployments:
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/feature-plan
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/feature-plan/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:14b33728ea22da702e69529b582ce6537ac9281f5afa90ac1f8a47cfd892c59d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:1c11b03e380578beb93807b46f3a0c4b243e1aeeef27e8782fe8bf2c8dfcf862
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/agents/openai.yml
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:39293434702908c2b54a57ef4512f06d0195b43d6a13154d91d577bbd4d3fad7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/assets/shadcn-svelte-small.png
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:ab571a7acd192a769531b5ea5e2105f40128b52e90fbdeb31e712d5fd18f6350
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/assets/shadcn-svelte.png
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:256a06954d29e566b01695f0fa3574c0a6d69991098e756d8cc0704ee376ce3f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/assets/showcase/color-pair.svelte
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:9b4dadaf371664d01d211279a968be10e920f4a269101944c0225777d9d6d504
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/assets/showcase/preview-state.ts
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:aed90272d955fd4f111d35873d2390cde1a63db159f823b5de9834ba08eec368
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/assets/showcase/preview-states.css
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:a11cc8ce59fa3d4c15e610014c44e7954ae277ee41b9201fb03ea75ec8b12f22
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/assets/showcase/state-matrix.svelte
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:af76035583bde0f3e846f9510b133e16a5e4b5bec4bf6f771d8090eab7ee3816
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/cli.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:01a82fbd642d3bf0850264d0dad8890ac9c5c12e004aa61860979cdaa00f8013
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/customization.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:47b7a33b50fa9eb4ec57475b268cb7ee2698e6ee135ae46aba5d67587656abf8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/design-system-page.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:6aab986a6ab26b703d809cebb48f55d56ab87934e4f1cbf701abd8d51fba4190
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/design-system.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:c30aca83ec50a6310c40ae8ed5d6979e81bb30675525bd2c52a4042ce65bd20e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/evals/evals.json
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:9be80d29deaddfe1d5152023942306c3b7a88a9d12e5e0021cfde44dd2018853
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/rules/composition.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:e14fe6271369db30706b859a3de6805eeba2c14d41920508633d2f7dcea93bd0
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/rules/forms.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:614363e74742e97acb775c8030d738635da230f8ccd8c5fa1d12171e68bfd318
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/rules/icons.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:cd291c6bf9b916b0e5d625eaf2ee1699e1dda4bbf7802a2c07ef18182a04d848
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/rules/styling.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:62d661d54f36f0188a123a7f0dd30ea20c37f6ca2843404f3eaa0ba1ac77f575
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/scripts/showcase-coverage.mjs
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:0eb7b7fc17d95ea35344c144ecabcc75a0f48aa85afd9429f4ca55da2de78d14
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/shadcn-svelte/scripts/showcase-coverage.test.mjs
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:f1758071607e9f32469b1781eff653736c69552292118aab5c4bebe149ca175c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/feature-plan
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/feature-plan/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:14b33728ea22da702e69529b582ce6537ac9281f5afa90ac1f8a47cfd892c59d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:1c11b03e380578beb93807b46f3a0c4b243e1aeeef27e8782fe8bf2c8dfcf862
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/agents/openai.yml
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:39293434702908c2b54a57ef4512f06d0195b43d6a13154d91d577bbd4d3fad7
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/assets/shadcn-svelte-small.png
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:ab571a7acd192a769531b5ea5e2105f40128b52e90fbdeb31e712d5fd18f6350
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/assets/shadcn-svelte.png
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:256a06954d29e566b01695f0fa3574c0a6d69991098e756d8cc0704ee376ce3f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/assets/showcase/color-pair.svelte
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:9b4dadaf371664d01d211279a968be10e920f4a269101944c0225777d9d6d504
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/assets/showcase/preview-state.ts
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:aed90272d955fd4f111d35873d2390cde1a63db159f823b5de9834ba08eec368
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/assets/showcase/preview-states.css
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:a11cc8ce59fa3d4c15e610014c44e7954ae277ee41b9201fb03ea75ec8b12f22
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/assets/showcase/state-matrix.svelte
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:af76035583bde0f3e846f9510b133e16a5e4b5bec4bf6f771d8090eab7ee3816
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/cli.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:01a82fbd642d3bf0850264d0dad8890ac9c5c12e004aa61860979cdaa00f8013
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/customization.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:47b7a33b50fa9eb4ec57475b268cb7ee2698e6ee135ae46aba5d67587656abf8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/design-system-page.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:6aab986a6ab26b703d809cebb48f55d56ab87934e4f1cbf701abd8d51fba4190
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/design-system.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:c30aca83ec50a6310c40ae8ed5d6979e81bb30675525bd2c52a4042ce65bd20e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/evals/evals.json
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:9be80d29deaddfe1d5152023942306c3b7a88a9d12e5e0021cfde44dd2018853
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/rules/composition.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:e14fe6271369db30706b859a3de6805eeba2c14d41920508633d2f7dcea93bd0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/rules/forms.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:614363e74742e97acb775c8030d738635da230f8ccd8c5fa1d12171e68bfd318
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/rules/icons.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:cd291c6bf9b916b0e5d625eaf2ee1699e1dda4bbf7802a2c07ef18182a04d848
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/rules/styling.md
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:62d661d54f36f0188a123a7f0dd30ea20c37f6ca2843404f3eaa0ba1ac77f575
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/scripts/showcase-coverage.mjs
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:0eb7b7fc17d95ea35344c144ecabcc75a0f48aa85afd9429f4ca55da2de78d14
+- kind: project-relative
+  target: claude
+  value: .claude/skills/shadcn-svelte/scripts/showcase-coverage.test.mjs
+  runtime: null
+  scope: project
+  owners:
+  - huntabyte/shadcn-svelte
+  active_owner: huntabyte/shadcn-svelte
+  content_hash: sha256:f1758071607e9f32469b1781eff653736c69552292118aab5c4bebe149ca175c
+- kind: uri
+  target: mcp
+  value: svelte
+  runtime: claude
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:ec52034ec6d30828361969b47325c331a0c80b6f7c37176b9b7b927d26acff6a
+- kind: uri
+  target: mcp
+  value: svelte
+  runtime: codex
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:c2b7f1cca572b504f84f7be65d8adcc00d05c042dd40d01c7c59e2b6e4b3dc1f
+mcp_servers:
+- svelte
+mcp_configs:
+  svelte:
+    name: svelte
+    transport: stdio
+    args:
+    - -y
+    - '@sveltejs/mcp'
+    registry: false
+    command: npx
+mcp_target_servers:
+  claude:
+  - svelte
+  codex:
+  - svelte
+local_deployed_files:
+- .agents/skills/feature-plan
+- .agents/skills/feature-plan/SKILL.md
+- .claude/skills/feature-plan
+- .claude/skills/feature-plan/SKILL.md
+local_deployed_file_hashes:
+  .agents/skills/feature-plan/SKILL.md: sha256:14b33728ea22da702e69529b582ce6537ac9281f5afa90ac1f8a47cfd892c59d
+  .claude/skills/feature-plan/SKILL.md: sha256:14b33728ea22da702e69529b582ce6537ac9281f5afa90ac1f8a47cfd892c59d

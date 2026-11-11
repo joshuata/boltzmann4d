@@ -8,6 +8,7 @@
 import type { Renderer, ViewSize } from '../render';
 import type { Census, ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
+import type { ArenaTheme } from '../render/view';
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
@@ -66,6 +67,8 @@ export class SimulationClient {
   /** Whether kinds' markers are drawn (KIND-9; the scenario's until changed). */
   markers = $state(true);
   #markersChosen = false;
+  /** Light or dark arena (VIEW-1); the viewer sets it from the site's theme. */
+  #theme: ArenaTheme = 'dark';
   /** The running simulation's particle kinds, in type order (empty until loaded). */
   kinds = $state.raw<KindInfo[]>([]);
   /** Kinds the statistics show (KIND-4): null for all of them. */
@@ -189,6 +192,7 @@ export class SimulationClient {
         .then(({ createRenderer }) => {
           if (this.#disposed) return;
           const renderer = createRenderer(canvas, size());
+          renderer.setTheme(this.#theme);
           channel.port2.onmessage = (event: MessageEvent<RenderStream>) => {
             if (event.data.type === 'scene') renderer.setScene(event.data.scene);
             else if (event.data.type === 'colorLimits') renderer.setColorLimits(event.data.limits);
@@ -554,15 +558,34 @@ export class SimulationClient {
     this.#send({ type: 'statKinds', types });
   }
 
-  #toRenderer(message: Extract<ToRenderWorker, { type: 'colorMode' | 'trace' | 'markers' }>): void {
+  /** Light or dark arena (VIEW-1). */
+  setTheme(theme: ArenaTheme): void {
+    this.#theme = theme;
+    this.#toRenderer({ type: 'theme', theme });
+  }
+
+  #toRenderer(
+    message: Extract<ToRenderWorker, { type: 'colorMode' | 'trace' | 'markers' | 'theme' }>,
+  ): void {
     if (this.#renderWorker) {
       this.#renderWorker.postMessage(message);
-    } else if (message.type === 'colorMode') {
-      this.#mainRenderer?.setColorMode(message.mode);
-    } else if (message.type === 'markers') {
-      this.#mainRenderer?.setMarkers(message.enabled);
-    } else {
-      this.#mainRenderer?.setTrace(message.enabled, message.pointSize);
+      return;
+    }
+    const renderer = this.#mainRenderer;
+    if (!renderer) return;
+    switch (message.type) {
+      case 'colorMode':
+        renderer.setColorMode(message.mode);
+        break;
+      case 'markers':
+        renderer.setMarkers(message.enabled);
+        break;
+      case 'theme':
+        renderer.setTheme(message.theme);
+        break;
+      case 'trace':
+        renderer.setTrace(message.enabled, message.pointSize);
+        break;
     }
   }
 

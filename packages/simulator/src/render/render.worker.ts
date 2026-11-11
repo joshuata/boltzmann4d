@@ -50,6 +50,9 @@ scope.onmessage = (event: MessageEvent<ToRenderWorker>) => {
       case 'markers':
         renderer?.setMarkers(message.enabled);
         break;
+      case 'theme':
+        renderer?.setTheme(message.theme);
+        break;
     }
   } catch (error) {
     fail(error);

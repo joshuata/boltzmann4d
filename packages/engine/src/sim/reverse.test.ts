@@ -109,13 +109,16 @@ describe('reverse (SIM-32)', () => {
     runFrames(sim, duration);
     expect(sim.counters.particleCollisions).toBeGreaterThan(5);
     const [px, py, pz] = momentum(sim);
+    // With wells, kinetic energy alone isn't conserved (particles can start inside a well).
+    if (_ !== '2D square wells') expect(sim.kineticEnergy()).toBeCloseTo(energy, 25);
+    const beforeReverse = sim.kineticEnergy();
 
     sim.reverse();
     expect(sim.time).toBe(duration); // the clock keeps running forward
     const [rx, ry, rz] = momentum(sim);
     // (+ 0 so that -0 and 0 compare equal)
     expect([rx + 0, ry + 0, rz + 0]).toEqual([-px + 0, -py + 0, -pz + 0]);
-    expect(sim.kineticEnergy()).toBeCloseTo(energy, 25);
+    expect(sim.kineticEnergy()).toBeCloseTo(beforeReverse, 25);
 
     runFrames(sim, 2 * duration);
     expect(maxDisplacement(sim, start)).toBeLessThan(1e-3 * NM);

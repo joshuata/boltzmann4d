@@ -29,7 +29,7 @@ export {
   type WallStyle,
 } from './schema';
 export { ScenarioV1Schema, type ScenarioV1, type ScenarioV1Input } from './schema-v1';
-export { migrateV1, RED_KIND, BLUE_KIND } from './migrate';
+export { migrateV1, KIND_A, KIND_B, KIND_A_NAME, KIND_B_NAME } from './migrate';
 export {
   setFileToScenario,
   scenarioToSetFile,

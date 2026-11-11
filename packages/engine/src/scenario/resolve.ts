@@ -85,7 +85,7 @@ export interface ResolvedScenario {
   /** The enabled reaction rules, with kinds as species indices (KIND-13). */
   reactions: ReactionRule[];
   /**
-   * One per kind, in the scenario's order (Red then Blue for `.set` files). A kind with no
+   * One per kind, in the scenario's order (Type A then Type B for `.set` files). A kind with no
    * particles is left out (as DummyMain did), unless a reaction rule can produce it.
    */
   species: ParticleSpecies[];
@@ -316,7 +316,7 @@ function resolveSpecies(
   const placer =
     scenario.walls.length > 0 || scenario.spawnRegions.length > 0
       ? new Placer(scenario, builders, arena, random)
-      : null;
+      : new BoxPlacer(scenario, builders, dimension, arena, random);
   for (const population of scenario.populations) {
     const side = randomSide(
       scenario.arena.boundary,
@@ -324,8 +324,8 @@ function resolveSpecies(
       arena.x,
     );
     const species = builders.get(population.kind)!;
-    const place = placer?.forPopulation(population, side, species.type.displayName);
-    placePopulation(population, species, dimension, arena, side, random, place, zeroMomentum);
+    const place = placer.forPopulation(population, side, species.type.displayName);
+    placePopulation(population, species, dimension, random, place, zeroMomentum);
   }
 
   const reacting = new Set(rules.flatMap((r) => [...r.reactants, ...r.products]));
@@ -342,17 +342,15 @@ function resolveSpecies(
 }
 
 /**
- * Places one population's particles, in the order (and with the random draws) Java used,
- * or with `place` for the randomly placed ones in scenarios with walls or spawn regions.
+ * Places one population's particles in the order Java used: the randomly placed ones (where
+ * `place` puts them), then the explicit ones.
  */
 function placePopulation(
   population: Population,
   species: SpeciesBuilder,
   dimension: Dimension,
-  arena: { x: number; y: number; z: number },
-  side: { min: number; max: number } | undefined,
   random: () => number,
-  place?: (radius: number, placed: number, total: number) => number[],
+  place: (radius: number, placed: number, total: number) => number[],
   zeroMomentumOfRandom = false,
 ): void {
   const radius = species.type.particleRadius;
@@ -362,17 +360,7 @@ function placePopulation(
 
   for (const block of population.randomlyPlaced) {
     for (let i = 0; i < block.count; i++) {
-      species.positions.push(
-        place
-          ? place(radius, placed++, total)
-          : [
-              side
-                ? random() * (side.max - side.min - 2 * radius) + side.min + radius
-                : random() * (arena.x - 2 * radius) + radius,
-              random() * (arena.y - 2 * radius) + radius,
-              random() * (arena.z - 2 * radius) + radius,
-            ],
-      );
+      species.positions.push(place(radius, placed++, total));
       species.velocities.push(randomVelocity(block.averageVelocity, dimension, random));
     }
   }
@@ -405,7 +393,7 @@ function placePopulation(
 
 /**
  * Where randomly placed particles go along x in a divided arena (FILE-3), as the Java app's
- * settings dialog does it (SimSettingsController.randomlyPlaceParticles): the first kind (red)
+ * settings dialog does it (SimSettingsController.randomlyPlaceParticles): the first kind (red in Java)
  * on the left and the others (blue) on the right of a closed divider, everything on the left
  * of one with a hole so it can leak through. Undefined means the whole width.
  */
@@ -452,6 +440,86 @@ function scaleVelocitiesToTemperature(
           )
         : 0;
     for (const v of velocities) v.splice(0, 3, ...randomVelocity(speed, dimension, random));
+  }
+}
+
+/**
+ * Places particles uniformly at random in the arena's box (or the side `randomSide` picks,
+ * which keeps them clear of the divider) in scenarios without drawn walls or spawn regions,
+ * in any dimension. A spot that overlaps a particle placed before (explicitly placed ones
+ * count from the start) is drawn again.
+ *
+ * The Java app never checked for overlaps here (Load.java's RandomlyPlaced loop and
+ * SimSettingsController.randomlyPlaceParticles draw x, y, z once each), so its random scenes
+ * could start with particles inside each other, which breaks collision prediction. A spot
+ * that fits on the first try uses the same three draws as Java's.
+ */
+class BoxPlacer {
+  /** Placed particles: x, y, z, radius (m). */
+  private readonly placed: number[] = [];
+
+  constructor(
+    scenario: Scenario,
+    builders: Map<string, SpeciesBuilder>,
+    private readonly dimension: Dimension,
+    private readonly arena: { x: number; y: number; z: number },
+    private readonly random: () => number,
+  ) {
+    for (const population of scenario.populations) {
+      const radius = builders.get(population.kind)!.type.particleRadius;
+      for (const p of population.particles) {
+        const [x = 0, y = 0, z = 0] = p.position.map(nmToM);
+        this.placed.push(x, y, z, radius);
+      }
+    }
+  }
+
+  /** The placement function for one population's randomly placed particles. */
+  forPopulation(
+    _population: Population,
+    side: { min: number; max: number } | undefined,
+    kindName: string,
+  ): (radius: number, placed: number, total: number) => number[] {
+    const xMin = side?.min ?? 0;
+    const xMax = side?.max ?? this.arena.x;
+    return (radius, placed, total) => {
+      const spot = this.place(xMin, xMax, radius);
+      if (!spot) {
+        throw new ScenarioError([
+          `Only ${placed} of ${total} ${kindName} particles fit in the arena without overlapping`,
+        ]);
+      }
+      return spot;
+    };
+  }
+
+  private place(xMin: number, xMax: number, radius: number): number[] | null {
+    const { arena, random } = this;
+    for (let attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
+      const x = random() * (xMax - xMin - 2 * radius) + xMin + radius;
+      const y = random() * (arena.y - 2 * radius) + radius;
+      const z = random() * (arena.z - 2 * radius) + radius;
+      if (this.fits(x, y, z, radius)) {
+        this.placed.push(x, y, z, radius);
+        return [x, y, z];
+      }
+    }
+    return null;
+  }
+
+  /** Clear of every placed particle, measured only along the arena's dimensions. */
+  private fits(x: number, y: number, z: number, radius: number): boolean {
+    const p = this.placed;
+    const useY = this.dimension > 1;
+    const useZ = this.dimension > 2;
+    for (let k = 0; k < p.length; k += 4) {
+      const reach = radius + p[k + 3]!;
+      const dx = x - p[k]!;
+      const dy = useY ? y - p[k + 1]! : 0;
+      const dz = useZ ? z - p[k + 2]! : 0;
+      if (dx * dx + dy * dy + dz * dz < reach * reach) return false;
+    }
+    return true;
   }
 }
 

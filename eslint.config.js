@@ -15,6 +15,10 @@ export default ts.config(
       'vendor/',
       '**/.svelte-kit/',
       'apps/web/build/',
+      // Skills deployed by apm install (apm.yml); our own are linted in .apm/skills.
+      'apm_modules/',
+      '.agents/skills/',
+      '.claude/skills/',
     ],
   },
   js.configs.recommended,

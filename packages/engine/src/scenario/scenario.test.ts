@@ -66,7 +66,7 @@ describe.each(presetNames)('%s', (name) => {
 /** A `.set` file as a version 1 JSON scenario, written by hand from the v2 one. */
 function v1FromSet(text: string): ScenarioV1Input {
   const v2 = setFileToScenario(text).scenario;
-  const color = (kind: string) => (kind === 'red' ? 'RED' : 'BLUE');
+  const color = (kind: string) => (kind === 'a' ? 'RED' : 'BLUE');
   const massOf = new Map(v2.kinds.map((k) => [k.id, k]));
   return {
     format: 'boltzmann4d-scenario',
@@ -90,8 +90,8 @@ function v1FromSet(text: string): ScenarioV1Input {
           name,
           {
             ...(l.all && { both: l.all }),
-            ...(l.kinds.red && { red: l.kinds.red }),
-            ...(l.kinds.blue && { blue: l.kinds.blue }),
+            ...(l.kinds.a && { red: l.kinds.a }),
+            ...(l.kinds.b && { blue: l.kinds.b }),
           },
         ]),
       ),
@@ -244,11 +244,11 @@ describe('version 2 scenarios', () => {
     kind,
   });
 
-  it('migrates .set red and blue to kinds with the Classic palette', async () => {
+  it('migrates .set red and blue to Type A and Type B with the Classic palette', async () => {
     const scenario = parseScenario(await base());
     expect(scenario.kinds.map((k) => [k.id, k.name, k.mass, k.radius])).toEqual([
-      ['red', 'Red', 2, 1],
-      ['blue', 'Blue', 2, 1],
+      ['a', 'Type A', 2, 1],
+      ['b', 'Type B', 2, 1],
     ]);
     expect(scenario.display.palette).toBe('classic');
     expect(scenario.reactions).toEqual([]);
@@ -263,12 +263,12 @@ describe('version 2 scenarios', () => {
     expect(setFileCompatibility(marked).warnings).toContain("the kinds' markers");
   });
 
-  it('turns reaction mode into the Red + Red → Blue + Blue rule', async () => {
+  it('turns reaction mode into the Type A + Type A → Type B + Type B rule', async () => {
     const { scenario } = setFileToScenario(await loadPresetText('2Dequil'));
     expect(scenario.reactions).toEqual([
       {
-        reactants: ['red', 'red'],
-        products: ['blue', 'blue'],
+        reactants: ['a', 'a'],
+        products: ['b', 'b'],
         forward: 8,
         reverse: 4,
         suppressReverse: false,
@@ -276,8 +276,8 @@ describe('version 2 scenarios', () => {
       },
     ]);
     const resolved = resolveScenario(scenario);
-    // Blue has no particles but is kept, since the reaction makes it.
-    expect(resolved.species.map((s) => s.kindId)).toEqual(['red', 'blue']);
+    // Type B has no particles but is kept, since the reaction makes it.
+    expect(resolved.species.map((s) => s.kindId)).toEqual(['a', 'b']);
     expect(resolved.reactions).toEqual([
       { reactants: [0, 0], products: [1, 1], forward: 8, reverse: 4, suppressReverse: false },
     ]);
@@ -289,7 +289,7 @@ describe('version 2 scenarios', () => {
     expect(scenario.reactions.map((r) => r.enabled)).toEqual([false]);
     const resolved = resolveScenario(scenario);
     expect(resolved.reactions).toEqual([]);
-    expect(resolved.species.map((s) => s.kindId)).toEqual(['red']);
+    expect(resolved.species.map((s) => s.kindId)).toEqual(['a']);
     // It still round-trips as reaction_mode TRUE.
     expect(toV1(scenario).scenario?.modes.reaction).toBe(true);
     expect(toV1(scenario).warnings).toEqual([]);
@@ -309,11 +309,11 @@ describe('version 2 scenarios', () => {
 
   it('keeps kind ids and names unique and fits the palette', async () => {
     const input = await base();
-    input.kinds.push({ id: 'red', name: 'BLUE', mass: 1, radius: 1 });
+    input.kinds.push({ id: 'a', name: 'TYPE B', mass: 1, radius: 1 });
     input.kinds.push(...['c', 'd', 'e'].map((id) => ({ id, name: id, mass: 1, radius: 1 })));
     expect(problemsOf(input)).toEqual([
-      'kinds[2].id: Another kind already has the id red',
-      'kinds[2].name: Another kind is already called BLUE',
+      'kinds[2].id: Another kind already has the id a',
+      'kinds[2].name: Another kind is already called TYPE B',
       'display.palette: The Classic (not colour-blind safe) palette has 5 colours, not enough for 6 kinds',
     ]);
   });
@@ -348,7 +348,7 @@ describe('version 2 scenarios', () => {
           [5, 20],
           [20, 20],
         ],
-        { type: 'semipermeable', passes: ['red', 'blue'] },
+        { type: 'semipermeable', passes: ['a', 'b'] },
       ),
     ];
     expect(problemsOf(input)).toEqual([
@@ -403,9 +403,9 @@ describe('version 2 scenarios', () => {
       reverse: 4,
       suppressReverse,
     });
-    input.reactions = [rule('red', 'blue'), rule('blue', 'c')];
-    expect(problemsOf(input)).toEqual(['reactions[1]: blue + blue already reacts by rule 1']);
-    input.reactions = [rule('red', 'blue', true), rule('blue', 'c', true)];
+    input.reactions = [rule('a', 'b'), rule('b', 'c')];
+    expect(problemsOf(input)).toEqual(['reactions[1]: b + b already reacts by rule 1']);
+    input.reactions = [rule('a', 'b', true), rule('b', 'c', true)];
     expect(problemsOf(input)).toEqual([]);
   });
 
@@ -413,8 +413,8 @@ describe('version 2 scenarios', () => {
     const scenario = parseScenario({
       ...(await base()),
       kinds: [
-        { id: 'red', name: 'Red', mass: 2, radius: 1 },
-        { id: 'blue', name: 'Blue', mass: 2, radius: 1 },
+        { id: 'a', name: 'Type A', mass: 2, radius: 1 },
+        { id: 'b', name: 'Type B', mass: 2, radius: 1 },
         { id: 'c', name: 'C', mass: 2, radius: 1 },
       ],
       walls: [
@@ -440,7 +440,7 @@ describe('version 2 scenarios', () => {
       ...(await base()),
       kinds: [
         { id: 'a', name: 'Argon', mass: 40, radius: 1, color: '#123456' },
-        { id: 'b', name: 'Blue', mass: 2, radius: 1 },
+        { id: 'b', name: 'Type B', mass: 2, radius: 1 },
       ],
       populations: [{ kind: 'a', randomlyPlaced: [{ count: 3, averageVelocity: 100 }] }],
       statistics: { ...(await base()).statistics, kinds: 'all', abscissaLimits: {} },
@@ -470,12 +470,12 @@ describe('version 2 scenarios', () => {
       ...input,
       walls: [
         w('t', { type: 'thermal', temperature: 300 }),
-        w('s', { type: 'semipermeable', passes: ['red'] }),
+        w('s', { type: 'semipermeable', passes: ['a'] }),
         w('a', { type: 'attractive', depth: 2, width: 3 }),
       ],
     });
     const physics = resolveScenario(scenario).walls.map((wall) => wall.physics);
-    // Kind ids become species indices (red is species 0).
+    // Kind ids become species indices (a is species 0).
     expect(physics).toEqual([
       { type: 'thermal', temperature: 300 },
       { type: 'semipermeable', passes: [0] },

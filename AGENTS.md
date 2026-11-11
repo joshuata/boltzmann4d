@@ -61,7 +61,7 @@ Java sources referenced above live in `vendor/boltzmann3d/src/edu/byu/chem/boltz
 
 ## Commands
 
-Tool versions (node, pnpm, hk, pkl, markdownlint-cli2, gh) are pinned in `mise.toml`. Run `mise install` once; it also installs `node_modules`. After that, `mise run <task>` reinstalls `node_modules` automatically whenever `package.json` or `pnpm-lock.yaml` changes (mise's `[deps.pnpm]` provider). Calling `pnpm` directly doesn't, so run `mise deps` after pulling if you skip `mise run`. Run `hk install` once to enable the git pre-commit hook. In VS Code, open `boltzmann4d.code-workspace` rather than the repo folder: the Svelte extension only finds each package's dependencies (and SvelteKit's `./$types`) when that package is its own workspace folder.
+Tool versions (node, pnpm, hk, pkl, markdownlint-cli2, gh, apm) are pinned in `mise.toml`. Run `mise install` once; it also installs `node_modules` and runs `apm install --frozen` to deploy the agent skills (see Skills). After that, `mise run <task>` reinstalls `node_modules` automatically whenever `package.json` or `pnpm-lock.yaml` changes (mise's `[deps.pnpm]` provider). Calling `pnpm` directly doesn't, so run `mise deps` after pulling if you skip `mise run`. Run `hk install` once to enable the git pre-commit hook. In VS Code, open `boltzmann4d.code-workspace` rather than the repo folder: the Svelte extension only finds each package's dependencies (and SvelteKit's `./$types`) when that package is its own workspace folder.
 
 - `pnpm dev`: start the SvelteKit dev server (`apps/web`)
 - `pnpm build`: type-check every workspace (`pnpm -r run check`: svelte-check, or tsc for the engine), then build the static site into `apps/web/build/`
@@ -92,7 +92,7 @@ Production builds use the base path `/boltzmann4d/` (`paths.base` in `apps/web/v
 - New data for the sidebar (statistics, timing, …) goes through `SimulationClient`: the worker sends it, the client exposes it as `$state`, and components receive it as props.
 - The site owns navigation and the URL: the navbar's 2D and 3D menus link to `/simulate/[preset]`, and `<Simulator>` just takes `preset`, or a `scenario` object the page supplies (e.g. `/upload` from a file the user opened), and loads a new one in place when the prop changes. The simulator package never touches `location` or `history` (except reading `?render=main`).
 - User documentation lives in `apps/web/src/docs/*.md`, written in Markdown and compiled by mdsvex. Frontmatter sets `title` (the page heading, so don't add a `#` heading), `description` and `order`. Link between docs with relative links (`[About](about)`) so they work under the base path.
-- Build controls from `@boltzmann4d/ui` (`import { Button } from '@boltzmann4d/ui/button'`) and style with Tailwind classes and the theme tokens (`bg-muted`, `text-muted-foreground`, `border`, …) rather than `<style>` blocks or hard-coded colours. Add components with `pnpm dlx shadcn-svelte@latest add <name>` run in `packages/ui` (its `components.json` sets the aliases); the generated files keep the CLI's kebab-case names. Dark mode follows the system setting. The site's `app.css` imports the theme and tells Tailwind to scan `packages/`, so classes used in any package are generated.
+- Build controls from `@boltzmann4d/ui` (`import { Button } from '@boltzmann4d/ui/button'`) and style with Tailwind classes and the theme tokens (`bg-muted`, `text-muted-foreground`, `border`, …) rather than `<style>` blocks or hard-coded colours. Add components with `pnpm dlx shadcn-svelte@latest add <name>` run in `packages/ui` (its `components.json` sets the aliases); the generated files keep the CLI's kebab-case names. Dark mode is the `dark` class on `<html>` (Tailwind's `dark:` variant is class-based), set by mode-watcher in the site's layout: it follows the system setting until the user picks Light or Dark in the navbar's theme menu. The site's `app.css` imports the theme and tells Tailwind to scan `packages/`, so classes used in any package are generated.
 - This keeps the UI ready for other devices: components only depend on reactive state, so the layout can change with screen size (phones, tablets, desktop) without touching data flow. Sidebar components must work at narrow widths and with touch input.
 
 ## Porting rules
@@ -110,7 +110,11 @@ Production builds use the base path `/boltzmann4d/` (`paths.base` in `apps/web/v
 
 ## Skills
 
-- Agent skills live in `.agents/skills/<name>/SKILL.md`; `.claude/skills/<name>` is a symlink to each one so Claude Code finds it.
+- Every skill is deployed by [apm](https://github.com/microsoft/apm): `apm install` copies each one into both `.agents/skills/<name>/` and `.claude/skills/<name>/` (real copies, not symlinks) and records their hashes in `apm.lock.yaml`. Those copies are gitignored and the linters skip them (`hk.pkl`, `eslint.config.js`, `.prettierignore`); `mise install` deploys them, or run `apm install` yourself.
+- Our own skills live in `.apm/skills/<name>/SKILL.md`, which apm deploys as a local package. Edit them there, then rerun `apm install` and commit the source together with the updated `apm.lock.yaml`.
+- Third-party skills are listed in `apm.yml`, and `apm.lock.yaml` pins their commits.
+- MCP servers are declared in `apm.yml` too; `apm install` writes them to `.mcp.json` (Claude Code) and `.codex/config.toml` (Codex), both gitignored. Edit `apm.yml`, not the generated files. The `svelte` server ([@sveltejs/mcp](https://svelte.dev/docs/mcp/overview)) runs locally over stdio via `npx` and gives Svelte 5 / SvelteKit docs and an autofixer for components.
+- `shadcn-svelte` (from `huntabyte/shadcn-svelte`, via apm): adding, styling and composing shadcn-svelte components in `packages/ui`.
 - `feature-plan`: investigate a feature idea and, once approved, file a GitHub issue with an implementation plan attached. Read-only: it never changes code.
 
 ## Plans
