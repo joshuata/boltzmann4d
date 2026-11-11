@@ -82,12 +82,14 @@ export function createView2D(info: SceneInfo): View {
   return {
     root,
     camera,
-    fit(aspect) {
+    fit(aspect, zoom) {
       const margin = MARGIN * Math.max(arena.x, arena.y);
       let halfW = arena.x / 2 + margin;
       let halfH = arena.y / 2 + margin;
       if (halfW / halfH < aspect) halfW = halfH * aspect;
       else halfH = halfW / aspect;
+      halfW /= zoom;
+      halfH /= zoom;
       camera.left = arena.x / 2 - halfW;
       camera.right = arena.x / 2 + halfW;
       camera.bottom = arena.y / 2 - halfH;

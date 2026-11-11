@@ -16,6 +16,16 @@ describe('arenaPoint', () => {
     expect(corner.y).toBeCloseTo(25 + 29, 9);
   });
 
+  it('follows the zoom about the arena centre', () => {
+    const canvas = { width: 1000, height: 500 };
+    const arena = { width: 100, height: 50 };
+    const zoomed = arenaPoint(500, 250, canvas, arena, 2);
+    expect(zoomed.x).toBeCloseTo(50, 9);
+    expect(zoomed.y).toBeCloseTo(25, 9);
+    expect(zoomed.metersPerPixel).toBeCloseTo(58 / 1000, 9);
+    expect(arenaPoint(0, 0, canvas, arena, 2).y).toBeCloseTo(25 + 29 / 2, 9);
+  });
+
   it('measures distances to polylines', () => {
     expect(distanceToPolyline(5, 2, [0, 0, 10, 0], false)).toBe(2);
     expect(distanceToPolyline(-3, 5, [0, 0, 10, 0, 10, 10, 0, 10], true)).toBe(3);

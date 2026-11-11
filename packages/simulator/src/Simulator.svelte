@@ -20,9 +20,11 @@
   import RateSlider from './ui/RateSlider.svelte';
   import ScaleBar from './ui/ScaleBar.svelte';
   import ViewOptions from './ui/ViewOptions.svelte';
+  import ZoomControls from './ui/ZoomControls.svelte';
   import { missingBrowserFeatures } from './ui/browser-support';
   import { arenaPoint, distanceToPolyline } from './ui/arena-point';
   import { rotateView } from './ui/rotate-view';
+  import { zoomView } from './ui/zoom-view';
   import { SimulationClient } from './ui/simulation.svelte';
   import type { ScenarioSource } from './worker';
 
@@ -119,10 +121,11 @@
         sim?.dimension === 3 && 'cursor-grab touch-none active:cursor-grabbing',
       ]}
       use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
-      tabindex={sim?.dimension === 3 ? 0 : -1}
+      use:zoomView={(update) => sim?.setZoom(update(sim.zoom))}
+      tabindex="0"
       aria-label={sim?.dimension === 3
-        ? 'Simulation arena; drag or use the arrow keys to turn it'
-        : 'Simulation arena'}
+        ? 'Simulation arena; drag or use the arrow keys to turn it, pinch or + and − to zoom'
+        : 'Simulation arena; pinch or + and − to zoom'}
       onclick={(event) => {
         if (!sim || sim.dimension === 3) return;
         // A drawn gate within a few pixels opens or closes (WALL-4).
@@ -133,6 +136,7 @@
             event.clientY - box.top,
             box,
             sim.arenaSize,
+            sim.zoom,
           );
           const gate = sim.arena.gates.find(
             (g) => distanceToPolyline(at.x, at.y, g.points, g.closed) <= 10 * at.metersPerPixel,
@@ -148,7 +152,10 @@
       }}
     ></canvas>
     {#if sim && sim.dimension !== 3 && !sim.error}
-      <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
+      <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} zoom={sim.zoom} />
+    {/if}
+    {#if sim && !sim.error}
+      <ZoomControls zoom={sim.zoom} onZoom={(zoom) => sim?.setZoom(zoom)} />
     {/if}
     <div class="absolute top-2 right-2 flex gap-1" role="group" aria-label="Presentation">
       {#if canFullscreen}

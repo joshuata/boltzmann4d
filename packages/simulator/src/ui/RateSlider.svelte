@@ -1,7 +1,7 @@
 <!-- Simulation speed (CTRL-2): multiplies how fast simulated time runs, in doubling steps
-     from MIN_STEP to MAX_STEP (⅛× to 2048×) of the scenario's own speed. 1× is the
-     default; double-click to go back to it. At high speeds particles jump too far per
-     frame to follow, and the physics may not keep up in real time; that's expected. -->
+     from 1× (the scenario's own speed, the default) to 2048×; double-click to go back to
+     1×. At high speeds particles jump too far per frame to follow, and the physics may not
+     keep up in real time; that's expected. -->
 <script lang="ts">
   import { Slider } from '@boltzmann4d/ui/slider';
 
@@ -13,18 +13,15 @@
 
   let { value, disabled = false, onChange }: Props = $props();
 
-  /** Powers of two: 2⁻³ = ⅛× to 2¹¹ = 2048×. */
-  const MIN_STEP = -3;
+  /** Powers of two: 2⁰ = 1× to 2¹¹ = 2048×. */
+  const MIN_STEP = 0;
   const MAX_STEP = 11;
 
   /** The nearest step to a scale (scales set elsewhere may fall between steps). */
   const stepOf = (scale: number) =>
     Math.min(MAX_STEP, Math.max(MIN_STEP, Math.round(Math.log2(scale))));
 
-  function format(scale: number): string {
-    if (scale >= 1) return scale.toFixed(0);
-    return { 0.5: '½', 0.25: '¼', 0.125: '⅛' }[scale] ?? scale.toPrecision(2);
-  }
+  const format = (scale: number) => (scale >= 1 ? scale.toFixed(0) : scale.toPrecision(2));
 </script>
 
 <div class="my-4 grid gap-2 text-sm">

@@ -24,6 +24,7 @@ import type {
   ToWorker,
 } from '../worker';
 import SimWorker from '../worker/sim.worker?worker';
+import { clampZoom } from './zoom';
 
 /** A plot the statistics area can show: a statistic, or a pressure history by region. */
 export type PlotId = StatisticId | `PRESSURE:${PressureRegion}`;
@@ -64,6 +65,8 @@ export class SimulationClient {
   /** The arena's size in m, and the canvas's in CSS pixels (for the scale bar). */
   arenaSize = $state.raw({ width: 0, height: 0 });
   canvasSize = $state.raw({ width: 0, height: 0 });
+  /** The view's zoom about the arena's centre (CTRL-7): 1 fits the arena. Kept across scenarios. */
+  zoom = $state(1);
   #viewChosen = false;
   /** Maxwell's demon: whether the hole is open (null without the demon). */
   holeOpen = $state<boolean | null>(null);
@@ -441,6 +444,17 @@ export class SimulationClient {
       case 'trace':
         renderer.setTrace(message.enabled, message.pointSize);
         break;
+    }
+  }
+
+  /** Magnifies the view about the arena's centre (CTRL-7); clamped to 33%–1600%. */
+  setZoom(zoom: number): void {
+    this.zoom = clampZoom(zoom);
+    if (this.#renderWorker) {
+      const message: ToRenderWorker = { type: 'zoom', zoom: this.zoom };
+      this.#renderWorker.postMessage(message);
+    } else {
+      this.#mainRenderer?.setZoom(this.zoom);
     }
   }
 
