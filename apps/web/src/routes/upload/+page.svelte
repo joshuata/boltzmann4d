@@ -44,6 +44,15 @@
   let storageProblem = $state<string | null>(null);
   let dragging = $state(false);
   let input: HTMLInputElement;
+  /**
+   * File types the picker offers. Phone and tablet pickers turn these into the system's file
+   * types and grey out what they don't know, `.set` among them, so touch screens offer every
+   * file; a wrong one is reported like any other bad file.
+   */
+  const accept =
+    typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+      ? undefined
+      : '.json,.set,application/json';
 
   const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
   const scenarioHref = (entryId: string) => withQuery(resolve('/upload'), { id: entryId });
@@ -148,7 +157,7 @@
 <input
   bind:this={input}
   type="file"
-  accept=".json,.set,application/json"
+  {accept}
   class="hidden"
   onchange={(event) => {
     void open(event.currentTarget.files?.[0]);
