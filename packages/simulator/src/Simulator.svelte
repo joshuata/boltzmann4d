@@ -2,8 +2,6 @@
      It fills its container, so the page decides how big it is. -->
 <script lang="ts">
   import { Button } from '@boltzmann4d/ui/button';
-  import * as Collapsible from '@boltzmann4d/ui/collapsible';
-  import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import MaximizeIcon from '@lucide/svelte/icons/maximize';
   import MinimizeIcon from '@lucide/svelte/icons/minimize';
   import PanelRightCloseIcon from '@lucide/svelte/icons/panel-right-close';
@@ -15,6 +13,7 @@
   import { untrack } from 'svelte';
   import ArenaOptions from './ui/ArenaOptions.svelte';
   import ArenaSize from './ui/ArenaSize.svelte';
+  import PerformancePanel from './ui/PerformancePanel.svelte';
   import PistonPanel from './ui/PistonPanel.svelte';
   import PlayPauseButton from './ui/PlayPauseButton.svelte';
   import PressurePanel from './ui/PressurePanel.svelte';
@@ -62,8 +61,6 @@
     else void root.requestFullscreen().catch(() => {});
   }
   let sim = $state<SimulationClient | null>(null);
-  /** The performance readouts under the particle count (frame rates, physics time, renderer). */
-  let detailsOpen = $state(true);
   /** Browser features the simulator needs but can't find (it doesn't start without them). */
   const missing = missingBrowserFeatures();
 
@@ -326,26 +323,7 @@
     {/if}
     <!-- Diagnostics last: particle count, frame rates and where drawing happens. -->
     {#if sim && !sim.error}
-      <Collapsible.Root bind:open={detailsOpen} class="mt-4 border-t pt-2">
-        <Collapsible.Trigger
-          class="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 w-[calc(100%+0.5rem)] items-center justify-between rounded-md px-1 text-xs font-medium"
-        >
-          {sim.loading
-            ? 'Loading…'
-            : `${sim.particleCount} particles, ${sim.simulationFps.toFixed(0)} fps`}
-          <ChevronDownIcon
-            class={['size-4 transition-transform', detailsOpen && 'rotate-180']}
-            aria-hidden="true"
-          />
-        </Collapsible.Trigger>
-        <Collapsible.Content class="text-muted-foreground space-y-1 text-xs tabular-nums">
-          <p>
-            {sim.drawnFps.toFixed(0)} frames drawn per second · physics {sim.physicsMs.toFixed(2)} ms/frame
-          </p>
-          <p>{sim.simulatedPsPerSecond.toFixed(1)} ps simulated per second</p>
-          <p>Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}</p>
-        </Collapsible.Content>
-      </Collapsible.Root>
+      <PerformancePanel {sim} />
     {/if}
   </aside>
 </div>

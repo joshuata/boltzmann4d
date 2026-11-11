@@ -1,6 +1,7 @@
 <!-- The arena's size in nm (OPT-1, SIM-10): width and height, and depth in 3D. Applying a
      new size restarts the simulation with the particles placed anew. -->
 <script lang="ts">
+  import SidebarPanel from './SidebarPanel.svelte';
   import { ARENA_SIZE_LIMITS } from '@boltzmann4d/engine/scenario/edit';
   import { Button } from '@boltzmann4d/ui/button';
   import { Input } from '@boltzmann4d/ui/input';
@@ -36,35 +37,38 @@
   const id = $props.id();
 </script>
 
-<form
-  class="mb-3 grid gap-2 rounded-md border px-3 pt-2 pb-3 text-sm"
-  aria-label="Arena size"
-  onsubmit={(e) => {
-    e.preventDefault();
-    if (valid && changed) onChange([...draft]);
-  }}
->
-  <p class="text-sm font-medium">Arena size (nm)</p>
-  <div class="grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] items-end gap-2">
-    {#each axes as axis, i (axis)}
-      <div class="grid min-w-0 gap-1">
-        <Label for="{id}-{i}" class="text-xs font-normal">{axis}</Label>
-        <Input
-          id="{id}-{i}"
-          type="number"
-          min={ARENA_SIZE_LIMITS.min}
-          max={ARENA_SIZE_LIMITS.max}
-          step="1"
-          class="h-9"
-          value={draft[i]}
-          oninput={(e) => setAxis(i, e.currentTarget.valueAsNumber)}
-          {disabled}
-        />
-      </div>
-    {/each}
-    <Button type="submit" variant="outline" disabled={disabled || !valid || !changed}>Apply</Button>
-  </div>
-  {#if changed}
-    <p class="text-muted-foreground text-xs">Applying restarts with the particles placed anew.</p>
-  {/if}
-</form>
+<SidebarPanel id="arena-size" title="Arena size" subtitle="(nm)">
+  <form
+    class="grid gap-2"
+    aria-label="Arena size"
+    onsubmit={(e) => {
+      e.preventDefault();
+      if (valid && changed) onChange([...draft]);
+    }}
+  >
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] items-end gap-2">
+      {#each axes as axis, i (axis)}
+        <div class="grid min-w-0 gap-1">
+          <Label for="{id}-{i}" class="text-xs font-normal">{axis}</Label>
+          <Input
+            id="{id}-{i}"
+            type="number"
+            min={ARENA_SIZE_LIMITS.min}
+            max={ARENA_SIZE_LIMITS.max}
+            step="1"
+            class="h-9"
+            value={draft[i]}
+            oninput={(e) => setAxis(i, e.currentTarget.valueAsNumber)}
+            {disabled}
+          />
+        </div>
+      {/each}
+      <Button type="submit" variant="outline" disabled={disabled || !valid || !changed}
+        >Apply</Button
+      >
+    </div>
+    {#if changed}
+      <p class="text-muted-foreground text-xs">Applying restarts with the particles placed anew.</p>
+    {/if}
+  </form>
+</SidebarPanel>

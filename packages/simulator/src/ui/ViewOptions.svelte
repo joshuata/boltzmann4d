@@ -1,6 +1,7 @@
 <!-- The View menu: colour particles by type, speed or kinetic energy, kinds' markers and
      trace mode (VIEW-5) with its Clear action. -->
 <script lang="ts">
+  import SidebarPanel from './SidebarPanel.svelte';
   import { Button } from '@boltzmann4d/ui/button';
   import type { ColorMode } from '@boltzmann4d/engine/sim';
 
@@ -27,59 +28,53 @@
   ];
 </script>
 
-<fieldset class="view">
-  <legend>View</legend>
-  <label class="field">
-    <span>Colour</span>
-    <select
-      value={colorMode}
-      onchange={(e) => onColorMode((e.currentTarget as HTMLSelectElement).value as ColorMode)}
-    >
-      {#each MODES as m (m.value)}
-        <option value={m.value}>{m.label}</option>
-      {/each}
-    </select>
-  </label>
-  {#if colorMode !== 'NORMAL'}
-    <p class="hint">
-      Violet to red across the {colorMode === 'KE' ? 'Kinetic energy' : 'Instantaneous speed'} plot’s
-      min and max; darker beyond them.
-    </p>
-  {/if}
-  {#if canMark}
-    <label class="check">
-      <input
-        type="checkbox"
-        checked={markers}
-        onchange={(e) => onMarkers(e.currentTarget.checked)}
-      />
-      Kind markers
+<SidebarPanel id="view" title="View">
+  <div class="view">
+    <label class="field">
+      <span>Colour</span>
+      <select
+        value={colorMode}
+        onchange={(e) => onColorMode((e.currentTarget as HTMLSelectElement).value as ColorMode)}
+      >
+        {#each MODES as m (m.value)}
+          <option value={m.value}>{m.label}</option>
+        {/each}
+      </select>
     </label>
-  {/if}
-  <div class="flex items-center justify-between gap-2">
-    <label class="check">
-      <input type="checkbox" checked={trace} onchange={(e) => onTrace(e.currentTarget.checked)} />
-      Trace paths
-    </label>
-    {#if trace}
-      <Button variant="outline" size="sm" onclick={onClearTrace}>Clear trace</Button>
+    {#if colorMode !== 'NORMAL'}
+      <p class="hint">
+        Violet to red across the {colorMode === 'KE' ? 'Kinetic energy' : 'Instantaneous speed'} plot’s
+        min and max; darker beyond them.
+      </p>
     {/if}
+    {#if canMark}
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={markers}
+          onchange={(e) => onMarkers(e.currentTarget.checked)}
+        />
+        Kind markers
+      </label>
+    {/if}
+    <div class="flex items-center justify-between gap-2">
+      <label class="check">
+        <input type="checkbox" checked={trace} onchange={(e) => onTrace(e.currentTarget.checked)} />
+        Trace paths
+      </label>
+      {#if trace}
+        <Button variant="outline" size="sm" onclick={onClearTrace}>Clear trace</Button>
+      {/if}
+    </div>
   </div>
-</fieldset>
+</SidebarPanel>
 
 <style>
   .view {
     display: grid;
     gap: 0.4rem;
-    margin: 0 0 0.75rem;
-    padding: 0.5rem 0.75rem 0.65rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
     font-size: 0.85rem;
     min-width: 0;
-  }
-  legend {
-    padding: 0 0.25rem;
   }
   .field {
     display: grid;
