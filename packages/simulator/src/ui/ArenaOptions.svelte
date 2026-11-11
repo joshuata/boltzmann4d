@@ -3,6 +3,7 @@
      between particles in any non-periodic arena (the Java app's Energy Wells tab).
      Changing one restarts the simulation. -->
 <script lang="ts">
+  import SidebarPanel from './SidebarPanel.svelte';
   import type { ArenaInfo, ArenaOptions } from '../worker';
 
   interface Props {
@@ -69,155 +70,163 @@
 </script>
 
 {#if arena.canHavePiston || arena.canConduct || arena.canDemon || arena.canHaveWells || arena.canReact}
-  <fieldset class="options">
-    <legend>Arena</legend>
-    {#if arena.canHavePiston}
-      <label>
-        <input
-          type="checkbox"
-          checked={arena.options.piston ?? false}
-          {disabled}
-          onchange={(e) => onChange({ piston: e.currentTarget.checked })}
-        />
-        Movable piston
-      </label>
-    {/if}
-    {#if arena.canConduct}
-      <label>
-        <input
-          type="checkbox"
-          checked={arena.options.conductingDivider ?? false}
-          {disabled}
-          onchange={(e) => onChange({ conductingDivider: e.currentTarget.checked })}
-        />
-        Divider conducts heat
-      </label>
-    {/if}
-    {#if arena.canDemon}
-      <label>
-        <input
-          type="checkbox"
-          checked={arena.options.demon ?? false}
-          {disabled}
-          onchange={(e) => onChange({ demon: e.currentTarget.checked })}
-        />
-        Maxwell's demon (you open the hole)
-      </label>
-    {/if}
-    {#if arena.canHaveWells}
-      <label>
-        <input
-          type="checkbox"
-          checked={wellsOn}
-          {disabled}
-          onchange={(e) => (e.currentTarget.checked ? applyWells() : onChange({ wells: null }))}
-        />
-        Attractive wells
-      </label>
-      {#if wellsOn}
-        <div class="wells">
-          <label class="field">
-            <span>Radius (× contact)</span>
-            <input
-              type="number"
-              min="1.05"
-              max="10"
-              step="0.1"
-              bind:value={multiplier}
-              {disabled}
-            />
-          </label>
-          {#each arena.typeNames as name, t (t)}
+  <SidebarPanel id="arena" title="Arena">
+    <div class="options">
+      {#if arena.canHavePiston}
+        <label>
+          <input
+            type="checkbox"
+            checked={arena.options.piston ?? false}
+            {disabled}
+            onchange={(e) => onChange({ piston: e.currentTarget.checked })}
+          />
+          Movable piston
+        </label>
+      {/if}
+      {#if arena.canConduct}
+        <label>
+          <input
+            type="checkbox"
+            checked={arena.options.conductingDivider ?? false}
+            {disabled}
+            onchange={(e) => onChange({ conductingDivider: e.currentTarget.checked })}
+          />
+          Divider conducts heat
+        </label>
+      {/if}
+      {#if arena.canDemon}
+        <label>
+          <input
+            type="checkbox"
+            checked={arena.options.demon ?? false}
+            {disabled}
+            onchange={(e) => onChange({ demon: e.currentTarget.checked })}
+          />
+          Maxwell's demon (you open the hole)
+        </label>
+      {/if}
+      {#if arena.canHaveWells}
+        <label>
+          <input
+            type="checkbox"
+            checked={wellsOn}
+            {disabled}
+            onchange={(e) => (e.currentTarget.checked ? applyWells() : onChange({ wells: null }))}
+          />
+          Attractive wells
+        </label>
+        {#if wellsOn}
+          <div class="wells">
             <label class="field">
-              <span>{name} depth (kJ/mol)</span>
-              <input type="number" min="0" max="50" step="0.5" bind:value={depths[t]} {disabled} />
+              <span>Radius (× contact)</span>
+              <input
+                type="number"
+                min="1.05"
+                max="10"
+                step="0.1"
+                bind:value={multiplier}
+                {disabled}
+              />
             </label>
-          {/each}
-          <button type="button" disabled={disabled || !valid || !changed} onclick={applyWells}>
-            Apply
-          </button>
-        </div>
+            {#each arena.typeNames as name, t (t)}
+              <label class="field">
+                <span>{name} depth (kJ/mol)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="50"
+                  step="0.5"
+                  bind:value={depths[t]}
+                  {disabled}
+                />
+              </label>
+            {/each}
+            <button type="button" disabled={disabled || !valid || !changed} onclick={applyWells}>
+              Apply
+            </button>
+          </div>
+        {/if}
+        <label>
+          <input
+            type="checkbox"
+            checked={wallOn}
+            {disabled}
+            onchange={(e) =>
+              e.currentTarget.checked ? applyWall() : onChange({ attractiveWall: null })}
+          />
+          Attractive bottom wall
+        </label>
+        {#if wallOn}
+          <div class="wells">
+            <label class="field">
+              <span>Width (nm)</span>
+              <input
+                type="number"
+                min="0.5"
+                max="100"
+                step="0.5"
+                bind:value={wallWidth}
+                {disabled}
+              />
+            </label>
+            <label class="field">
+              <span>Depth (kJ/mol)</span>
+              <input type="number" min="0" max="50" step="0.5" bind:value={wallDepth} {disabled} />
+            </label>
+            <button
+              type="button"
+              disabled={disabled || !wallValid || !wallChanged}
+              onclick={applyWall}
+            >
+              Apply
+            </button>
+          </div>
+        {/if}
       {/if}
-      <label>
-        <input
-          type="checkbox"
-          checked={wallOn}
-          {disabled}
-          onchange={(e) =>
-            e.currentTarget.checked ? applyWall() : onChange({ attractiveWall: null })}
-        />
-        Attractive bottom wall
-      </label>
-      {#if wallOn}
-        <div class="wells">
-          <label class="field">
-            <span>Width (nm)</span>
-            <input type="number" min="0.5" max="100" step="0.5" bind:value={wallWidth} {disabled} />
-          </label>
-          <label class="field">
-            <span>Depth (kJ/mol)</span>
-            <input type="number" min="0" max="50" step="0.5" bind:value={wallDepth} {disabled} />
-          </label>
-          <button
-            type="button"
-            disabled={disabled || !wallValid || !wallChanged}
-            onclick={applyWall}
-          >
-            Apply
-          </button>
-        </div>
+      {#if arena.canReact}
+        <label>
+          <input
+            type="checkbox"
+            checked={reactionsOn}
+            {disabled}
+            onchange={(e) =>
+              e.currentTarget.checked ? applyReactions() : onChange({ reactions: null })}
+          />
+          Reactions (red ⇌ blue)
+        </label>
+        {#if reactionsOn}
+          <div class="wells">
+            <label class="field">
+              <span>Forward (kJ/mol)</span>
+              <input type="number" min="0" max="50" step="0.5" bind:value={forward} {disabled} />
+            </label>
+            <label class="field">
+              <span>Reverse (kJ/mol)</span>
+              <input type="number" min="0" max="50" step="0.5" bind:value={reverse} {disabled} />
+            </label>
+            <label class="inline">
+              <input type="checkbox" bind:checked={suppressReverse} {disabled} />
+              No reverse
+            </label>
+            <button
+              type="button"
+              disabled={disabled || !reactionsValid || !reactionsChanged}
+              onclick={applyReactions}
+            >
+              Apply
+            </button>
+          </div>
+        {/if}
       {/if}
-    {/if}
-    {#if arena.canReact}
-      <label>
-        <input
-          type="checkbox"
-          checked={reactionsOn}
-          {disabled}
-          onchange={(e) =>
-            e.currentTarget.checked ? applyReactions() : onChange({ reactions: null })}
-        />
-        Reactions (red ⇌ blue)
-      </label>
-      {#if reactionsOn}
-        <div class="wells">
-          <label class="field">
-            <span>Forward (kJ/mol)</span>
-            <input type="number" min="0" max="50" step="0.5" bind:value={forward} {disabled} />
-          </label>
-          <label class="field">
-            <span>Reverse (kJ/mol)</span>
-            <input type="number" min="0" max="50" step="0.5" bind:value={reverse} {disabled} />
-          </label>
-          <label class="inline">
-            <input type="checkbox" bind:checked={suppressReverse} {disabled} />
-            No reverse
-          </label>
-          <button
-            type="button"
-            disabled={disabled || !reactionsValid || !reactionsChanged}
-            onclick={applyReactions}
-          >
-            Apply
-          </button>
-        </div>
-      {/if}
-    {/if}
-  </fieldset>
+    </div>
+  </SidebarPanel>
 {/if}
 
 <style>
   .options {
     display: grid;
     gap: 0.4rem;
-    margin: 0 0 0.75rem;
-    padding: 0.5rem 0.75rem 0.65rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
     font-size: 0.85rem;
-  }
-  legend {
-    padding: 0 0.25rem;
   }
   label {
     display: flex;

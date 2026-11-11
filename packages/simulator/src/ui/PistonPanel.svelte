@@ -2,6 +2,7 @@
      piston moves there, its speed, and Move / Stop. Positions are shown as how far the
      piston is pushed in. -->
 <script lang="ts">
+  import SidebarPanel from './SidebarPanel.svelte';
   import { PistonMode } from '@boltzmann4d/engine/sim/piston';
   import type { PistonInfo } from '../worker';
 
@@ -35,70 +36,64 @@
   const speedValid = $derived(Number.isFinite(speed) && speed > 0);
 </script>
 
-<fieldset class="piston">
-  <legend>Piston</legend>
-  <p class="readout">
-    Pushed in {nm(piston.level)} nm ({(piston.level * 100).toFixed(1)}%){piston.moving
-      ? ' · moving'
-      : ''}
-  </p>
+<SidebarPanel id="piston" title="Piston">
+  <div class="piston">
+    <p class="readout">
+      Pushed in {nm(piston.level)} nm ({(piston.level * 100).toFixed(1)}%){piston.moving
+        ? ' · moving'
+        : ''}
+    </p>
 
-  <label class="field">
-    <span>Target: {nm(target / STEPS)} nm ({(target / 10).toFixed(1)}%)</span>
-    <input type="range" min="0" max={maxStep} step="1" bind:value={target} />
-  </label>
-
-  <div class="row">
     <label class="field">
-      <span>Mode</span>
-      <select bind:value={mode}>
-        {#each MODES as m (m.value)}
-          <option value={m.value}>{m.label}</option>
-        {/each}
-      </select>
+      <span>Target: {nm(target / STEPS)} nm ({(target / 10).toFixed(1)}%)</span>
+      <input type="range" min="0" max={maxStep} step="1" bind:value={target} />
     </label>
-    <label class="field">
-      <span>Speed (nm/ps)</span>
-      <input
-        type="number"
-        min="0.01"
-        max="10"
-        step="0.05"
-        bind:value={speed}
-        disabled={mode === PistonMode.INSTANTANEOUS}
-      />
-    </label>
-  </div>
 
-  {#if instantInwards}
-    <p class="hint">An instantaneous move can only pull the piston out.</p>
-  {/if}
+    <div class="row">
+      <label class="field">
+        <span>Mode</span>
+        <select bind:value={mode}>
+          {#each MODES as m (m.value)}
+            <option value={m.value}>{m.label}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="field">
+        <span>Speed (nm/ps)</span>
+        <input
+          type="number"
+          min="0.01"
+          max="10"
+          step="0.05"
+          bind:value={speed}
+          disabled={mode === PistonMode.INSTANTANEOUS}
+        />
+      </label>
+    </div>
 
-  <div class="row buttons">
-    <button
-      type="button"
-      disabled={instantInwards || !speedValid}
-      onclick={() => onMove(target / STEPS, mode, speed * 1000)}
-    >
-      Move
-    </button>
-    <button type="button" disabled={!piston.moving} onclick={onStop}>Stop</button>
+    {#if instantInwards}
+      <p class="hint">An instantaneous move can only pull the piston out.</p>
+    {/if}
+
+    <div class="row buttons">
+      <button
+        type="button"
+        disabled={instantInwards || !speedValid}
+        onclick={() => onMove(target / STEPS, mode, speed * 1000)}
+      >
+        Move
+      </button>
+      <button type="button" disabled={!piston.moving} onclick={onStop}>Stop</button>
+    </div>
   </div>
-</fieldset>
+</SidebarPanel>
 
 <style>
   .piston {
     display: grid;
     gap: 0.5rem;
-    margin: 0 0 0.75rem;
-    padding: 0.5rem 0.75rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
     font-size: 0.85rem;
     min-width: 0;
-  }
-  legend {
-    padding: 0 0.25rem;
   }
   .readout {
     margin: 0;

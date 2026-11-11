@@ -2,6 +2,7 @@
      or for each side of a divided one, next to the Ideal or Real prediction; marked while
      the first averaging time is still filling. The averaging time is set here too (OPT-3). -->
 <script lang="ts">
+  import SidebarPanel from './SidebarPanel.svelte';
   import { Button } from '@boltzmann4d/ui/button';
   import { Input } from '@boltzmann4d/ui/input';
   import { Label } from '@boltzmann4d/ui/label';
@@ -62,12 +63,12 @@
       .filter(({ k }) => region.ideal[k]! > 0 || region.measured[k]! > 0);
 </script>
 
-<section class="mt-4 border-t pt-3" aria-label="Pressure">
-  <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-    <h2 class="text-sm font-semibold">
-      {reading.method === 'virial' ? 'Virial pressure' : 'Wall pressure'}
-      <span class="text-muted-foreground font-normal">({reading.unit})</span>
-    </h2>
+<SidebarPanel
+  id="pressure"
+  title={reading.method === 'virial' ? 'Virial pressure' : 'Wall pressure'}
+  subtitle="({reading.unit})"
+>
+  {#snippet actions()}
     <div class="flex gap-1" role="group" aria-label="Pressure prediction">
       {#each PREDICTIONS as option (option.value)}
         <Button
@@ -82,7 +83,7 @@
         </Button>
       {/each}
     </div>
-  </div>
+  {/snippet}
 
   {#if reading.warmingUp}
     <p class="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs" role="status">
@@ -163,4 +164,4 @@
       predictions.
     </p>
   {/if}
-</section>
+</SidebarPanel>
