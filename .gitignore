@@ -211,3 +211,13 @@ profiles/
 # SvelteKit static output (apps/web)
 build/
 !boltzmann4d.code-workspace
+
+# apm (apm.yml): everything `apm install` writes from apm.lock.yaml (which stays tracked).
+# `mise install` runs it. That's its download cache, the skills (third-party ones, and our own
+# from .apm/skills), and the MCP server config for Claude Code and Codex.
+# (.apm-local/ ignores itself.)
+apm_modules/
+.agents/skills/
+.claude/skills/
+.mcp.json
+.codex/config.toml

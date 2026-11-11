@@ -61,7 +61,7 @@ Java sources referenced above live in `vendor/boltzmann3d/src/edu/byu/chem/boltz
 
 ## Commands
 
-Tool versions (node, pnpm, hk, pkl, markdownlint-cli2, gh) are pinned in `mise.toml`. Run `mise install` once; it also installs `node_modules`. After that, `mise run <task>` reinstalls `node_modules` automatically whenever `package.json` or `pnpm-lock.yaml` changes (mise's `[deps.pnpm]` provider). Calling `pnpm` directly doesn't, so run `mise deps` after pulling if you skip `mise run`. Run `hk install` once to enable the git pre-commit hook. In VS Code, open `boltzmann4d.code-workspace` rather than the repo folder: the Svelte extension only finds each package's dependencies (and SvelteKit's `./$types`) when that package is its own workspace folder.
+Tool versions (node, pnpm, hk, pkl, markdownlint-cli2, gh, apm) are pinned in `mise.toml`. Run `mise install` once; it also installs `node_modules` and runs `apm install --frozen` to deploy the agent skills (see Skills). After that, `mise run <task>` reinstalls `node_modules` automatically whenever `package.json` or `pnpm-lock.yaml` changes (mise's `[deps.pnpm]` provider). Calling `pnpm` directly doesn't, so run `mise deps` after pulling if you skip `mise run`. Run `hk install` once to enable the git pre-commit hook. In VS Code, open `boltzmann4d.code-workspace` rather than the repo folder: the Svelte extension only finds each package's dependencies (and SvelteKit's `./$types`) when that package is its own workspace folder.
 
 - `pnpm dev`: start the SvelteKit dev server (`apps/web`)
 - `pnpm build`: type-check every workspace (`pnpm -r run check`: svelte-check, or tsc for the engine), then build the static site into `apps/web/build/`
@@ -110,7 +110,11 @@ Production builds use the base path `/boltzmann4d/` (`paths.base` in `apps/web/v
 
 ## Skills
 
-- Agent skills live in `.agents/skills/<name>/SKILL.md`; `.claude/skills/<name>` is a symlink to each one so Claude Code finds it.
+- Every skill is deployed by [apm](https://github.com/microsoft/apm): `apm install` copies each one into both `.agents/skills/<name>/` and `.claude/skills/<name>/` (real copies, not symlinks) and records their hashes in `apm.lock.yaml`. Those copies are gitignored and the linters skip them (`hk.pkl`, `eslint.config.js`, `.prettierignore`); `mise install` deploys them, or run `apm install` yourself.
+- Our own skills live in `.apm/skills/<name>/SKILL.md`, which apm deploys as a local package. Edit them there, then rerun `apm install` and commit the source together with the updated `apm.lock.yaml`.
+- Third-party skills are listed in `apm.yml`, and `apm.lock.yaml` pins their commits.
+- MCP servers are declared in `apm.yml` too; `apm install` writes them to `.mcp.json` (Claude Code) and `.codex/config.toml` (Codex), both gitignored. Edit `apm.yml`, not the generated files. The `svelte` server ([@sveltejs/mcp](https://svelte.dev/docs/mcp/overview)) runs locally over stdio via `npx` and gives Svelte 5 / SvelteKit docs and an autofixer for components.
+- `shadcn-svelte` (from `huntabyte/shadcn-svelte`, via apm): adding, styling and composing shadcn-svelte components in `packages/ui`.
 - `feature-plan`: investigate a feature idea and, once approved, file a GitHub issue with an implementation plan attached. Read-only: it never changes code.
 
 ## Plans

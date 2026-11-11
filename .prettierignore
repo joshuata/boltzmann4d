@@ -11,3 +11,12 @@ LICENSE
 packages/engine/src/sim/parity/*.json
 benchmarks/results/*.json
 vendor/
+
+# apm (apm.yml) rewrites these on every install, and apm.lock.yaml hash-checks the skills it
+# installs (third-party ones, and our own from .apm/skills), so keep them exactly as apm writes them.
+apm.yml
+apm.lock.yaml
+.mcp.json
+apm_modules/
+.agents/skills/
+.claude/skills/

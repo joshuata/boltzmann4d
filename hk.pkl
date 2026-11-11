@@ -2,8 +2,13 @@ amends "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.
 // Using a coding agent? See https://hk.jdx.dev/agents
 // Node tools run via `pnpm exec` so versions come from package.json; others come from mise.toml.
 
-// Files no step should ever touch.
-exclude = List("LICENSE*", "vendor/**")
+// Files no step should ever touch. Every skill in .agents/skills and .claude/skills is a copy
+// that apm install writes (see apm.yml) and apm.lock.yaml hash-checks, so they must stay exactly
+// as apm wrote them. Our own skills are linted at their source in .apm/skills.
+exclude = List(
+    "LICENSE*", "vendor/**", "apm_modules/**", "apm.lock.yaml",
+    ".agents/skills/**", ".claude/skills/**"
+)
 
 local linters = new Mapping<String, Step> {
     // TypeScript + Svelte lint rules (typescript-eslint, eslint-plugin-svelte). See eslint.config.js.

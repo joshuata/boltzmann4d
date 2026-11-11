@@ -1,0 +1,21 @@
+name: boltzmann4d
+version: 1.0.0
+description: APM project for boltzmann4d
+author: Josh Asplund
+targets:
+- agent-skills
+- claude
+- codex
+dependencies:
+  apm:
+  - huntabyte/shadcn-svelte
+  mcp:
+  - name: svelte
+    registry: false
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@sveltejs/mcp'
+includes: auto
+scripts: {}
