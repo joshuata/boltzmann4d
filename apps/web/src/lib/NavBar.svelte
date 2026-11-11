@@ -1,7 +1,7 @@
 <!-- Top bar. Wide screens: the app name, the 2D and 3D simulation menus, the current
-     simulation, Your scenarios and Help. Phones: the app name, the current simulation and a
-     menu button that opens a sheet with the simulations, Your scenarios, Documentation and
-     About. -->
+     simulation, Your scenarios, Help and the theme menu. Phones: the app name, the current
+     simulation, the theme menu and a menu button that opens a sheet with the simulations, Your
+     scenarios, Documentation and About. -->
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -13,6 +13,7 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import MenuIcon from '@lucide/svelte/icons/menu';
   import AboutDialog from './AboutDialog.svelte';
+  import ThemeMenu from './ThemeMenu.svelte';
   import { docs } from './docs';
 
   const SOURCE_URL = 'https://github.com/joshuata/boltzmann4d';
@@ -125,6 +126,8 @@
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   </div>
+
+  <ThemeMenu />
 
   <!-- Phones: the simulation lists collapse (the current one starts open), then a few links. -->
   <Sheet.Root bind:open={sheetOpen}>
