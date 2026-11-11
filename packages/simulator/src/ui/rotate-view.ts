@@ -10,23 +10,32 @@ export type Rotate = (aboutX: number, aboutY: number) => void;
 
 /** Degrees per CSS pixel dragged. */
 const DRAG_DEGREES_PER_PIXEL = 0.4;
+/** A press that moves further than this (CSS pixels) is a drag, not a tap. */
+const TAP_SLOP = 6;
+
+/** Whether the latest press on `node` (with rotateView) was a drag rather than a tap. */
+export const wasDragged = (node: HTMLElement) => node.dataset.dragged === 'true';
+
 /** Degrees per arrow-key step (and key repeat). */
 const KEY_DEGREES = 2;
 
 export const rotateView: Action<HTMLElement, Rotate | null> = (node, initial) => {
   let rotate = initial;
-  let dragging: { id: number; x: number; y: number } | null = null;
+  let dragging: { id: number; x: number; y: number; travelled: number } | null = null;
   /** Pointers down on the canvas; more than one is a pinch. */
   const pointers = new Set<number>();
 
   const down = (event: PointerEvent) => {
     pointers.add(event.pointerId);
     if (pointers.size > 1) {
+      // A pinch (zoom-view.ts) is never a tap.
       dragging = null;
+      node.dataset.dragged = 'true';
       return;
     }
     if (!rotate || dragging || (event.pointerType === 'mouse' && event.button !== 0)) return;
-    dragging = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    dragging = { id: event.pointerId, x: event.clientX, y: event.clientY, travelled: 0 };
+    node.dataset.dragged = 'false';
     node.setPointerCapture(event.pointerId);
   };
   const move = (event: PointerEvent) => {
@@ -35,6 +44,8 @@ export const rotateView: Action<HTMLElement, Rotate | null> = (node, initial) =>
     const dy = event.clientY - dragging.y;
     dragging.x = event.clientX;
     dragging.y = event.clientY;
+    dragging.travelled += Math.hypot(dx, dy);
+    if (dragging.travelled > TAP_SLOP) node.dataset.dragged = 'true';
     if (dx !== 0 || dy !== 0) {
       rotate(dy * DRAG_DEGREES_PER_PIXEL, dx * DRAG_DEGREES_PER_PIXEL);
     }

@@ -1,18 +1,31 @@
 // Simulation Web Worker entry: builds the Simulation from a scenario (a bundled preset or one
 // the page supplies), paces it with ThreadController, and streams frames to the renderer over the port it is given.
 import {
+  describeSpecies,
+  emptySpecies,
   loadPresetScenario,
   MARKERS,
   parseScenario,
   resolveScenario,
   scenarioProblems,
   withArenaSize,
+  withSpecies,
+  type ParticleSpecies,
   type ResolvedScenario,
+  type ResolveOptions,
+  type Scenario,
 } from '@boltzmann4d/engine/scenario';
 import type { RenderStream } from '../render/protocol';
 import {
+  addParticle,
+  census,
+  continueInArena,
   javaReaction,
+  PlacementError,
+  removeNewest,
   Simulation,
+  type Boundary,
+  type Census,
   type ColorMode,
   type InitialState,
   type SceneInfo,
@@ -35,7 +48,16 @@ import {
   PISTON_SHAFT_RADIUS,
   PISTON_VALVE_RADIUS,
 } from '@boltzmann4d/engine/sim/simulation-info';
-import type { ArenaInfo, ArenaOptions, FromWorker, ScenarioSource, ToWorker } from './index';
+import type {
+  ArenaInfo,
+  ArenaOptions,
+  BoundaryMode,
+  FromWorker,
+  KindSetup,
+  ScenarioSource,
+  SetupKind,
+  ToWorker,
+} from './index';
 import { parseSimulationSpeed, ThreadController } from './thread-controller';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
@@ -103,12 +125,12 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
   switch (message.type) {
     case 'connect':
       frames = message.frames;
-      void load(message.source, message.arena);
+      void load(message.source, message.arena, true);
       break;
     case 'load':
       averagingTime = message.pressureAveragingTime ?? null;
       forgetMultiplier = message.forgetMultiplier ?? null;
-      void load(message.source, message.arena);
+      void load(message.source, message.arena, message.fresh);
       break;
     case 'statistic':
       statistic = message.id;
@@ -143,7 +165,42 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       }
       break;
     case 'restart':
-      restart();
+      restart(message.kinds);
+      break;
+    case 'addParticle':
+      editParticles(message.kind, (state, species) =>
+        addParticle(state, species, {
+          at: message.at,
+          temperature: message.temperature,
+          random: Math.random,
+        }),
+      );
+      break;
+    case 'removeParticle':
+      editParticles(message.kind, (state, species) => removeNewest(state, species));
+      break;
+    case 'setCount':
+      editParticles(message.kind, (state, species) => {
+        const target = Math.max(0, Math.round(message.count));
+        let next = state;
+        const count = () => next.species[species]!.positions.length / 3;
+        while (count() > target) next = removeNewest(next, species)!;
+        try {
+          while (count() < target) {
+            next = addParticle(next, species, {
+              temperature: message.temperature,
+              random: Math.random,
+            });
+          }
+        } catch (error) {
+          if (!(error instanceof PlacementError)) throw error;
+          post({ type: 'notice', message: `${error.message}: ${count()} fit` });
+        }
+        return next === state ? null : next;
+      });
+      break;
+    case 'setBoundary':
+      setBoundary(message.boundary);
       break;
     case 'setGate':
       try {
@@ -197,11 +254,13 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
 /**
  * Loads a scenario (the default preset when absent) and starts running it, replacing the
  * current simulation. If it can't be loaded or isn't supported yet, reports the error and
- * keeps the current simulation running. Paused stays paused.
+ * keeps the current simulation running. A `fresh` scenario starts paused or running as it
+ * says (FILE-4); otherwise paused stays paused.
  */
 async function load(
   source: ScenarioSource = { kind: 'preset', name: 'default' },
   arena: ArenaOptions = {},
+  fresh = false,
 ): Promise<void> {
   const generation = ++loadGeneration;
   let prepared: Prepared;
@@ -217,116 +276,7 @@ async function load(
       const [problem] = scenarioProblems(input);
       if (problem) throw new Error(problem);
     }
-    const loaded = resolveScenario(input);
-    // Drawn walls can't be combined with the piston yet (WALL-3).
-    const canHavePiston =
-      loaded.walls.length === 0 &&
-      (loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
-        loaded.arenaType === ArenaType.MOVABLE_PISTON);
-    const canConduct =
-      loaded.arenaType === ArenaType.DIVIDED_ARENA ||
-      loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
-    const canDemon = loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
-    const scenario = { ...loaded };
-    if (canDemon && arena.demon !== undefined) scenario.maxwellDemonMode = arena.demon;
-    if (canHavePiston && arena.piston !== undefined) {
-      scenario.arenaType = arena.piston
-        ? ArenaType.MOVABLE_PISTON
-        : ArenaType.REFLECTING_BOUNDARIES;
-    }
-    if (canConduct && arena.conductingDivider !== undefined) {
-      scenario.dividerThermalMode = arena.conductingDivider
-        ? DividerThermalMode.CONDUCTING
-        : DividerThermalMode.INSULATING;
-    }
-    // Reactions: the scenario's rules. The sidebar's switch (Java's Reactions tab) edits
-    // the Java rule, species 0 + 0 → 1 + 1, in 2D scenarios with a single species (a
-    // "Reacted" copy of it is added for particles to turn into) or with that rule already
-    // (`.set` files with reaction_mode TRUE, which get the tab's defaults).
-    const [rule, ...otherRules] = scenario.reactions;
-    const javaRule =
-      rule !== undefined &&
-      otherRules.length === 0 &&
-      scenario.species.length === 2 &&
-      rule.reactants.every((k) => k === 0) &&
-      rule.products.every((k) => k === 1);
-    const canReact =
-      scenario.dimension === 2 &&
-      ((scenario.species.length === 1 && rule === undefined) || javaRule);
-    let reactions: ArenaOptions['reactions'] = javaRule
-      ? { forward: rule.forward, reverse: rule.reverse, suppressReverse: rule.suppressReverse }
-      : null;
-    if (canReact && arena.reactions !== undefined) {
-      reactions = arena.reactions;
-      scenario.reactions = reactions
-        ? [javaReaction(reactions.forward, reactions.reverse, reactions.suppressReverse)]
-        : [];
-    }
-    if (reactions && scenario.species.length === 1) {
-      const reactant = scenario.species[0]!;
-      const empty = new Float64Array(0);
-      scenario.species = [
-        reactant,
-        {
-          ...reactant,
-          kindId: 'reacted',
-          marker: MARKERS[1]!,
-          type: new ParticleType(
-            reactant.type.particleMass,
-            reactant.type.particleRadius,
-            DefaultParticleInfo.BLUE,
-            'Reacted',
-          ),
-          positions: empty,
-          velocities: empty,
-        },
-      ];
-    }
-    const canHaveWells = scenario.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
-    const wells = canHaveWells && arena.wells ? arena.wells : null;
-    const attractiveWall = canHaveWells && arena.attractiveWall ? arena.attractiveWall : null;
-    const initialState = {
-      ...scenario,
-      ...(wells ? { wells } : {}),
-      ...(attractiveWall ? { attractiveWall } : {}),
-    };
-    const arenaInfo: ArenaInfo = {
-      canHavePiston,
-      canConduct,
-      canDemon,
-      canHaveWells,
-      canReact,
-      typeNames: scenario.species.map((s) => s.type.displayName),
-      size: [...input.arena.size],
-      drawnWalls: scenario.walls.length > 0,
-      gates: scenario.walls.flatMap((w, index) =>
-        w.physics?.type === 'gate'
-          ? [{ index, id: w.id, points: w.points.flat(), closed: w.closed ?? false }]
-          : [],
-      ),
-      options: {
-        piston: scenario.arenaType === ArenaType.MOVABLE_PISTON,
-        conductingDivider: scenario.dividerThermalMode === DividerThermalMode.CONDUCTING,
-        demon: canDemon && scenario.maxwellDemonMode,
-        wells,
-        attractiveWall,
-        reactions,
-        size: [...input.arena.size],
-      },
-    };
-    const ctx = statsContext(scenario);
-    prepared = {
-      name: source.name,
-      scenario,
-      initialState,
-      ctx,
-      arenaInfo,
-      speed: parseSimulationSpeed(scenario.simulationSpeed),
-      typeColors: scenario.species.map((s) => s.type.defaultColor),
-      viewingAngles: scenario.viewingAngles,
-      view: viewOf(scenario),
-      limits: scenarioLimits(scenario),
-    };
+    prepared = prepare(source.name, input, arena);
     userLimits.clear(); // a new scenario or arena brings its own axis limits
     built = build(prepared);
   } catch (error) {
@@ -336,12 +286,171 @@ async function load(
     return;
   }
   if (generation !== loadGeneration || !frames) return;
+  if (fresh) paused = prepared.scenario.paused;
   start(prepared, built);
 }
+
+/** Resolves a scenario (placing its particles) and applies the user's arena options. */
+function prepare(
+  name: string,
+  input: Scenario,
+  arena: ArenaOptions,
+  resolveOptions?: ResolveOptions,
+): Prepared {
+  const loaded = resolveScenario(input, resolveOptions);
+  // Drawn walls can't be combined with the piston yet (WALL-3).
+  const canHavePiston =
+    loaded.walls.length === 0 &&
+    (loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
+      loaded.arenaType === ArenaType.MOVABLE_PISTON);
+  const canConduct =
+    loaded.arenaType === ArenaType.DIVIDED_ARENA ||
+    loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+  const canDemon = loaded.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+  const scenario = { ...loaded };
+  if (canDemon && arena.demon !== undefined) scenario.maxwellDemonMode = arena.demon;
+  if (canHavePiston && arena.piston !== undefined) {
+    scenario.arenaType = arena.piston ? ArenaType.MOVABLE_PISTON : ArenaType.REFLECTING_BOUNDARIES;
+  }
+  if (canConduct && arena.conductingDivider !== undefined) {
+    scenario.dividerThermalMode = arena.conductingDivider
+      ? DividerThermalMode.CONDUCTING
+      : DividerThermalMode.INSULATING;
+  }
+  // Reactions: the scenario's rules. The sidebar's switch (Java's Reactions tab) edits
+  // the Java rule, species 0 + 0 → 1 + 1, in 2D scenarios with a single species (a
+  // "Reacted" copy of it is added for particles to turn into) or with that rule already
+  // (`.set` files with reaction_mode TRUE, which get the tab's defaults).
+  const [rule, ...otherRules] = scenario.reactions;
+  const javaRule =
+    rule !== undefined &&
+    otherRules.length === 0 &&
+    scenario.species.length === 2 &&
+    rule.reactants.every((k) => k === 0) &&
+    rule.products.every((k) => k === 1);
+  const canReact =
+    scenario.dimension === 2 && ((scenario.species.length === 1 && rule === undefined) || javaRule);
+  let reactions: ArenaOptions['reactions'] = javaRule
+    ? { forward: rule.forward, reverse: rule.reverse, suppressReverse: rule.suppressReverse }
+    : null;
+  if (canReact && arena.reactions !== undefined) {
+    reactions = arena.reactions;
+    scenario.reactions = reactions
+      ? [javaReaction(reactions.forward, reactions.reverse, reactions.suppressReverse)]
+      : [];
+  }
+  if (reactions && scenario.species.length === 1) {
+    const reactant = scenario.species[0]!;
+    const empty = new Float64Array(0);
+    scenario.species = [
+      reactant,
+      {
+        ...reactant,
+        kindId: 'reacted',
+        marker: MARKERS[1]!,
+        type: new ParticleType(
+          reactant.type.particleMass,
+          reactant.type.particleRadius,
+          DefaultParticleInfo.BLUE,
+          'Reacted',
+        ),
+        positions: empty,
+        velocities: empty,
+      },
+    ];
+  }
+  const canHaveWells = scenario.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
+  const wells = canHaveWells && arena.wells ? arena.wells : null;
+  const attractiveWall = canHaveWells && arena.attractiveWall ? arena.attractiveWall : null;
+  const initialState = {
+    ...scenario,
+    ...(wells ? { wells } : {}),
+    ...(attractiveWall ? { attractiveWall } : {}),
+  };
+  const arenaInfo = describeArena(
+    scenario,
+    input.arena.size,
+    { wells, attractiveWall, reactions },
+    canReact,
+  );
+  return {
+    name,
+    input,
+    arenaOptions: arena,
+    scenario,
+    initialState,
+    ctx: statsContext(scenario),
+    arenaInfo,
+    speed: parseSimulationSpeed(scenario.simulationSpeed),
+    typeColors: scenario.species.map((s) => s.type.defaultColor),
+    viewingAngles: scenario.viewingAngles,
+    view: viewOf(scenario),
+    limits: scenarioLimits(scenario),
+  };
+}
+
+/** Which arena options a running scenario can take, and which are on. */
+function describeArena(
+  scenario: ResolvedScenario,
+  size: readonly number[],
+  options: Pick<ArenaOptions, 'wells' | 'attractiveWall' | 'reactions'>,
+  canReact: boolean,
+): ArenaInfo {
+  const type = scenario.arenaType;
+  // Drawn walls can't be combined with the piston yet (WALL-3).
+  const canHavePiston =
+    scenario.walls.length === 0 &&
+    (type === ArenaType.REFLECTING_BOUNDARIES || type === ArenaType.MOVABLE_PISTON);
+  const canConduct = type === ArenaType.DIVIDED_ARENA || type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+  const canDemon = type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
+  const xyz: [number, number, number] = [size[0]!, size[1]!, size[2]!];
+  return {
+    canHavePiston,
+    canConduct,
+    canDemon,
+    canHaveWells: type !== ArenaType.PERIODIC_BOUNDARIES,
+    canReact,
+    typeNames: scenario.species.map((s) => s.type.displayName),
+    size: xyz,
+    boundary: BOUNDARY_OF[type],
+    drawnWalls: scenario.walls.length > 0,
+    gates: scenario.walls.flatMap((w, index) =>
+      w.physics?.type === 'gate'
+        ? [{ index, id: w.id, points: w.points.flat(), closed: w.closed ?? false }]
+        : [],
+    ),
+    options: {
+      piston: type === ArenaType.MOVABLE_PISTON,
+      conductingDivider: scenario.dividerThermalMode === DividerThermalMode.CONDUCTING,
+      demon: canDemon && scenario.maxwellDemonMode,
+      wells: options.wells ?? null,
+      attractiveWall: options.attractiveWall ?? null,
+      reactions: options.reactions ?? null,
+      size: [...xyz],
+    },
+  };
+}
+
+const BOUNDARY_OF: Record<ArenaType, ArenaInfo['boundary']> = {
+  [ArenaType.PERIODIC_BOUNDARIES]: 'PERIODIC',
+  [ArenaType.REFLECTING_BOUNDARIES]: 'REFLECTING',
+  [ArenaType.DIVIDED_ARENA]: 'DIVIDED',
+  [ArenaType.DIVIDED_ARENA_WITH_HOLE]: 'HOLE',
+  [ArenaType.MOVABLE_PISTON]: 'PISTON',
+};
+const ARENA_OF: Record<BoundaryMode, Boundary> = {
+  PERIODIC: ArenaType.PERIODIC_BOUNDARIES,
+  REFLECTING: ArenaType.REFLECTING_BOUNDARIES,
+  DIVIDED: ArenaType.DIVIDED_ARENA,
+  HOLE: ArenaType.DIVIDED_ARENA_WITH_HOLE,
+};
 
 /** A loaded scenario with the user's arena options applied, ready to (re)build. */
 interface Prepared {
   name: string;
+  /** The scenario as given (after a new arena size), which Restart resolves again. */
+  input: Scenario;
+  arenaOptions: ArenaOptions;
   /** The scenario's axis limits by plot (STAT-11). */
   limits: Map<string, Range>;
   scenario: ResolvedScenario;
@@ -416,22 +525,178 @@ function build(prepared: Prepared): Built {
 }
 
 /**
- * Restart (Physics.reset): the same starting positions and velocities again, rather than
- * re-placing particles at random. Unlike Java's reset, a periodic arena's momentum is
- * zeroed again, so the run repeats the first exactly (joshuata/boltzmann4d#24).
+ * Restart (CTRL-3, PART-14): the scenario placed anew at random, the clock at zero and the
+ * statistics cleared. Each kind keeps its present count (particles added mid-run too) and
+ * takes the panel's mass, radius and temperature; the random velocities get zero total
+ * momentum (SIM-30). If that doesn't fit, says so and keeps running.
  */
-function restart(): void {
-  if (!lastPrepared || !frames) return;
+function restart(kinds?: KindSetup[], change: Partial<Restarting> = {}): void {
+  const prev = lastPrepared;
+  if (!prev || !running || !frames) return;
   ++loadGeneration; // a load still in flight mustn't replace the restarted run
   try {
-    start(lastPrepared, build(lastPrepared));
+    const input = withPresentKinds(
+      change.input ?? prev.input,
+      prev,
+      census(running.currentState()),
+      kinds,
+    );
+    const [problem] = scenarioProblems(input);
+    if (problem) throw new PlacementError(problem);
+    const prepared = prepare(prev.name, input, change.arena ?? prev.arenaOptions, {
+      zeroMomentum: true,
+      allOnLeft: change.allOnLeft,
+    });
+    start(prepared, build(prepared));
   } catch (error) {
-    post({ type: 'error', message: `Can't restart: ${errorText(error)}` });
+    post({ type: 'notice', message: `Can't restart: ${errorText(error)}` });
   }
 }
 
+interface Restarting {
+  input: Scenario;
+  arena: ArenaOptions;
+  allOnLeft: boolean;
+}
+
+/**
+ * The scenario with each kind at its present count, and the panel's values for the kinds
+ * it lists. Kinds that keep their count and values stay as the scenario places them.
+ */
+function withPresentKinds(
+  input: Scenario,
+  prev: Prepared,
+  now: Census,
+  edits: KindSetup[] = [],
+): Scenario {
+  let out = input;
+  for (const kind of input.kinds) {
+    const species = prev.scenario.species.findIndex((s) => s.kindId === kind.id);
+    const count = species >= 0 ? now.counts[species]! : 0;
+    const summary = describeSpecies(input, kind.id);
+    const edit = edits.find((e) => e.kind === kind.id);
+    if (!edit && (summary?.count ?? 0) === count) continue;
+    const present = species >= 0 ? now.temperatures[species]! : NaN;
+    out = withSpecies(out, kind.id, {
+      count,
+      mass: edit?.mass ?? kind.mass,
+      radius: edit?.radius ?? kind.radius,
+      temperature:
+        edit?.temperature ?? (Number.isFinite(present) ? present : (summary?.temperature ?? 300)),
+    });
+  }
+  return out;
+}
+
+/**
+ * Adds or removes particles of a kind mid-run (PART-7–9): the simulation is rebuilt from
+ * the present moment with the change, and the clock carries on. A kind the run doesn't
+ * have yet joins as a new species.
+ */
+function editParticles(
+  kindId: string,
+  edit: (state: InitialState, species: number) => InitialState | null,
+): void {
+  const prev = lastPrepared;
+  if (!prev || !running) return;
+  let state = running.currentState();
+  let species = prev.scenario.species.findIndex((s) => s.kindId === kindId);
+  if (species < 0) {
+    if (!prev.input.kinds.some((k) => k.id === kindId)) return;
+    state = { ...state, species: [...state.species, emptySpecies(prev.input, kindId)] };
+    species = state.species.length - 1;
+  }
+  try {
+    const next = edit(state, species);
+    if (next) continueWith(next, prev.input, prev.arenaOptions);
+  } catch (error) {
+    if (error instanceof PlacementError) post({ type: 'notice', message: error.message });
+    else post({ type: 'error', message: `Can't change the particles: ${errorText(error)}` });
+  }
+}
+
+/**
+ * Switches the boundary mode mid-run (SIM-12–16): carries on with the particles where they
+ * are when they fit the new arena (a divided box opening its hole or losing its divider),
+ * and restarts otherwise; a switch to the divided box restarts with every particle on the
+ * left (SIM-14). Leaves a piston arena for a plain box.
+ */
+function setBoundary(mode: BoundaryMode): void {
+  const prev = lastPrepared;
+  if (!prev || !running) return;
+  const input: Scenario = { ...prev.input, arena: { ...prev.input.arena, boundary: mode } };
+  const arena: ArenaOptions = { ...prev.arenaOptions, piston: false };
+  const state = running.currentState();
+  const demon = mode === 'HOLE' && (arena.demon ?? input.modes.maxwellDemon);
+  const next = continueInArena({ ...state, maxwellDemonMode: demon }, ARENA_OF[mode]);
+  try {
+    if (next) continueWith(next, input, arena);
+    else {
+      // Particles at given positions may sit on the new divider: they're placed anew too.
+      const placed = withArenaSize(input, input.arena.size);
+      restart(undefined, { input: placed, arena, allOnLeft: mode === 'DIVIDED' });
+    }
+  } catch (error) {
+    post({ type: 'notice', message: `Can't switch the arena: ${errorText(error)}` });
+  }
+}
+
+/** Runs an edited state of the present run: same scenario and view, the clock carrying on. */
+function continueWith(state: InitialState, input: Scenario, arenaOptions: ArenaOptions): void {
+  const prev = lastPrepared!;
+  const species = state.species as ParticleSpecies[];
+  const scenario: ResolvedScenario = {
+    ...prev.scenario,
+    arenaType: state.arenaType as ResolvedScenario['arenaType'],
+    maxwellDemonMode: state.maxwellDemonMode ?? false,
+    species,
+  };
+  const prepared: Prepared = {
+    ...prev,
+    input,
+    arenaOptions,
+    scenario,
+    initialState: state,
+    ctx: statsContext(state),
+    arenaInfo: describeArena(
+      scenario,
+      prev.arenaInfo.size,
+      prev.arenaInfo.options,
+      prev.arenaInfo.canReact,
+    ),
+    typeColors: species.map((s) => s.type.defaultColor),
+  };
+  const built = build(prepared);
+  ++loadGeneration; // a load still in flight mustn't replace the edited run
+  start(prepared, built, true);
+}
+
+/** The scenario's kinds for the Particles panel. */
+function setupKindsOf(prepared: Prepared): SetupKind[] {
+  const { input, scenario } = prepared;
+  return input.kinds.map((kind, i) => {
+    const species = scenario.species.findIndex((s) => s.kindId === kind.id);
+    const type = (species >= 0 ? scenario.species[species]! : emptySpecies(input, kind.id)).type;
+    return {
+      id: kind.id,
+      name: kind.name,
+      color: type.defaultColor,
+      marker: MARKERS[i]!,
+      mass: kind.mass,
+      radius: kind.radius,
+      // Rounded: inferred ones come out as 299.99999….
+      temperature: Math.round((describeSpecies(input, kind.id)?.temperature ?? 300) * 10) / 10,
+      species,
+    };
+  });
+}
+
 /** Runs a built simulation: streams its scene and frames, and reports it loaded. */
-function start(prepared: Prepared, { simulation, statistics, pressure }: Built): void {
+function start(
+  prepared: Prepared,
+  { simulation, statistics, pressure }: Built,
+  continued = false,
+): void {
   const port = frames;
   if (!port) return;
   lastPrepared = prepared;
@@ -471,6 +736,7 @@ function start(prepared: Prepared, { simulation, statistics, pressure }: Built):
       if (now - lastPressure >= PRESSURE_INTERVAL_MS || controller.isPaused()) {
         lastPressure = now;
         post({ type: 'pressure', reading: pressure.read() });
+        post({ type: 'census', time: simulation.time, census: census(simulation.currentState()) });
       }
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
         lastSummary = now;
@@ -484,7 +750,7 @@ function start(prepared: Prepared, { simulation, statistics, pressure }: Built):
   running = simulation;
   runningStatistics = statistics;
   runningPressure = pressure;
-  statKinds = null; // a new scenario has its own kinds
+  if (!continued) statKinds = null; // a new scenario has its own kinds
   const name = prepared.scenario.statName.toUpperCase();
   scenarioStatistic = isStatisticId(name) ? name : null;
   threadController.setPaused(paused);
@@ -492,6 +758,9 @@ function start(prepared: Prepared, { simulation, statistics, pressure }: Built):
   threadController.showCurrentFrame();
   post({
     type: 'loaded',
+    continued,
+    paused,
+    setupKinds: setupKindsOf(prepared),
     name: prepared.name,
     particles: simulation.particles.count,
     arena: prepared.arenaInfo,

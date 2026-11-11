@@ -54,6 +54,7 @@ export {
 } from './palettes';
 export {
   resolveScenario,
+  emptySpecies,
   calculateTotalKE,
   parseHexColor,
   type ResolveOptions,

@@ -6,7 +6,7 @@
 // only runs the UI. Browsers that can't hand a canvas to a worker draw on the main
 // thread instead, fed through the same channel.
 import type { Renderer, ViewSize } from '../render';
-import type { ColorMode, Dimension } from '@boltzmann4d/engine/sim';
+import type { Census, ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import type { ArenaTheme } from '../render/view';
 import RenderWorker from '../render/render.worker?worker';
@@ -17,10 +17,12 @@ import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
 import type {
   ArenaInfo,
   ArenaOptions,
+  BoundaryMode,
   FromWorker,
   KindInfo,
   PistonInfo,
   ScenarioSource,
+  SetupKind,
   ToWorker,
 } from '../worker';
 import SimWorker from '../worker/sim.worker?worker';
@@ -28,6 +30,16 @@ import { clampZoom } from './zoom';
 
 /** A plot the statistics area can show: a statistic, or a pressure history by region. */
 export type PlotId = StatisticId | `PRESSURE:${PressureRegion}`;
+
+/** A kind's values in the Particles panel that aren't applied yet (PART-15). */
+export interface KindDraft {
+  /** amu. */
+  mass?: number;
+  /** nm. */
+  radius?: number;
+  /** K. */
+  temperature?: number;
+}
 
 /** Readings kept for the pressure history, like the statistics' history (STAT-20). */
 const HISTORY_LENGTH = 150;
@@ -104,6 +116,20 @@ export class SimulationClient {
   /** The forget time in predicted collision times (OPT-4; the scenario's until changed). */
   forgetMultiplier = $state(4);
   #forgetChosen = false;
+  /** Simulation clock as of the latest frame, s (CTRL-1). */
+  time = $state(0);
+  /** Particle counts per kind and side, and temperatures (PART-12, PART-16); null until the first. */
+  census = $state.raw<Census | null>(null);
+  /** Every kind the scenario has, for the Particles panel (empty until loaded). */
+  setupKinds = $state.raw<SetupKind[]>([]);
+  /** The Particles panel's kind (a scenario kind id): what taps and Add add. */
+  selectedKind = $state<string | null>(null);
+  /** Values typed into the Particles panel, by kind id, until Restart or Add (PART-15). */
+  drafts = $state<Record<string, KindDraft>>({});
+  /** The temperature (K) each kind's particles were last added at, by kind id. */
+  addTemperatures = $state<Record<string, number>>({});
+  /** Why the last add, removal, switch or restart couldn't be done; cleared by the next. */
+  notice = $state<string | null>(null);
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
   /**
@@ -208,6 +234,7 @@ export class SimulationClient {
           // A newly loaded scenario starts again from 0: count only forward progress.
           this.#simulatedThisSecond += Math.max(0, message.time - this.#lastFrameTime);
           this.#lastFrameTime = message.time;
+          this.time = message.time;
           if ((message.holeOpen ?? null) !== this.holeOpen) {
             this.holeOpen = message.holeOpen ?? null;
           }
@@ -239,7 +266,36 @@ export class SimulationClient {
           }
           break;
         }
+        case 'census':
+          this.census = message.census;
+          break;
+        case 'notice':
+          this.notice = message.message;
+          break;
         case 'loaded':
+          this.paused = message.paused;
+          this.setupKinds = message.setupKinds;
+          if (!message.setupKinds.some((k) => k.id === this.selectedKind)) {
+            this.selectedKind = message.setupKinds[0]?.id ?? null;
+            this.drafts = {};
+          }
+          this.loading = false;
+          this.error = null;
+          if (message.continued) {
+            // The same run, edited: keep the user's choices, refresh what changed.
+            this.particleCount = message.particles;
+            this.arena = message.arena;
+            this.kinds = message.kinds;
+            if (!message.piston) this.piston = null;
+            else if (!this.piston) this.piston = { ...message.piston, level: 0, moving: false };
+            if (message.arena.gates.length !== this.gates.length) {
+              this.gates = message.arena.gates.map(({ index, id }) => ({ index, id, open: false }));
+            }
+            break;
+          }
+          this.census = null;
+          this.drafts = {};
+          this.addTemperatures = {};
           this.particleCount = message.particles;
           this.arena = message.arena;
           this.gates = message.arena.gates.map(({ index, id }) => ({ index, id, open: false }));
@@ -291,7 +347,7 @@ export class SimulationClient {
     this.loading = true;
     this.#averagingChosen = false; // a new scenario brings its own averaging time
     this.#forgetChosen = false; // ... and forget time
-    this.#send({ type: 'load', source: cloneable(source) });
+    this.#send({ type: 'load', source: cloneable(source), fresh: true });
   }
 
   /** Reloads the running scenario with these arena options (the simulation starts over). */
@@ -364,9 +420,98 @@ export class SimulationClient {
     this.#send({ type: 'stopPiston' });
   }
 
-  /** Starts the running simulation again from its starting state (same positions). */
+  /**
+   * Restart (CTRL-3, PART-14): every particle placed anew at random and the clock at zero,
+   * each kind with its present count and the Particles panel's pending values.
+   */
   restart(): void {
-    this.#send({ type: 'restart' });
+    this.notice = null;
+    const kinds = this.setupKinds.flatMap((kind) => {
+      const draft = this.drafts[kind.id];
+      if (!draft) return [];
+      const species = kind.species;
+      const present = species >= 0 ? this.census?.temperatures[species] : undefined;
+      return [
+        {
+          kind: kind.id,
+          mass: draft.mass ?? kind.mass,
+          radius: draft.radius ?? kind.radius,
+          temperature: draft.temperature ?? present ?? kind.temperature,
+        },
+      ];
+    });
+    this.drafts = {};
+    this.#send({ type: 'restart', kinds });
+  }
+
+  /** Edits a kind's pending values in the Particles panel; undefined fields stop pending. */
+  setDraft(kind: string, draft: KindDraft): void {
+    const next = { ...this.drafts[kind], ...draft };
+    for (const key of Object.keys(next) as (keyof KindDraft)[]) {
+      if (next[key] === undefined) delete next[key];
+    }
+    const drafts = { ...this.drafts };
+    if (Object.keys(next).length > 0) drafts[kind] = next;
+    else delete drafts[kind];
+    this.drafts = drafts;
+  }
+
+  /**
+   * The temperature (K) the next particles of `kind` are added at: the panel's pending one,
+   * else the last one used, else the scenario's for the kind.
+   */
+  addTemperature(kind: string): number {
+    return (
+      this.drafts[kind]?.temperature ??
+      this.addTemperatures[kind] ??
+      this.setupKinds.find((k) => k.id === kind)?.temperature ??
+      300
+    );
+  }
+
+  /** Uses up the pending temperature of `kind` for an add (PART-15). */
+  #useTemperature(kind: string): number {
+    const temperature = this.addTemperature(kind);
+    this.addTemperatures = { ...this.addTemperatures, [kind]: temperature };
+    this.setDraft(kind, { temperature: undefined });
+    return temperature;
+  }
+
+  /**
+   * Adds a particle of the selected kind (PART-7, PART-8) at the panel's temperature: at a
+   * point (2D, m), or at random. The run carries on.
+   */
+  addParticle(at?: [number, number]): void {
+    const kind = this.selectedKind;
+    if (!kind) return;
+    this.notice = null;
+    const temperature = this.#useTemperature(kind);
+    this.#send({ type: 'addParticle', kind, at, temperature });
+  }
+
+  /**
+   * Sets the selected kind's number of particles (PART-1, 8, 9): new ones at random at the
+   * panel's temperature, or the newest removed.
+   */
+  setCount(count: number): void {
+    const kind = this.selectedKind;
+    if (!kind || !Number.isFinite(count)) return;
+    this.notice = null;
+    const temperature = this.#useTemperature(kind);
+    this.#send({ type: 'setCount', kind, count, temperature });
+  }
+
+  /** Removes the selected kind's newest particle (PART-9). */
+  removeParticle(): void {
+    if (!this.selectedKind) return;
+    this.notice = null;
+    this.#send({ type: 'removeParticle', kind: this.selectedKind });
+  }
+
+  /** Switches the boundary mode (SIM-12–16); some switches restart (see the worker). */
+  setBoundary(boundary: BoundaryMode): void {
+    this.notice = null;
+    this.#send({ type: 'setBoundary', boundary });
   }
 
   /** Maxwell's demon: opens or closes the hole (from the next frame). */

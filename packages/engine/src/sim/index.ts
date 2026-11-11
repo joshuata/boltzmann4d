@@ -120,6 +120,25 @@ export {
   type EventInfo,
 } from './event';
 export { CellGrid } from './cell-grid';
+export {
+  addParticle,
+  census,
+  continueInArena,
+  MAX_PARTICLES,
+  PlacementError,
+  placementSpace,
+  removeNewest,
+  type AddOptions,
+  type Boundary,
+  type Census,
+} from './particle-edits';
+export {
+  PlacementSpace,
+  randomVelocity,
+  speedForTemperature,
+  velocityFromAngles,
+  zeroMomentum,
+} from './placement';
 export { EventHeap } from './event-heap';
 export { Particles, type Arena } from './particles';
 export {

@@ -12,12 +12,12 @@ Pick a simulation from the **2D** or **3D** menu at the top of the page, or from
 
 ## Run it
 
-The simulation starts as soon as it loads. The buttons in the sidebar control it:
+The simulation starts as soon as it loads, unless it was saved paused. The clock beside the buttons shows the simulated time in picoseconds (ps). The buttons in the sidebar control it:
 
 - **Play / pause** starts and stops the clock.
 - **Step** advances one frame while paused.
 - **Reverse** flips every particle's velocity, so the motion runs back the way it came. See [Reverse, chaos and trajectories](reverse-and-trace).
-- **Restart** starts again from the same starting positions and speeds.
+- **Restart** sets the clock to zero and places every particle again at random, with fresh random directions. See [Your own gas](particles).
 - **Speed** makes simulated time pass faster or slower, in doubling steps from ⅛× to 2048×. Double-click the slider to go back to 1×.
 
 In 3D, drag the arena (or use the arrow keys) to turn it.
