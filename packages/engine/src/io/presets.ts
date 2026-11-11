@@ -1,4 +1,6 @@
-// The .set files shipped with Boltzmann 3D, copied verbatim into simsettingsfiles/.
+// The .set files shipped with Boltzmann 3D, copied into simsettingsfiles/. They are verbatim
+// except default, 2Dpresnum and 3Dpresnum: Java saved those as fixed positions all at one
+// speed, which we write as the equivalent RandomlyPlaced blocks so each run starts fresh.
 // Loaded lazily so they stay out of the main bundle until someone opens one.
 
 const presetLoaders = import.meta.glob<string>('./simsettingsfiles/presets/*.set', {
