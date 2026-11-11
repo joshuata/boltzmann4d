@@ -1,24 +1,28 @@
 // Converts between scenario versions. Version 1 (./schema-v1.ts) is an image of the `.set`
 // format, so `.set` files go `.set ⇄ v1 ⇄ v2` (./set-convert.ts):
 // - migrateV1 turns any v1 scenario into v2 with the same physics: red and blue become the
-//   kinds `red` and `blue` (always both, as the Java app always has both types), particle
-//   groups become populations in the same order, and reaction mode becomes the one rule
-//   Red + Red → Blue + Blue with the Java app's energies (KIND-15).
+//   kinds `a` and `b`, named Type A and Type B (always both, as the Java app always has both
+//   types), particle groups become populations in the same order, and reaction mode becomes the one rule
+//   A + A → B + B with the Java app's energies (KIND-15).
 // - toV1 goes back where the `.set` format can say it (EDIT-20), listing what stops it or
-//   what would be lost. Kinds map by position: the first is Red, the second Blue.
+//   what would be lost. Kinds map by position: the first is red, the second blue.
 import { DefaultParticleInfo } from '../sim/particle-type';
 import { DEFAULT_REACTION, SCENARIO_FORMAT } from './format';
 import type { ParticleColorV1, ScenarioV1, ScenarioV1Input } from './schema-v1';
 import type { Kind, Scenario, ScenarioInput } from './schema';
 
 /** Ids the migration gives the Java app's two particle types. */
-export const RED_KIND = 'red';
-export const BLUE_KIND = 'blue';
+export const KIND_A = 'a';
+export const KIND_B = 'b';
+
+/** Names the migration gives those kinds. */
+export const KIND_A_NAME = 'Type A';
+export const KIND_B_NAME = 'Type B';
 
 /** Mass (amu) and radius (nm) the Java app gives a type no particle group mentions. */
 const JAVA_DEFAULT_TYPE = { mass: 2.0, radius: 1.0 } as const;
 
-const kindOf = (color: ParticleColorV1) => (color === 'RED' ? RED_KIND : BLUE_KIND);
+const kindOf = (color: ParticleColorV1) => (color === 'RED' ? KIND_A : KIND_B);
 
 /** Whether a group places any particles. */
 const hasParticles = (g: { randomlyPlaced: { count: number }[]; particles: unknown[] }) =>
@@ -26,7 +30,7 @@ const hasParticles = (g: { randomlyPlaced: { count: number }[]; particles: unkno
 
 /**
  * Whether reaction_mode TRUE runs: the Java app has reactions only in 2D, and only with a
- * single particle type, which turns blue (SIM-25). Otherwise the rule is kept, switched off.
+ * single particle type, which turns into the second (SIM-25). Otherwise the rule is kept, switched off.
  */
 function javaRunsReaction(v1: ScenarioV1): boolean {
   return (
@@ -66,7 +70,7 @@ export function migrateV1(v1: ScenarioV1): ScenarioInput {
     version: 2,
     arena: v1.arena,
     modes: { maxwellDemon: v1.modes.maxwellDemon },
-    kinds: [kind('RED', 'Red'), kind('BLUE', 'Blue')],
+    kinds: [kind('RED', KIND_A_NAME), kind('BLUE', KIND_B_NAME)],
     populations: v1.particleGroups.map((g) => ({
       kind: kindOf(g.color),
       ...(g.temperature !== undefined && { temperature: g.temperature }),
@@ -76,8 +80,8 @@ export function migrateV1(v1: ScenarioV1): ScenarioInput {
     reactions: v1.modes.reaction
       ? [
           {
-            reactants: [RED_KIND, RED_KIND],
-            products: [BLUE_KIND, BLUE_KIND],
+            reactants: [KIND_A, KIND_A],
+            products: [KIND_B, KIND_B],
             ...DEFAULT_REACTION,
             suppressReverse: false,
             enabled: reactionEnabled,
@@ -99,7 +103,7 @@ export function migrateV1(v1: ScenarioV1): ScenarioInput {
           name,
           {
             ...(both && { all: both }),
-            kinds: { ...(red && { [RED_KIND]: red }), ...(blue && { [BLUE_KIND]: blue }) },
+            kinds: { ...(red && { [KIND_A]: red }), ...(blue && { [KIND_B]: blue }) },
           },
         ]),
       ),
@@ -148,10 +152,10 @@ export function toV1(scenario: Scenario): V1Conversion {
   if (scenario.spawnRegions.length > 0 || scenario.populations.some((p) => p.region)) {
     problems.push('it has spawn regions');
   }
-  const [red, blue] = kinds;
+  const [a, b] = kinds;
   const colorOf = new Map<string, ParticleColorV1>([
-    [red?.id ?? '', 'RED'],
-    [blue?.id ?? '', 'BLUE'],
+    [a?.id ?? '', 'RED'],
+    [b?.id ?? '', 'BLUE'],
   ]);
 
   let reaction = false;
@@ -160,9 +164,9 @@ export function toV1(scenario: Scenario): V1Conversion {
     const isJavaRule =
       scenario.reactions.length === 1 &&
       rule !== undefined &&
-      blue !== undefined &&
-      rule.reactants.every((k) => k === red?.id) &&
-      rule.products.every((k) => k === blue.id) &&
+      b !== undefined &&
+      rule.reactants.every((k) => k === a?.id) &&
+      rule.products.every((k) => k === b.id) &&
       rule.forward === DEFAULT_REACTION.forward &&
       rule.reverse === DEFAULT_REACTION.reverse &&
       !rule.suppressReverse;
@@ -172,24 +176,25 @@ export function toV1(scenario: Scenario): V1Conversion {
       reaction = true;
       const runs =
         scenario.arena.dimensions === 2 &&
-        !scenario.populations.some((p) => p.kind === blue.id && hasParticles(p));
+        !scenario.populations.some((p) => p.kind === b.id && hasParticles(p));
       if (rule.enabled !== runs) {
         warnings.push(
           rule.enabled
-            ? 'the reaction (which only runs in 2D with no Blue particles at the start)'
+            ? `the reaction (which only runs in 2D with no ${b.name} particles at the start)`
             : 'the switched-off reaction',
         );
       }
     } else {
+      const [A, B] = [a?.name ?? KIND_A_NAME, b?.name ?? KIND_B_NAME];
       problems.push(
-        `its reactions aren't the single rule ${red?.name ?? 'Red'} + ${red?.name ?? 'Red'} → ${blue?.name ?? 'Blue'} + ${blue?.name ?? 'Blue'} with activation energies ${DEFAULT_REACTION.forward} and ${DEFAULT_REACTION.reverse} kJ/mol`,
+        `its reactions aren't the single rule ${A} + ${A} → ${B} + ${B} with activation energies ${DEFAULT_REACTION.forward} and ${DEFAULT_REACTION.reverse} kJ/mol`,
       );
     }
   }
   if (problems.length > 0) return { problems, warnings };
 
   if (display.palette !== 'classic') warnings.push('the colour palette');
-  if (kinds.some((k, i) => k.name !== (i === 0 ? 'Red' : 'Blue')))
+  if (kinds.some((k, i) => k.name !== (i === 0 ? KIND_A_NAME : KIND_B_NAME)))
     warnings.push("the kinds' names");
   const custom = display.colorScheme === 'CUSTOM' ? display.customColors : undefined;
   if (!custom && kinds.some((k) => k.color)) warnings.push("the kinds' colours");
@@ -241,8 +246,8 @@ export function toV1(scenario: Scenario): V1Conversion {
       colorScheme: display.colorScheme,
       ...(custom && {
         customColors: {
-          red: red?.color ?? CLASSIC_HEX.RED,
-          blue: blue?.color ?? CLASSIC_HEX.BLUE,
+          red: a?.color ?? CLASSIC_HEX.RED,
+          blue: b?.color ?? CLASSIC_HEX.BLUE,
           background: custom.background,
           divider: custom.divider,
           walls3D: custom.walls3D,

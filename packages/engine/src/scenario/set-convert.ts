@@ -6,7 +6,7 @@
 // (EDIT-20); setFileCompatibility says why.
 import { parseSetFile, SetFileError, type SetGroup } from '../io/set-file';
 import { describeIssue, SCENARIO_FORMAT, ScenarioError } from './format';
-import { migrateV1, toV1 } from './migrate';
+import { KIND_A_NAME, KIND_B_NAME, migrateV1, toV1 } from './migrate';
 import { ScenarioSchema, type Scenario } from './schema';
 import {
   ScenarioV1Schema,
@@ -106,7 +106,7 @@ function redefinedTypes(v1: ScenarioV1): string[] {
     const differs = groups.some((g) => g.mass !== last?.mass || g.radius !== last.radius);
     return differs
       ? [
-          `${color === 'RED' ? 'Red' : 'Blue'} particle groups have different masses or radii; all use the last group's (${last?.mass} amu, ${last?.radius} nm).`,
+          `${color === 'RED' ? KIND_A_NAME : KIND_B_NAME} particle groups have different masses or radii; all use the last group's (${last?.mass} amu, ${last?.radius} nm).`,
         ]
       : [];
   });

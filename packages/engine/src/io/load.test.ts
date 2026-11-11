@@ -68,12 +68,12 @@ describe('loadSetFile', () => {
 
     const [red, blue] = scenario.species;
     expect(red?.type).toMatchObject({
-      displayName: 'Red',
+      displayName: 'Type A',
       particleMass: 2,
       particleRadius: 0.7 * 1e-9,
     });
     expect(blue?.type).toMatchObject({
-      displayName: 'Blue',
+      displayName: 'Type B',
       particleMass: 32,
       particleRadius: 1.1 * 1e-9,
     });
@@ -101,7 +101,7 @@ describe('loadSetFile', () => {
 
   it('drops particle groups with no particles (default.set)', async () => {
     const { scenario } = loadSetFile(await loadDefaultSetFileText());
-    expect(scenario.species.map((s) => s.type.displayName)).toEqual(['Red']);
+    expect(scenario.species.map((s) => s.type.displayName)).toEqual(['Type A']);
     expect(scenario.species[0]!.positions).toHaveLength(50 * 3);
   });
 

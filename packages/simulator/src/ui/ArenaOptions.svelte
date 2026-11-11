@@ -177,7 +177,7 @@
           onchange={(e) =>
             e.currentTarget.checked ? applyReactions() : onChange({ reactions: null })}
         />
-        Reactions (red ⇌ blue)
+        Reactions ({arena.typeNames[0]} ⇌ {arena.typeNames[1] ?? 'Reacted'})
       </label>
       {#if reactionsOn}
         <div class="wells">

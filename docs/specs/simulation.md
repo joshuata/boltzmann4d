@@ -48,7 +48,7 @@ Five modes, chosen with icons in the particle area. Default: Box with Walls.
 
 ## Reaction mode
 
-_Web port:_ the editor generalizes reaction mode to a table of rules between any kinds (KIND-13–15, `editor.md`); the mode described here is the single rule Red + Red → Blue + Blue.
+_Web port:_ the editor generalizes reaction mode to a table of rules between any kinds (KIND-13–15, `editor.md`); the mode described here is the single rule Type A + Type A → Type B + Type B (red to blue).
 
 - **SIM-25** Reaction mode (from the Simulation menu) turns red and blue into reactant and product. It requires a single particle type at the start (the Java app refuses otherwise).
 - **SIM-26** Two red particles whose relative kinetic energy along their line of centres exceeds the forward activation energy `E_f` become two blue particles of the same size, and their relative kinetic energy along the line of centres drops by `ΔE = E_f − E_r`. Two blue particles above the reverse activation energy `E_r` become red and gain `ΔE`. Defaults: `E_f` = 8 kJ/mol, `E_r` = 4 kJ/mol.

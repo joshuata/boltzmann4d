@@ -19,26 +19,26 @@ const xs = (positions: Float64Array) => positions.filter((_, i) => i % 3 === 0);
 describe('describeSpecies', () => {
   it('infers the temperature of randomly placed particles from their speed', async () => {
     // 2Dhyd100: hydrogen at 100 K, given as an average velocity.
-    const red = describeSpecies(await loadPresetScenario('2Dhyd100'), 'red');
+    const red = describeSpecies(await loadPresetScenario('2Dhyd100'), 'a');
     expect(red).toMatchObject({ placed: 0, mass: 2 });
     expect(red?.temperature).toBeCloseTo(100, 0);
   });
 
   it('counts placed particles and uses the group temperature', async () => {
     const scenario = await loadPresetScenario('2Dhotcold');
-    expect(describeSpecies(scenario, 'red')).toEqual({
+    expect(describeSpecies(scenario, 'a')).toEqual({
       count: 30,
       placed: 30,
       mass: 2,
       radius: 0.7,
       temperature: 500,
     });
-    expect(describeSpecies(scenario, 'blue')?.temperature).toBe(300);
+    expect(describeSpecies(scenario, 'b')?.temperature).toBe(300);
   });
 
   it('is null for a colour with no groups', async () => {
     const scenario = await loadPresetScenario('2Dequil');
-    expect(describeSpecies(scenario, 'blue')).toBeNull();
+    expect(describeSpecies(scenario, 'b')).toBeNull();
   });
 });
 
@@ -46,9 +46,9 @@ describe('withSpecies', () => {
   it('writes a species back as it reads, and runs at that temperature', async () => {
     const base = await loadPresetScenario('2Dequil');
     const setup = { count: 40, mass: 4, radius: 1, temperature: 450 };
-    const edited = withSpecies(base, 'blue', setup);
-    expect(describeSpecies(edited, 'blue')).toEqual({ ...setup, placed: 0 });
-    expect(edited.populations.map((p) => p.kind)).toEqual(['red', 'blue']);
+    const edited = withSpecies(base, 'b', setup);
+    expect(describeSpecies(edited, 'b')).toEqual({ ...setup, placed: 0 });
+    expect(edited.populations.map((p) => p.kind)).toEqual(['a', 'b']);
     const blue = resolveScenario(edited, { random: seededRandom(1) }).species[1];
     expect(blue?.positions).toHaveLength(120);
     expect(blue?.initialTemperature).toBe(450);
@@ -56,17 +56,17 @@ describe('withSpecies', () => {
 
   it('keeps placed particles, adding or dropping the rest', async () => {
     const base = await loadPresetScenario('2Dhotcold');
-    const more = withSpecies(base, 'red', { count: 35, mass: 2, radius: 0.7, temperature: 500 });
-    expect(describeSpecies(more, 'red')).toMatchObject({ count: 35, placed: 30 });
-    const fewer = withSpecies(base, 'red', { count: 10, mass: 2, radius: 0.7, temperature: 500 });
-    expect(describeSpecies(fewer, 'red')).toMatchObject({ count: 10, placed: 10 });
+    const more = withSpecies(base, 'a', { count: 35, mass: 2, radius: 0.7, temperature: 500 });
+    expect(describeSpecies(more, 'a')).toMatchObject({ count: 35, placed: 30 });
+    const fewer = withSpecies(base, 'a', { count: 10, mass: 2, radius: 0.7, temperature: 500 });
+    expect(describeSpecies(fewer, 'a')).toMatchObject({ count: 10, placed: 10 });
     expect(fewer.populations[0]?.particles).toEqual(base.populations[0]?.particles.slice(0, 10));
   });
 
   it('removes a colour with a count of 0', async () => {
     const base = await loadPresetScenario('2Dmixture');
-    const edited = withSpecies(base, 'red', { count: 0, mass: 2, radius: 1, temperature: 300 });
-    expect(edited.populations.map((p) => p.kind)).toEqual(['blue']);
+    const edited = withSpecies(base, 'a', { count: 0, mass: 2, radius: 1, temperature: 300 });
+    expect(edited.populations.map((p) => p.kind)).toEqual(['b']);
   });
 });
 
@@ -99,9 +99,9 @@ describe('scenarioProblems', () => {
 
   it('notices particles that do not fit, and too many', async () => {
     const base = await loadPresetScenario('2Dequil');
-    const crowded = withSpecies(base, 'red', { count: 900, mass: 2, radius: 5, temperature: 300 });
+    const crowded = withSpecies(base, 'a', { count: 900, mass: 2, radius: 5, temperature: 300 });
     expect(scenarioProblems(crowded)).toEqual([expect.stringMatching(/do not fit in the arena/)]);
-    const many = withSpecies(base, 'red', { count: 1000, mass: 2, radius: 0.2, temperature: 300 });
+    const many = withSpecies(base, 'a', { count: 1000, mass: 2, radius: 0.2, temperature: 300 });
     expect(scenarioProblems({ ...many, arena: { ...many.arena, size: [500, 500, 10] } })).toEqual([
       'At most 999 particles in all (this has 1000).',
     ]);
