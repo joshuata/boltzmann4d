@@ -338,6 +338,14 @@ export function realGasQx(x: number, dimension: number): number {
   return (1 + e1 * x + e2 * x * x + e3 * x * x * x) / (1 + f1 * x + f2 * x * x + f3 * x * x * x);
 }
 
+/**
+ * Compressibility P V_eff / (N k T) of hard disks (2D) or spheres (3D) at packing x:
+ * 1 + x Q(x) (Pressure.getPredictionForAverage, PRED-8).
+ */
+export function realGasPressureFactor(x: number, dimension: number): number {
+  return 1 + x * realGasQx(x, dimension);
+}
+
 /** Predicted collisions per second of one particle of `type` with particles of `other`. */
 export function predictPairCollisionRate(ctx: StatsContext, type: number, other: number): number {
   const t = ctx.types[type]!;

@@ -147,6 +147,12 @@ export interface SimulationOptions {
   frameDuration?: number;
   /** Called with each event just before it is performed (where statistics plug in). */
   onEvent?: (event: Readonly<EventInfo>) => void;
+  /**
+   * Called with each event just after it is performed, with the particles involved in
+   * their new state (where observers such as the pressure meter read the outcome). It must
+   * not change the simulation.
+   */
+  afterEvent?: (event: Readonly<EventInfo>) => void;
 }
 
 export class Simulation {
@@ -187,6 +193,8 @@ export class Simulation {
   frameDuration: number;
   /** Piston arenas: the piston (null otherwise). */
   readonly piston: Piston | null;
+  /** The level the piston's latest move started from, where reverse() sends it back to. */
+  private pistonMoveStart = 0;
   /** The wall thermostat, switched on by isothermal piston moves. */
   readonly thermostat = new Thermostat();
   /** The reaction rules, compiled (null without any). */
@@ -213,6 +221,7 @@ export class Simulation {
   private readonly boundaryValid: Uint8Array;
 
   private readonly onEvent: SimulationOptions['onEvent'];
+  private readonly afterEvent: SimulationOptions['afterEvent'];
   private readonly heap: EventHeap;
 
   // Each particle's next event (keys live in the heap).
@@ -328,6 +337,7 @@ export class Simulation {
     }
     this.frameDuration = options.frameDuration ?? DEFAULT_FRAME_DURATION;
     this.onEvent = options.onEvent;
+    this.afterEvent = options.afterEvent;
 
     // Particles in species order, as Physics does with SimulationInfo's particle types.
     const count = init.species.reduce((n, s) => n + s.positions.length / 3, 0);
@@ -487,6 +497,7 @@ export class Simulation {
       throw new RangeError(`Piston level ${targetLevel} is outside 0..${this.maxPistonLevel()}`);
     }
     piston.speed = speed;
+    this.pistonMoveStart = piston.curLevel;
     if (mode === PistonMode.INSTANTANEOUS) {
       if (targetLevel > piston.curLevel) {
         throw new RangeError('An instantaneous piston move can only pull the piston out');
@@ -509,6 +520,47 @@ export class Simulation {
     const piston = this.requirePiston();
     piston.targetLevel = piston.curLevel;
     this.repredictAllBoundaries();
+  }
+
+  /**
+   * Reverse (SIM-32, CTRL-6): flips the velocity of every particle, and sends a moving
+   * piston back towards where its move started, at the current time. The clock keeps
+   * running forward and the motion retraces itself as closely as round-off allows, until
+   * chaos (SIM-4) takes over. The isothermal thermostat, a conducting divider and a
+   * reaction with its reverse suppressed aren't time-reversible, so there it won't retrace.
+   *
+   * Java has Particle.reverse() but never calls it (its Time Reverse button is disabled),
+   * so this has no parity counterpart.
+   */
+  reverse(): void {
+    const p = this.particles;
+    const n = p.count;
+    // After step() particles are at their own event times: bring them all to the latest.
+    let latest = this.time;
+    for (let k = 0; k < n; k++) if (p.t0[k]! > latest) latest = p.t0[k]!;
+    let together = latest === this.time;
+    for (let k = 0; together && k < n; k++) together = p.t0[k] === latest;
+    if (!together) this.advanceToTime(latest);
+
+    for (let k = 0; k < n; k++) {
+      p.vx[k] = -p.vx[k]!;
+      p.vy[k] = -p.vy[k]!;
+      p.vz[k] = -p.vz[k]!;
+    }
+    const piston = this.piston;
+    if (piston?.isMoving(this.time)) {
+      // The piston is at its current level as of this frame (advanceToTime moved it).
+      const back = this.pistonMoveStart;
+      this.pistonMoveStart = piston.targetLevel;
+      piston.targetLevel = back;
+    }
+    // Every particle starts afresh from here, as after an event of its own: predictions
+    // (boundaries included) start from its present state.
+    for (let k = 0; k < n; k++) {
+      this.collisionCount[k]!++; // pair events predicted with the old velocities are stale
+      this.recordEventState(k);
+    }
+    for (let k = 0; k < n; k++) this.repredict(k);
   }
 
   /** Highest piston level that leaves the particles room (Physics.calculateCompressionLimit). */
@@ -729,8 +781,15 @@ export class Simulation {
     this.repredict(i);
   }
 
-  /** Performs particle i's (valid, physical) next event and re-predicts what it changed. */
+  /** Performs particle i's (valid, physical) next event, then tells afterEvent. */
   private perform(i: number): Readonly<EventInfo> {
+    const event = this.performEvent(i);
+    this.afterEvent?.(event);
+    return event;
+  }
+
+  /** Performs particle i's (valid, physical) next event and re-predicts what it changed. */
+  private performEvent(i: number): Readonly<EventInfo> {
     const p = this.particles;
     const event = this.event;
     const type = this.nextType[i]!;

@@ -67,6 +67,7 @@ export {
   SPECIES_LIMITS,
   describeSpecies,
   scenarioProblems,
+  withArenaSize,
   withSpecies,
   type SpeciesSetup,
   type SpeciesSummary,

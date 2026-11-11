@@ -11,6 +11,8 @@ import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/p
 import type { ArenaTheme } from '../render/view';
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
+import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
+import type { PressureReading, PressureRegion } from '@boltzmann4d/engine/stats/pressure';
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
 import type {
   ArenaInfo,
@@ -22,6 +24,12 @@ import type {
   ToWorker,
 } from '../worker';
 import SimWorker from '../worker/sim.worker?worker';
+
+/** A plot the statistics area can show: a statistic, or a pressure history by region. */
+export type PlotId = StatisticId | `PRESSURE:${PressureRegion}`;
+
+/** Readings kept for the pressure history, like the statistics' history (STAT-20). */
+const HISTORY_LENGTH = 150;
 
 export class SimulationClient {
   /** The worker starts running, matching `new PlayPauseButton(false)` in the Java app. */
@@ -69,6 +77,30 @@ export class SimulationClient {
   piston = $state.raw<(PistonInfo & { level: number; moving: boolean }) | null>(null);
   /** Latest statistics from the physics worker (about once a second); null until the first. */
   statistics = $state.raw<StatisticsSummary | null>(null);
+  /** Latest pressure readout (a few times a second); null until the first. */
+  pressure = $state.raw<PressureReading | null>(null);
+  /** The pressure averaging time T_avg, s (OPT-3; the scenario's until changed). */
+  pressureAveragingTime = $state(60e-12);
+  #averagingChosen = false;
+  /** Which pressure prediction is shown (PRES-6; the scenario's until changed). */
+  pressurePrediction = $state<'IDEAL' | 'REAL'>('IDEAL');
+  #predictionChosen = false;
+  /** The most recent pressure readings (oldest first), for the pressure history (STAT-20). */
+  pressureHistory = $state.raw<PressureReading[]>([]);
+  /**
+   * The plot shown (STAT-1): a statistic, or a pressure history (`PRESSURE:arena`, `:left`,
+   * `:right`). The scenario's until the user picks one.
+   */
+  plot = $state<PlotId>('INSTANTANEOUS_SPEED');
+  #plotChosen = false;
+  /** Cumulative, Width and History views (STAT-13, 15, 20; the scenario's until changed). */
+  statView = $state({ cumulative: false, width: false, history: false });
+  #statViewChosen = false;
+  /** Finite-system corrections to the predictions (PRED-11; kept across scenarios). */
+  finiteCorrections = $state(false);
+  /** The forget time in predicted collision times (OPT-4; the scenario's until changed). */
+  forgetMultiplier = $state(4);
+  #forgetChosen = false;
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
   /**
@@ -137,6 +169,7 @@ export class SimulationClient {
           renderer.setTheme(this.#theme);
           channel.port2.onmessage = (event: MessageEvent<RenderStream>) => {
             if (event.data.type === 'scene') renderer.setScene(event.data.scene);
+            else if (event.data.type === 'colorLimits') renderer.setColorLimits(event.data.limits);
             else renderer.setNextFrameToDisplay(event.data.frame);
           };
           this.#mainRenderer = renderer;
@@ -193,6 +226,16 @@ export class SimulationClient {
         case 'statistics':
           this.statistics = message.summary;
           break;
+        case 'pressure': {
+          this.pressure = message.reading;
+          const last = this.pressureHistory.at(-1);
+          // A restart or a new scenario starts the clock again.
+          const kept = last && message.reading.time < last.time ? [] : this.pressureHistory;
+          if (!last || message.reading.time !== last.time || kept.length === 0) {
+            this.pressureHistory = [...kept, message.reading].slice(-HISTORY_LENGTH);
+          }
+          break;
+        }
         case 'loaded':
           this.particleCount = message.particles;
           this.arena = message.arena;
@@ -206,6 +249,18 @@ export class SimulationClient {
             this.#toRenderer({ type: 'markers', enabled: this.markers });
           }
           this.arenaSize = { width: message.view.arenaWidth, height: message.view.arenaHeight };
+          this.pressureAveragingTime = message.pressure.averagingTime;
+          this.pressureHistory = [];
+          this.forgetMultiplier = message.statistics.forgetMultiplier;
+          if (!this.#plotChosen) this.plot = message.statistics.plot ?? 'INSTANTANEOUS_SPEED';
+          if (!this.#statViewChosen) {
+            const { cumulative, width, history } = message.statistics;
+            this.statView = { cumulative, width, history };
+          }
+          if (!this.#predictionChosen) {
+            this.pressurePrediction = message.pressure.prediction;
+            this.#send({ type: 'statOptions', realGas: this.pressurePrediction === 'REAL' });
+          }
           if (!this.#viewChosen) {
             this.colorMode = message.view.colorMode;
             this.trace = { ...message.view.trace };
@@ -231,6 +286,8 @@ export class SimulationClient {
     if (sameSource(source, this.source) && !this.error) return;
     this.source = source;
     this.loading = true;
+    this.#averagingChosen = false; // a new scenario brings its own averaging time
+    this.#forgetChosen = false; // ... and forget time
     this.#send({ type: 'load', source: cloneable(source) });
   }
 
@@ -241,7 +298,58 @@ export class SimulationClient {
       type: 'load',
       source: cloneable(this.source),
       arena: { ...this.arena?.options, ...options },
+      pressureAveragingTime: this.#averagingChosen ? this.pressureAveragingTime : undefined,
+      forgetMultiplier: this.#forgetChosen ? this.forgetMultiplier : undefined,
     });
+  }
+
+  /** The pressure averaging time T_avg, s (OPT-3). The readout warms up again. */
+  setPressureAveragingTime(seconds: number): void {
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    this.#averagingChosen = true;
+    this.pressureAveragingTime = seconds;
+    this.#send({ type: 'pressureAveragingTime', seconds });
+  }
+
+  /** Shows the Ideal or Real pressure prediction (PRES-6; kept across scenarios). */
+  setPressurePrediction(prediction: 'IDEAL' | 'REAL'): void {
+    this.#predictionChosen = true;
+    this.pressurePrediction = prediction;
+    // The same choice applies to the path, time and rate predictions (STAT-14).
+    this.#send({ type: 'statOptions', realGas: prediction === 'REAL' });
+  }
+
+  /** Picks the plot shown (STAT-1; kept across scenarios that offer it). */
+  setPlot(plot: PlotId): void {
+    this.#plotChosen = true;
+    this.plot = plot;
+    if (!plot.startsWith('PRESSURE:')) this.#send({ type: 'statistic', id: plot as StatisticId });
+  }
+
+  /** Cumulative, Width or History on or off (kept across scenarios). */
+  setStatView(view: Partial<SimulationClient['statView']>): void {
+    this.#statViewChosen = true;
+    this.statView = { ...this.statView, ...view };
+  }
+
+  /** One of a plot's axis limits (STAT-8–10): clears that plot's cumulative data. */
+  setStatLimit(id: DistributionId, edge: 'min' | 'max', value: number): void {
+    if (!Number.isFinite(value)) return;
+    this.#send({ type: 'statLimit', id, edge, value });
+  }
+
+  /** Finite-system corrections to the predictions on or off (PRED-11). */
+  setFiniteCorrections(on: boolean): void {
+    this.finiteCorrections = on;
+    this.#send({ type: 'statOptions', finite: on });
+  }
+
+  /** The forget time, in predicted collision times (OPT-4). */
+  setForgetMultiplier(multiplier: number): void {
+    if (!Number.isFinite(multiplier) || multiplier < 0) return;
+    this.#forgetChosen = true;
+    this.forgetMultiplier = multiplier;
+    this.#send({ type: 'forgetMultiplier', value: multiplier });
   }
 
   /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
@@ -275,11 +383,21 @@ export class SimulationClient {
     this.#toRenderer({ type: 'colorMode', mode });
   }
 
-  /** Trace mode: particles leave marks (2D; kept across scenarios). */
+  /** Trace mode (VIEW-5): particles leave a dot each frame (kept across scenarios). */
   setTrace(enabled: boolean): void {
     this.#viewChosen = true;
     this.trace = { ...this.trace, enabled };
     this.#toRenderer({ type: 'trace', enabled, pointSize: this.trace.pointSize });
+  }
+
+  /** Erases the trace drawn so far (VIEW-5); tracing carries on. */
+  clearTrace(): void {
+    if (this.#renderWorker) {
+      const message: ToRenderWorker = { type: 'clearTrace' };
+      this.#renderWorker.postMessage(message);
+    } else {
+      this.#mainRenderer?.clearTrace();
+    }
   }
 
   /** Kinds' markers on or off (kept across scenarios). */
@@ -346,6 +464,14 @@ export class SimulationClient {
     if (!Number.isFinite(scale) || scale <= 0) return;
     this.rateScale = scale;
     this.#send({ type: 'rate', scale });
+  }
+
+  /**
+   * Reverse (SIM-32, CTRL-6): flips every velocity so the motion retraces itself, until
+   * chaos takes over. Works while running or paused.
+   */
+  reverse(): void {
+    this.#send({ type: 'reverse' });
   }
 
   advanceOneFrame(): void {

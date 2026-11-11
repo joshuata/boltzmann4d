@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
+import type { ColorLimits, ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
 import { ARENA_COLORS, type ArenaTheme, type View } from './view';
 import { createView2D } from './view-2d';
 import { createView3D } from './view-3d';
@@ -22,8 +22,12 @@ export interface Renderer {
   rotate(aboutX: number, aboutY: number): void;
   /** How particles are coloured (View menu: Normal, Speed, Kinetic energy). */
   setColorMode(mode: ColorMode): void;
-  /** Trace mode: accumulate particle marks of `pointSize` pixels (2D). */
+  /** The Color by Speed / KE limits (VIEW-4; the physics worker sends them). */
+  setColorLimits(limits: ColorLimits): void;
+  /** Trace mode (VIEW-5): accumulate a dot of `pointSize` pixels per particle per frame. */
   setTrace(enabled: boolean, pointSize: number): void;
+  /** Erases the trace drawn so far. */
+  clearTrace(): void;
   /** Whether kinds' markers are drawn (KIND-9; 2D). */
   setMarkers(enabled: boolean): void;
   /** Light or dark arena (VIEW-1), following the site's theme. */
@@ -130,9 +134,17 @@ export function createRenderer(
       view?.setColorMode(mode);
       scheduleDraw();
     },
+    setColorLimits(limits) {
+      view?.setColorLimits?.(limits);
+      scheduleDraw();
+    },
     setTrace(enabled, pointSize) {
       trace = { enabled, pointSize };
       view?.setTrace(enabled, pointSize);
+      scheduleDraw();
+    },
+    clearTrace() {
+      view?.clearTrace();
       scheduleDraw();
     },
     setMarkers(enabled) {

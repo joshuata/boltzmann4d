@@ -4,6 +4,8 @@
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
 import type { ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
+import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
+import type { PressureReading } from '@boltzmann4d/engine/stats/pressure';
 import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
 
 /**
@@ -36,6 +38,11 @@ export interface ArenaOptions {
   reactions?: { forward: number; reverse: number; suppressReverse: boolean } | null;
   /** A square well along the bottom wall: width in m, depth in kJ/mol. null turns it off. */
   attractiveWall?: { width: number; depth: number } | null;
+  /**
+   * Arena side lengths x, y, z in nm (OPT-1, SIM-10). Particles are placed anew; drawn
+   * walls and spawn regions stretch with the arena.
+   */
+  size?: [number, number, number];
 }
 
 /** What the sidebar needs to offer a piston arena's controls. */
@@ -61,6 +68,10 @@ export interface ArenaInfo {
   canReact: boolean;
   /** Species names, for per-species settings. */
   typeNames: string[];
+  /** The arena's side lengths x, y, z in nm, as running. */
+  size: [number, number, number];
+  /** Whether the scenario has drawn walls (the pressure readout ignores them). */
+  drawnWalls: boolean;
   /** Drawn gates (WALL-4): wall index, id, and points (x, y pairs in m) for tapping them. */
   gates: { index: number; id: string; points: number[]; closed: boolean }[];
   options: ArenaOptions;
@@ -72,8 +83,18 @@ export type ToWorker =
    * absent). The worker starts after this.
    */
   | { type: 'connect'; frames: MessagePort; source?: ScenarioSource; arena?: ArenaOptions }
-  /** Replace the running simulation (keeps play/pause). */
-  | { type: 'load'; source: ScenarioSource; arena?: ArenaOptions }
+  /**
+   * Replace the running simulation (keeps play/pause). `pressureAveragingTime` (s) and
+   * `forgetMultiplier` keep the user's choices; absent, the scenario's apply. Axis limits
+   * go back to the scenario's.
+   */
+  | {
+      type: 'load';
+      source: ScenarioSource;
+      arena?: ArenaOptions;
+      pressureAveragingTime?: number;
+      forgetMultiplier?: number;
+    }
   /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
   | { type: 'movePiston'; level: number; mode: PistonMode; speed: number }
   | { type: 'stopPiston' }
@@ -86,13 +107,25 @@ export type ToWorker =
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'step' }
+  /** Flip every velocity (SIM-32, CTRL-6); the clock keeps running forward. */
+  | { type: 'reverse' }
   /** Multiply the scenario's simulation speed (kept across loads). */
   | { type: 'rate'; scale: number }
   /**
    * The kinds (species indices) the statistics should also cover (KIND-4), when they
    * aren't a set tracked anyway; null for none. Reset by each load.
    */
-  | { type: 'statKinds'; types: number[] | null };
+  | { type: 'statKinds'; types: number[] | null }
+  /** The pressure averaging time T_avg in seconds (OPT-3; kept by Restart). */
+  | { type: 'pressureAveragingTime'; seconds: number }
+  /** Which plot the statistics summaries carry (STAT-1). */
+  | { type: 'statistic'; id: StatisticId }
+  /** One of a plot's axis limits (STAT-8–10; kept by Restart, reset by a load). */
+  | { type: 'statLimit'; id: DistributionId; edge: 'min' | 'max'; value: number }
+  /** Finite-system (PRED-11) and real-gas (PRED-9) predictions; kept across loads. */
+  | { type: 'statOptions'; finite?: boolean; realGas?: boolean }
+  /** The forget time, in predicted collision times (OPT-4; kept by Restart). */
+  | { type: 'forgetMultiplier'; value: number };
 
 /** One particle kind of the running simulation, for legends and pickers (KIND-4, KIND-9). */
 export interface KindInfo {
@@ -139,7 +172,22 @@ export type FromWorker =
         arenaWidth: number;
         arenaHeight: number;
       };
+      /** The scenario's pressure settings: averaging time (s) and prediction (PRES-2, PRES-6). */
+      pressure: { averagingTime: number; prediction: 'IDEAL' | 'REAL' };
+      /**
+       * The scenario's statistics view: its plot (a statistic id, when this app knows it),
+       * Cumulative, Width and History; and the forget multiplier in use.
+       */
+      statistics: {
+        plot: StatisticId | null;
+        cumulative: boolean;
+        width: boolean;
+        history: boolean;
+        forgetMultiplier: number;
+      };
     }
   /** About once a second (every SUMMARY_INTERVAL_MS), and after each step. */
   | { type: 'statistics'; summary: StatisticsSummary }
+  /** The pressure readout, a few times a second and after each step. */
+  | { type: 'pressure'; reading: PressureReading }
   | { type: 'error'; message: string };

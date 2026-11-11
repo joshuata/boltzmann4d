@@ -130,6 +130,39 @@ export function withSpecies(
 }
 
 /**
+ * The scenario in an arena of a new size (OPT-1, SIM-10; x, y, z in nm). Drawn walls and
+ * spawn regions stretch with the arena. Particles are placed anew, each at its own speed:
+ * those placed at given positions join the randomly placed ones, since moving them with the
+ * arena could make them overlap. Run scenarioProblems on the result to check they fit.
+ */
+export function withArenaSize(scenario: Scenario, size: [number, number, number]): Scenario {
+  const [x, y] = scenario.arena.size;
+  const sx = size[0] / x;
+  const sy = size[1] / y;
+  const scale = ([px, py]: [number, number]): [number, number] => [px * sx, py * sy];
+  return {
+    ...scenario,
+    arena: { ...scenario.arena, size: [...size] },
+    populations: scenario.populations.map((p) => ({
+      ...p,
+      randomlyPlaced: [
+        ...p.randomlyPlaced,
+        ...p.particles.map((particle) => ({ count: 1, averageVelocity: particle.speed })),
+      ],
+      particles: [],
+    })),
+    walls: scenario.walls.map((w) => ({ ...w, points: w.points.map(scale) })),
+    spawnRegions: scenario.spawnRegions.map((r) => ({
+      ...r,
+      shape:
+        r.shape.type === 'rectangle'
+          ? { ...r.shape, min: scale(r.shape.min), max: scale(r.shape.max) }
+          : { ...r.shape, points: r.shape.points.map(scale) },
+    })),
+  };
+}
+
+/**
  * Problems a valid scenario can still have, as the Java dialog checks them: particles placed
  * at random must fit in the space they're placed in, with room to move
  * (SimSettingsController.getTotalNeededVolume), and there may be at most 999 of them.
