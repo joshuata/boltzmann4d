@@ -5,6 +5,18 @@ import type { ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim'
 /** The scene is drawn in nanometres: simulation meters are ~1e-8, awkward for float32. */
 export const NM = 1e9;
 
+/** The arena's colour scheme (VIEW-1), which follows the site's light or dark theme. */
+export type ArenaTheme = 'dark' | 'light';
+
+/**
+ * VIEW-1's arena colours: a black arena with white edges, or a white one with grey edges.
+ * Particle and wall colours stand out against both (KIND-8, WALL-5).
+ */
+export const ARENA_COLORS: Record<ArenaTheme, { background: number; edge: number }> = {
+  dark: { background: 0x000000, edge: 0xffffff },
+  light: { background: 0xffffff, edge: 0x808080 },
+};
+
 export interface View {
   /** Everything the view draws, added to the renderer's scene. */
   readonly root: THREE.Object3D;
@@ -21,6 +33,8 @@ export interface View {
   setTrace(enabled: boolean, pointSize: number): void;
   /** Whether kinds' markers are drawn over their particles (KIND-9; 2D only). */
   setMarkers?(enabled: boolean): void;
+  /** Recolours the arena's edges for a light or dark background (2D only). */
+  setTheme?(theme: ArenaTheme): void;
   /** Called before each draw, with the renderer (the trace draws into its own target). */
   beforeRender?(renderer: THREE.WebGLRenderer): void;
   dispose(): void;

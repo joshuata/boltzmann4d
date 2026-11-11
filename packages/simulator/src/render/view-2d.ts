@@ -11,7 +11,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import type { RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
 import { MARKER_SHAPES, markerColor, type MarkerShape } from './markers';
 import { periodicImages } from './periodic-images';
-import { disposeTree, NM, ParticleColors, type View } from './view';
+import { ARENA_COLORS, disposeTree, NM, ParticleColors, type View } from './view';
 
 /** Space around the arena, as a fraction of its larger side. */
 const MARGIN = 0.04;
@@ -23,6 +23,9 @@ export function createView2D(info: SceneInfo): View {
   const root = new THREE.Group();
   const camera = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
 
+  // The box outline and the divider take the theme's edge colour (setTheme).
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: ARENA_COLORS.dark.edge });
+  const dividerMaterial = new THREE.MeshBasicMaterial({ color: ARENA_COLORS.dark.edge });
   root.add(
     new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints([
@@ -31,10 +34,10 @@ export function createView2D(info: SceneInfo): View {
         new THREE.Vector3(arena.x, arena.y, 0),
         new THREE.Vector3(0, arena.y, 0),
       ]),
-      new THREE.LineBasicMaterial({ color: 0xffffff }),
+      edgeMaterial,
     ),
   );
-  const plug = info.divider ? addDivider(root, info.divider, arena.y) : null;
+  const plug = info.divider ? addDivider(root, info.divider, arena.y, dividerMaterial) : null;
   const { materials: wallMaterials, gates } = addWalls(root, info.walls ?? [], arena);
   const placePiston = info.piston ? addPiston(root, info.piston, arena) : null;
   placePiston?.(arena.y);
@@ -139,6 +142,10 @@ export function createView2D(info: SceneInfo): View {
     setMarkers(enabled) {
       markers.group.visible = enabled;
     },
+    setTheme(theme) {
+      edgeMaterial.color.setHex(ARENA_COLORS[theme].edge);
+      dividerMaterial.color.setHex(ARENA_COLORS[theme].edge);
+    },
     beforeRender(renderer) {
       if (wallMaterials.length > 0) {
         const size = renderer.getSize(new THREE.Vector2());
@@ -148,6 +155,7 @@ export function createView2D(info: SceneInfo): View {
     },
     dispose() {
       particles.dispose();
+      dividerMaterial.dispose(); // shared by the divider's parts, and unused without one
       markers.dispose();
       trace.dispose();
       disposeTree(root);
@@ -272,9 +280,9 @@ function addDivider(
   root: THREE.Group,
   info: NonNullable<SceneInfo['divider']>,
   arenaHeight: number,
+  material: THREE.MeshBasicMaterial,
 ): THREE.Mesh | null {
   const group = new THREE.Group();
-  const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const left = info.leftX * NM;
   const width = (info.rightX - info.leftX) * NM;
   const bar = (from: number, to: number) => {

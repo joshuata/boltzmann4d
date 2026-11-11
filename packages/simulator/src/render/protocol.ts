@@ -3,6 +3,7 @@
 // up the canvas and reports size changes.
 import type { ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
 import type { ViewSize } from './index';
+import type { ArenaTheme } from './view';
 
 /** Main thread -> render worker. */
 export type ToRenderWorker =
@@ -20,7 +21,9 @@ export type ToRenderWorker =
   | { type: 'colorMode'; mode: ColorMode }
   | { type: 'trace'; enabled: boolean; pointSize: number }
   /** Kinds' markers on or off (KIND-9). */
-  | { type: 'markers'; enabled: boolean };
+  | { type: 'markers'; enabled: boolean }
+  /** Light or dark arena (VIEW-1), following the site's theme. */
+  | { type: 'theme'; theme: ArenaTheme };
 
 /** Physics worker -> renderer, over the MessagePort. */
 export type RenderStream =

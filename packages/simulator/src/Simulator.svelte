@@ -77,6 +77,19 @@
     };
   });
 
+  // The arena follows the site's light or dark theme (VIEW-1): the `dark` class on <html>
+  // that @boltzmann4d/ui's theme uses.
+  $effect(() => {
+    const client = sim;
+    if (!client) return;
+    const html = document.documentElement;
+    const apply = () => client.setTheme(html.classList.contains('dark') ? 'dark' : 'light');
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(html, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  });
+
   // Follow later changes to `preset` or `scenario` (load ignores the one already running).
   $effect(() => {
     const next = source;
