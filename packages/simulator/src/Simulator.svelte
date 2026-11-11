@@ -8,6 +8,7 @@
   import MinimizeIcon from '@lucide/svelte/icons/minimize';
   import PanelRightCloseIcon from '@lucide/svelte/icons/panel-right-close';
   import PanelRightOpenIcon from '@lucide/svelte/icons/panel-right-open';
+  import RewindIcon from '@lucide/svelte/icons/rewind';
   import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
   import StepForwardIcon from '@lucide/svelte/icons/step-forward';
   import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
@@ -194,11 +195,11 @@
       <ViewOptions
         colorMode={sim.colorMode}
         trace={sim.trace.enabled}
-        canTrace={sim.dimension !== 3}
         markers={sim.markers}
         canMark={sim.dimension !== 3}
         onColorMode={(mode) => sim?.setColorMode(mode)}
         onTrace={(enabled) => sim?.setTrace(enabled)}
+        onClearTrace={() => sim?.clearTrace()}
         onMarkers={(enabled) => sim?.setMarkers(enabled)}
       />
     {/if}
@@ -231,6 +232,17 @@
         onclick={() => sim?.advanceOneFrame()}
       >
         <StepForwardIcon aria-hidden="true" />
+      </Button>
+      <!-- Reverse (SIM-32, CTRL-6): every velocity flips and the motion retraces itself. -->
+      <Button
+        variant="outline"
+        size="icon-lg"
+        disabled={!sim || sim.loading}
+        aria-label="Reverse"
+        title="Reverse: flip every particle’s velocity"
+        onclick={() => sim?.reverse()}
+      >
+        <RewindIcon aria-hidden="true" />
       </Button>
       <!-- Restart (Physics.reset): the same starting positions and velocities again. -->
       <Button

@@ -54,7 +54,7 @@ _Done_ (plan 0012, archived): every plot but the RDF with its predictions, Ideal
 
 ### Phase 4: Chaos, reversibility and trajectories
 
-_Not started._
+_Done_ (plan 0013, archived): `Simulation.reverse()` (velocities and a moving piston) with a Reverse button, the `2Dequal` divergence test, speed in doubling steps up to 2048×, the trace in 3D (dot sprites in box coordinates) and a Clear trace button. Not done: a dot-size control.
 
 - **Requirements:** SIM-4, 32; CTRL-2 (doubling steps), CTRL-6; VIEW-5.
 - **Unlocks:** STORY-21, 22; the trace for STORY-15 and `2Dliquid`.

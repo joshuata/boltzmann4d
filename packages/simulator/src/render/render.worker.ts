@@ -44,6 +44,9 @@ scope.onmessage = (event: MessageEvent<ToRenderWorker>) => {
       case 'trace':
         renderer?.setTrace(message.enabled, message.pointSize);
         break;
+      case 'clearTrace':
+        renderer?.clearTrace();
+        break;
       case 'markers':
         renderer?.setMarkers(message.enabled);
         break;

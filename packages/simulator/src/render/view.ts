@@ -18,8 +18,10 @@ export interface View {
   rotate(aboutX: number, aboutY: number): void;
   /** How particles are coloured from the next frame on. */
   setColorMode(mode: ColorMode): void;
-  /** Trace mode (2D): accumulate particle marks of `pointSize` pixels; off clears them. */
+  /** Trace mode (VIEW-5): accumulate particle dots of `pointSize` pixels; off clears them. */
   setTrace(enabled: boolean, pointSize: number): void;
+  /** Erases the trace drawn so far; tracing carries on if it's on. */
+  clearTrace(): void;
   /** The Color by Speed / KE scale's limits (VIEW-4), from the next frame on. */
   setColorLimits?(limits: ColorLimits): void;
   /** Whether kinds' markers are drawn over their particles (KIND-9; 2D only). */

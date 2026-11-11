@@ -19,6 +19,8 @@ export type ToRenderWorker =
   /** Colour mode and trace (the View menu). */
   | { type: 'colorMode'; mode: ColorMode }
   | { type: 'trace'; enabled: boolean; pointSize: number }
+  /** Erase the trace drawn so far (VIEW-5). */
+  | { type: 'clearTrace' }
   /** Kinds' markers on or off (KIND-9). */
   | { type: 'markers'; enabled: boolean };
 

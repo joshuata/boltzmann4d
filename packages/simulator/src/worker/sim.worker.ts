@@ -179,6 +179,10 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
     case 'step':
       threadController?.advanceOneFrame();
       break;
+    case 'reverse':
+      // Between frames, so every particle is at the frame's time.
+      running?.reverse();
+      break;
     case 'rate':
       rateScale = message.scale;
       threadController?.setRateScale(rateScale);

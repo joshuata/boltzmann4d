@@ -107,6 +107,8 @@ export type ToWorker =
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'step' }
+  /** Flip every velocity (SIM-32, CTRL-6); the clock keeps running forward. */
+  | { type: 'reverse' }
   /** Multiply the scenario's simulation speed (kept across loads). */
   | { type: 'rate'; scale: number }
   /**

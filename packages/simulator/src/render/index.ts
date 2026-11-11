@@ -24,8 +24,10 @@ export interface Renderer {
   setColorMode(mode: ColorMode): void;
   /** The Color by Speed / KE limits (VIEW-4; the physics worker sends them). */
   setColorLimits(limits: ColorLimits): void;
-  /** Trace mode: accumulate particle marks of `pointSize` pixels (2D). */
+  /** Trace mode (VIEW-5): accumulate a dot of `pointSize` pixels per particle per frame. */
   setTrace(enabled: boolean, pointSize: number): void;
+  /** Erases the trace drawn so far. */
+  clearTrace(): void;
   /** Whether kinds' markers are drawn (KIND-9; 2D). */
   setMarkers(enabled: boolean): void;
   /** Simulation frames drawn so far (frames replaced before a refresh aren't counted). */
@@ -134,6 +136,10 @@ export function createRenderer(
     setTrace(enabled, pointSize) {
       trace = { enabled, pointSize };
       view?.setTrace(enabled, pointSize);
+      scheduleDraw();
+    },
+    clearTrace() {
+      view?.clearTrace();
       scheduleDraw();
     },
     setMarkers(enabled) {

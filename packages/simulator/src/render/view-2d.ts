@@ -139,6 +139,9 @@ export function createView2D(info: SceneInfo): View {
     setTrace(enabled, pointSize) {
       trace.setEnabled(enabled, pointSize);
     },
+    clearTrace() {
+      trace.reset();
+    },
     setMarkers(enabled) {
       markers.group.visible = enabled;
     },

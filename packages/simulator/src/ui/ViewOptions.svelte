@@ -1,22 +1,23 @@
 <!-- The View menu: colour particles by type, speed or kinetic energy, kinds' markers and
-     trace mode. -->
+     trace mode (VIEW-5) with its Clear action. -->
 <script lang="ts">
+  import { Button } from '@boltzmann4d/ui/button';
   import type { ColorMode } from '@boltzmann4d/engine/sim';
 
   interface Props {
     colorMode: ColorMode;
     trace: boolean;
-    /** Trace mode is 2D-only so far. */
-    canTrace: boolean;
     /** Kinds' markers on particles (KIND-9; 2D). */
     markers: boolean;
     canMark: boolean;
     onColorMode: (mode: ColorMode) => void;
     onTrace: (enabled: boolean) => void;
+    /** Erases the trace drawn so far. */
+    onClearTrace: () => void;
     onMarkers: (enabled: boolean) => void;
   }
 
-  let { colorMode, trace, canTrace, markers, canMark, onColorMode, onTrace, onMarkers }: Props =
+  let { colorMode, trace, markers, canMark, onColorMode, onTrace, onClearTrace, onMarkers }: Props =
     $props();
 
   const MODES: { value: ColorMode; label: string }[] = [
@@ -55,12 +56,15 @@
       Kind markers
     </label>
   {/if}
-  {#if canTrace}
+  <div class="flex items-center justify-between gap-2">
     <label class="check">
       <input type="checkbox" checked={trace} onchange={(e) => onTrace(e.currentTarget.checked)} />
       Trace paths
     </label>
-  {/if}
+    {#if trace}
+      <Button variant="outline" size="sm" onclick={onClearTrace}>Clear trace</Button>
+    {/if}
+  </div>
 </fieldset>
 
 <style>

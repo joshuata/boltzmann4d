@@ -16,8 +16,9 @@ The simulation starts as soon as it loads. The buttons in the sidebar control it
 
 - **Play / pause** starts and stops the clock.
 - **Step** advances one frame while paused.
+- **Reverse** flips every particle's velocity, so the motion runs back the way it came. See [Reverse, chaos and trajectories](reverse-and-trace).
 - **Restart** starts again from the same starting positions and speeds.
-- **Speed** makes simulated time pass faster or slower. Double-click the slider to go back to 1×.
+- **Speed** makes simulated time pass faster or slower, in doubling steps from ⅛× to 2048×. Double-click the slider to go back to 1×.
 
 In 3D, drag the arena (or use the arrow keys) to turn it.
 
@@ -25,7 +26,7 @@ In 3D, drag the arena (or use the arrow keys) to turn it.
 
 - **Colour** shows particles by type (red and blue, or each kind's colour), by speed or by kinetic energy.
 - **Kind markers** draw a ring, dot or other mark on each kind's particles, so kinds can be told apart without colour.
-- **Trace paths** (2D) leaves a mark wherever particles have been, which shows how far they travel between collisions.
+- **Trace paths** leaves a dot at each particle's centre every frame, which shows how fast particles move and how far they travel between collisions. **Clear trace** erases it.
 - The bar in the corner of a 2D arena shows the scale in nanometres.
 
 ## Change the arena

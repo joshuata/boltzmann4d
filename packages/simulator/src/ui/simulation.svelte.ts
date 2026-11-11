@@ -379,11 +379,21 @@ export class SimulationClient {
     this.#toRenderer({ type: 'colorMode', mode });
   }
 
-  /** Trace mode: particles leave marks (2D; kept across scenarios). */
+  /** Trace mode (VIEW-5): particles leave a dot each frame (kept across scenarios). */
   setTrace(enabled: boolean): void {
     this.#viewChosen = true;
     this.trace = { ...this.trace, enabled };
     this.#toRenderer({ type: 'trace', enabled, pointSize: this.trace.pointSize });
+  }
+
+  /** Erases the trace drawn so far (VIEW-5); tracing carries on. */
+  clearTrace(): void {
+    if (this.#renderWorker) {
+      const message: ToRenderWorker = { type: 'clearTrace' };
+      this.#renderWorker.postMessage(message);
+    } else {
+      this.#mainRenderer?.clearTrace();
+    }
   }
 
   /** Kinds' markers on or off (kept across scenarios). */
@@ -431,6 +441,14 @@ export class SimulationClient {
     if (!Number.isFinite(scale) || scale <= 0) return;
     this.rateScale = scale;
     this.#send({ type: 'rate', scale });
+  }
+
+  /**
+   * Reverse (SIM-32, CTRL-6): flips every velocity so the motion retraces itself, until
+   * chaos takes over. Works while running or paused.
+   */
+  reverse(): void {
+    this.#send({ type: 'reverse' });
   }
 
   advanceOneFrame(): void {
