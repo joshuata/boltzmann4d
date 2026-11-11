@@ -113,7 +113,7 @@ describe('withArenaSize (OPT-1)', () => {
     const scenario = await loadPresetScenario('2Dhotcold');
     const resized = withArenaSize(scenario, [35, 50, 10]);
     expect(resized.arena.size).toEqual([35, 50, 10]);
-    for (const kind of ['red', 'blue']) {
+    for (const kind of ['a', 'b']) {
       expect(describeSpecies(resized, kind)).toEqual({
         ...describeSpecies(scenario, kind)!,
         placed: 0,
