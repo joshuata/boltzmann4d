@@ -23,7 +23,7 @@ function countsByKind(scenario: Scenario): Map<string, number> {
   return counts;
 }
 
-/** One line about a scenario for lists, e.g. "2D · Divided box · 30 Red, 30 Blue". */
+/** One line about a scenario for lists, e.g. "2D · Divided box · 30 Type A, 30 Type B". */
 export function summarizeScenario(scenario: Scenario): string {
   const counts = countsByKind(scenario);
   const particles = scenario.kinds

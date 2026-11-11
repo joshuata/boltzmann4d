@@ -33,7 +33,7 @@ export const MAX_KINDS = MARKERS.length;
 
 /** A new 2D scenario: a 70 × 50 nm box with 50 particles of one kind at 300 K (EDIT-17). */
 export function blankScenario(): Scenario {
-  const kind: Kind = { id: 'a', name: 'A', mass: 40, radius: 1 };
+  const kind: Kind = { id: 'a', name: 'Type A', mass: 40, radius: 1 };
   return parseScenario({
     format: SCENARIO_FORMAT,
     version: 2,
@@ -332,16 +332,16 @@ export function kindUsage(scenario: Scenario, kindId: string): string[] {
 }
 
 /**
- * Adds a kind, named with the next free letter. Switches the Okabe–Ito palette to Muted
+ * Adds a kind, named Type and the next free letter (Type A, Type B, …). Switches the Okabe–Ito palette to Muted
  * when it runs out of colours (KIND-7).
  */
 export function addKind(scenario: Scenario): Scenario {
   const next = clone(scenario);
   if (next.kinds.length >= MAX_KINDS) return next;
   const names = new Set(next.kinds.map((k) => k.name.toLowerCase()));
-  let name = 'A';
+  let name = 'Type A';
   for (let c = 65; c < 91; c++) {
-    name = String.fromCharCode(c);
+    name = `Type ${String.fromCharCode(c)}`;
     if (!names.has(name.toLowerCase())) break;
   }
   const id = nextId(

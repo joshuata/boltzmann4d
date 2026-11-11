@@ -15,7 +15,7 @@ Each value has a text field plus increase and decrease buttons. Typed values out
 
 ## Red and blue
 
-- **PART-5** There are two particle types, red and blue (type 1 and type 2), each with its own mass, radius and starting temperature. _Web port:_ scenarios built in the editor can have up to 10 kinds (KIND-1, `editor.md`); red and blue are the first two.
+- **PART-5** There are two particle types, red and blue (type 1 and type 2), each with its own mass, radius and starting temperature. _Web port:_ scenarios built in the editor can have up to 10 kinds (KIND-1, `editor.md`); red and blue are the first two, named Type A and Type B.
 - **PART-6** Restart creates the number of particles shown, all red, with the mass, radius and temperature shown. In a divided arena they all start on the left.
 - **PART-7** Particles added after a restart are blue, and take the mass, radius and temperature shown at the moment they are added. The user sets those values first, then adds.
 - **PART-8** Ways to add blue particles: raise the number (by typing or with +), or click (tap) a point in the arena to drop one particle there. A dropped particle must not overlap others.

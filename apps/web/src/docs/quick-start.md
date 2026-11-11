@@ -23,7 +23,7 @@ In 3D, drag the arena (or use the arrow keys) to turn it.
 
 ## Look at the particles
 
-- **Colour** shows particles by type (red and blue, or each kind's colour), by speed or by kinetic energy.
+- **Colour** shows particles by kind (each kind's colour), by speed or by kinetic energy.
 - **Kind markers** draw a ring, dot or other mark on each kind's particles, so kinds can be told apart without colour.
 - **Trace paths** (2D) leaves a mark wherever particles have been, which shows how far they travel between collisions.
 - The bar in the corner of a 2D arena shows the scale in nanometres.

@@ -184,17 +184,17 @@ async function load(
         : [];
     }
     if (reactions && scenario.species.length === 1) {
-      const red = scenario.species[0]!;
+      const reactant = scenario.species[0]!;
       const empty = new Float64Array(0);
       scenario.species = [
-        red,
+        reactant,
         {
-          ...red,
+          ...reactant,
           kindId: 'reacted',
           marker: MARKERS[1]!,
           type: new ParticleType(
-            red.type.particleMass,
-            red.type.particleRadius,
+            reactant.type.particleMass,
+            reactant.type.particleRadius,
             DefaultParticleInfo.BLUE,
             'Reacted',
           ),

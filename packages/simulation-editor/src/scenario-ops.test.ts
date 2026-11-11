@@ -81,7 +81,7 @@ describe('scenario operations', () => {
     let s = blankScenario();
     for (let k = 1; k < 12; k++) s = addKind(s);
     expect(s.kinds).toHaveLength(MAX_KINDS);
-    expect(s.kinds.map((k) => k.name).slice(0, 3)).toEqual(['A', 'B', 'C']);
+    expect(s.kinds.map((k) => k.name).slice(0, 3)).toEqual(['Type A', 'Type B', 'Type C']);
     expect(s.display.palette).toBe('muted');
     expect(validateScenario(s).success).toBe(true);
   });

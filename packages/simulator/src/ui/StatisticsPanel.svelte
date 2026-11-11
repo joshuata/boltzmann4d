@@ -23,7 +23,7 @@
   let cumulative = $state(false);
 
   const label = (types: number[]) =>
-    types.map((t) => summary.typeNames[t] ?? `Type ${t + 1}`).join(' & ');
+    types.map((t) => summary.typeNames[t] ?? `Type ${String.fromCharCode(65 + t)}`).join(' & ');
   const key = (types: number[]) => types.join(',');
   const allKinds = $derived(
     summary.statistics.find((s) => s.types.length === summary.typeNames.length) ??

@@ -34,8 +34,8 @@ async function chamber(redCount = 30): Promise<ScenarioInput> {
       },
     ],
     populations: [
-      { kind: 'red', region: 'left', randomlyPlaced: [{ count: redCount, averageVelocity: 1500 }] }, // prettier-ignore
-      { kind: 'blue', randomlyPlaced: [{ count: 20, averageVelocity: 1500 }] },
+      { kind: 'a', region: 'left', randomlyPlaced: [{ count: redCount, averageVelocity: 1500 }] }, // prettier-ignore
+      { kind: 'b', randomlyPlaced: [{ count: 20, averageVelocity: 1500 }] },
     ],
   };
 }
@@ -93,7 +93,7 @@ describe('spawn regions', () => {
     const input = await chamber(2000);
     await expect(resolve(input)).rejects.toThrow(ScenarioError);
     await expect(resolve(input)).rejects.toThrow(
-      /Only \d+ of 2000 Red particles fit in spawn region Left without overlapping/,
+      /Only \d+ of 2000 Type A particles fit in spawn region Left without overlapping/,
     );
   });
 

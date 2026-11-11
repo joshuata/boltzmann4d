@@ -33,7 +33,7 @@ async function drawnWalls(count: number): Promise<InitialState> {
     wall('c', [[45, 0], [45, 35]]), // prettier-ignore
     wall('t', [[52, 10], [64, 10], [58, 22]], true), // prettier-ignore
   ];
-  input.populations = [{ kind: 'red', randomlyPlaced: [{ count, averageVelocity: 1500 }] }];
+  input.populations = [{ kind: 'a', randomlyPlaced: [{ count, averageVelocity: 1500 }] }];
   return resolveScenario(parseScenario(input), { random: seededRandom(1) });
 }
 

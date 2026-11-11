@@ -78,7 +78,7 @@ export interface ResolvedScenario {
   /** The enabled reaction rules, with kinds as species indices (KIND-13). */
   reactions: ReactionRule[];
   /**
-   * One per kind, in the scenario's order (Red then Blue for `.set` files). A kind with no
+   * One per kind, in the scenario's order (Type A then Type B for `.set` files). A kind with no
    * particles is left out (as DummyMain did), unless a reaction rule can produce it.
    */
   species: ParticleSpecies[];
@@ -340,7 +340,7 @@ function placePopulation(
 
 /**
  * Where randomly placed particles go along x in a divided arena (FILE-3), as the Java app's
- * settings dialog does it (SimSettingsController.randomlyPlaceParticles): the first kind (red)
+ * settings dialog does it (SimSettingsController.randomlyPlaceParticles): the first kind (red in Java)
  * on the left and the others (blue) on the right of a closed divider, everything on the left
  * of one with a hole so it can leak through. Undefined means the whole width.
  */
