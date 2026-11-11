@@ -27,6 +27,7 @@ scope.onmessage = (event: MessageEvent<ToRenderWorker>) => {
         }, 1000);
         message.frames.onmessage = (e: MessageEvent<RenderStream>) => {
           if (e.data.type === 'scene') active.setScene(e.data.scene);
+          else if (e.data.type === 'colorLimits') active.setColorLimits(e.data.limits);
           else active.setNextFrameToDisplay(e.data.frame);
         };
         break;

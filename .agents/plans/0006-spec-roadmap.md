@@ -45,7 +45,7 @@ _Done_ (plan 0011, archived): wall and virial pressure per kind and per side, Id
 
 ### Phase 3: Complete statistics
 
-_Not started._ Finishes plan 0004 step 5.
+_Done_ (plan 0012, archived): every plot but the RDF with its predictions, Ideal/Real and finite-system corrections (Java bug 2 fixed), axis limits, history (including pressure and counts), forget time, heat-coloured bars. Not done: + and − stepping (optional), saving edited limits to a file. Finishes plan 0004 step 5.
 
 - **Requirements:** STAT-1, 3–5, 7–17, 19–23; PRED-1–7, 11; VIEW-4; OPT-4.
 - **Unlocks:** STORY-3, 4, 5, 6; history plots for STORY-7–13.

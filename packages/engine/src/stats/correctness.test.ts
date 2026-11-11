@@ -11,9 +11,10 @@ import {
   temperature,
   velocityWidth,
 } from './formulas';
-import { velocityDistribution, type InstantaneousSpeed } from './instantaneous-speed';
+import { velocityDistribution } from './predictions';
+import type { WeightedValueTracker } from './weighted-value-tracker';
 import { Statistics } from './statistics';
-import { statsContext } from './stats-context';
+import { statsContext, type StatsContext } from './stats-context';
 
 const AMU = 1.660538782e-27;
 
@@ -50,9 +51,9 @@ function worstBinError(
 }
 
 /** The temperature that a set of speeds with this mean and width corresponds to. */
-function measuredTemperature(s: InstantaneousSpeed, massAmu: number): number {
-  const mean = s.cumulativeValues.average();
-  const width = s.cumulativeValues.width();
+function measuredTemperature(values: WeightedValueTracker, massAmu: number): number {
+  const mean = values.average();
+  const width = values.width();
   return temperature(0.5 * massAmu * AMU * (width * width + mean * mean), 2);
 }
 
@@ -84,6 +85,34 @@ function singleSpecies(count: number, arenaType: ArenaType, seed: number): Initi
   return { ...init, species: [{ ...species, velocities: v }] };
 }
 
+/** One set of kinds' cumulative speeds: bins (summed over the kinds) and running sums. */
+function speeds(stats: Statistics, types: number[], view: 'current' | 'cumulative' = 'cumulative') {
+  const recorder = stats.recorder('INSTANTANEOUS_SPEED');
+  const bins = view === 'current' ? recorder.current : recorder.cumulative;
+  const { values } = recorder.compose(types, view);
+  const total = new Float64Array(bins.total.length);
+  for (const t of types) bins.byType[t]!.forEach((w, i) => (total[i] = total[i]! + w));
+  return { values, bins: { limits: bins.limits, range: bins.range, total } };
+}
+
+/** Count-weighted mean and width of the speeds of `types` at the given temperatures. */
+function predicted(ctx: StatsContext, types: number[], temperatures: ArrayLike<number>) {
+  const n = types.reduce((sum, t) => sum + ctx.types[t]!.count, 0);
+  let mean = 0;
+  let second = 0;
+  for (const t of types) {
+    const m = ctx.types[t]!.mass * AMU;
+    const w = ctx.types[t]!.count / n;
+    const avg = averageVelocity(temperatures[t]!, m, 2);
+    const width = velocityWidth(temperatures[t]!, m, 2);
+    mean += w * avg;
+    second += w * (width * width + avg * avg);
+  }
+  return { average: mean, width: Math.sqrt(second - mean * mean) };
+}
+
+const SETS = [[0], [1], [0, 1]];
+
 describe('speed statistics against kinetic theory', () => {
   it('a mixture: each species is Maxwell–Boltzmann at the shared temperature', () => {
     // 2 and 32 amu at the same temperature: the light species is 4× faster.
@@ -91,23 +120,26 @@ describe('speed statistics against kinetic theory', () => {
       syntheticGas({ count: 400, arenaType: ArenaType.PERIODIC_BOUNDARIES, seed: 5 }),
       200_000,
     );
-    for (const s of stats.speed) {
-      expect(s.cumulativeValues.average() / s.predictedAverage()).toBeCloseTo(1, 1.5);
-      expect(s.cumulativeValues.width() / s.predictedWidth()).toBeCloseTo(1, 1.5);
+    const initial = ctx.types.map((t) => t.initialTemperature);
+    for (const types of SETS) {
+      const s = speeds(stats, types);
+      const p = predicted(ctx, types, initial);
+      expect(s.values.average() / p.average).toBeCloseTo(1, 1.5);
+      expect(s.values.width() / p.width).toBeCloseTo(1, 1.5);
       // The set's density is the count-weighted mix of its species' densities.
-      const n = s.types.reduce((sum, t) => sum + ctx.types[t]!.count, 0);
+      const n = types.reduce((sum, t) => sum + ctx.types[t]!.count, 0);
       const density = (v: number) =>
-        s.types.reduce((sum, t) => {
+        types.reduce((sum, t) => {
           const type = ctx.types[t]!;
           return (
             sum +
             (type.count / n) * velocityDistribution(v, type.mass * AMU, type.initialTemperature, 2)
           );
         }, 0);
-      expect(worstBinError(s.cumulative, density)).toBeLessThan(0.015);
+      expect(worstBinError(s.bins, density)).toBeLessThan(0.015);
     }
     // Equipartition: both species hold the same mean kinetic energy.
-    const [light, heavy] = [stats.speed[0]!, stats.speed[1]!];
+    const [light, heavy] = [speeds(stats, [0]).values, speeds(stats, [1]).values];
     const ratio =
       measuredTemperature(light, ctx.types[0]!.mass) /
       measuredTemperature(heavy, ctx.types[1]!.mass);
@@ -122,9 +154,9 @@ describe('speed statistics against kinetic theory', () => {
       ...init,
       species: [init.species[0]!, { ...heavy, velocities: heavy.velocities.map((v) => 2 * v) }],
     };
-    const { stats, ctx } = run(hot, 200_000);
-    const tLight = measuredTemperature(stats.speed[0]!, ctx.types[0]!.mass);
-    const tHeavy = measuredTemperature(stats.speed[1]!, ctx.types[1]!.mass);
+    const { sim, stats, ctx } = run(hot, 200_000);
+    const tLight = measuredTemperature(speeds(stats, [0]).values, ctx.types[0]!.mass);
+    const tHeavy = measuredTemperature(speeds(stats, [1]).values, ctx.types[1]!.mass);
     // Within ±3%: one finite run fluctuates by ~2% (it differs a little between machines),
     // while species that kept their starting temperatures would be 4× apart.
     expect(tLight / tHeavy).toBeCloseTo(1, 1.2);
@@ -137,22 +169,24 @@ describe('speed statistics against kinetic theory', () => {
     // 21–59% off.)
     const temperatures = stats.temperatures('cumulative');
     expect(temperatures[0]! / tLight).toBeCloseTo(1, 10);
-    for (const s of stats.speed) {
-      expect(s.cumulativeValues.average() / s.predictedAverage(temperatures)).toBeCloseTo(1, 1.5);
-      expect(s.cumulativeValues.width() / s.predictedWidth(temperatures)).toBeCloseTo(1, 1.5);
-      const n = s.types.reduce((sum, t) => sum + ctx.types[t]!.count, 0);
+    for (const types of SETS) {
+      const s = speeds(stats, types);
+      const p = predicted(ctx, types, temperatures);
+      expect(s.values.average() / p.average).toBeCloseTo(1, 1.5);
+      expect(s.values.width() / p.width).toBeCloseTo(1, 1.5);
+      const n = types.reduce((sum, t) => sum + ctx.types[t]!.count, 0);
       const density = (v: number) =>
-        s.types.reduce(
+        types.reduce(
           (sum, t) =>
             sum +
             (ctx.types[t]!.count / n) *
               velocityDistribution(v, ctx.types[t]!.mass * AMU, temperatures[t]!, 2),
           0,
         );
-      expect(worstBinError(s.cumulative, density)).toBeLessThan(0.015);
+      expect(worstBinError(s.bins, density)).toBeLessThan(0.015);
     }
-    const summary = stats.summary(0).statistics[2]!.cumulative.prediction;
-    expect(summary.average).toBe(stats.speed[2]!.predictedAverage(temperatures));
+    const summary = stats.summary(sim.time).statistics[2]!.cumulative.prediction;
+    expect(summary.average).toBeCloseTo(predicted(ctx, [0, 1], temperatures).average, 9);
     expect(summary.temperatures).toEqual([temperatures[0], temperatures[1]]);
   });
 
@@ -165,7 +199,7 @@ describe('speed statistics against kinetic theory', () => {
     expect(Array.from(stats.temperatures('cumulative'))).toEqual(start);
     expect(Array.from(stats.temperatures('current'))).toEqual(start);
     // Every particle starts at its type's speed, so the current sample is exactly that.
-    stats.sampleCurrent();
+    stats.sampleCurrent(sim.time);
     const current = stats.temperatures('current');
     start.forEach((t, i) => expect(current[i]! / t).toBeCloseTo(1, 10));
   });
@@ -176,18 +210,19 @@ describe('speed statistics against kinetic theory', () => {
     const init = syntheticGas({ count: 400, arenaType: ArenaType.PERIODIC_BOUNDARIES, seed: 6 });
     const single: InitialState = { ...init, species: [init.species[0]!] };
     const { sim, stats, ctx } = run(single, 0);
-    const s = stats.speed[0]!;
-    const bins = new Float64Array(s.current.total.length);
+    const recorder = stats.recorder('INSTANTANEOUS_SPEED');
+    const bins = new Float64Array(recorder.current.total.length);
     let sum = 0;
     let sumSquares = 0;
     let samples = 0;
     for (let frame = 0; frame < 3000; frame++) {
       sim.advanceToTime(sim.time + sim.frameDuration);
-      stats.sampleCurrent();
-      s.current.total.forEach((w, i) => (bins[i] = bins[i]! + w));
-      const n = s.currentValues.weight;
-      const mean = s.currentValues.average();
-      const width = s.currentValues.width();
+      stats.sampleCurrent(sim.time);
+      recorder.current.total.forEach((w, i) => (bins[i] = bins[i]! + w));
+      const values = recorder.currentByType[0]!;
+      const n = values.weight;
+      const mean = values.average();
+      const width = values.width();
       sum += mean * n;
       sumSquares += (width * width + mean * mean) * n;
       samples += n;
@@ -195,11 +230,12 @@ describe('speed statistics against kinetic theory', () => {
     const type = ctx.types[0]!;
     const mean = sum / samples;
     const width = Math.sqrt(sumSquares / samples - mean * mean);
-    expect(mean / s.predictedAverage()).toBeCloseTo(1, 1.5);
-    expect(width / s.predictedWidth()).toBeCloseTo(1, 1.5);
+    const p = predicted(ctx, [0], [type.initialTemperature]);
+    expect(mean / p.average).toBeCloseTo(1, 1.5);
+    expect(width / p.width).toBeCloseTo(1, 1.5);
     const density = (v: number) =>
       velocityDistribution(v, type.mass * AMU, type.initialTemperature, 2);
-    expect(worstBinError({ ...s.current, total: bins }, density)).toBeLessThan(0.01);
+    expect(worstBinError({ ...recorder.current, total: bins }, density)).toBeLessThan(0.01);
   });
 
   describe.each([
@@ -215,9 +251,9 @@ describe('speed statistics against kinetic theory', () => {
       const m = type.mass * AMU;
       const T = type.initialTemperature;
       const periodic = arenaType === ArenaType.PERIODIC_BOUNDARIES;
-      const s = stats.speed[0]!;
-      const mean = s.cumulativeValues.average();
-      const width = s.cumulativeValues.width();
+      const { values } = speeds(stats, [0]);
+      const mean = values.average();
+      const width = values.width();
       expect(mean / correctedAverageVelocity(T, m, 2, periodic, n, n * m)).toBeCloseTo(1, 2);
       expect(width / correctedVelocityWidth(T, m, 2, periodic, n, n * m)).toBeCloseTo(1, 2);
       expect(mean / averageVelocity(T, m, 2)).toBeGreaterThan(1.02);

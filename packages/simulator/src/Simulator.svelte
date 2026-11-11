@@ -293,11 +293,9 @@
     {#if sim?.statistics}
       {#await statisticsPanel then { default: StatisticsPanel }}
         <StatisticsPanel
+          {sim}
           summary={sim.statistics}
-          kinds={sim.kinds}
-          selected={sim.statKinds}
           showMarkers={sim.markers && sim.dimension !== 3}
-          onKinds={(types) => sim?.setStatKinds(types)}
         />
       {/await}
     {/if}

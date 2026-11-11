@@ -40,7 +40,10 @@
     </select>
   </label>
   {#if colorMode !== 'NORMAL'}
-    <p class="hint">Violet is slow, red is fast (2.5 × the predicted average or more).</p>
+    <p class="hint">
+      Violet to red across the {colorMode === 'KE' ? 'Kinetic energy' : 'Instantaneous speed'} plot’s
+      min and max; darker beyond them.
+    </p>
   {/if}
   {#if canMark}
     <label class="check">

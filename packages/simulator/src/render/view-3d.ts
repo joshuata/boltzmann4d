@@ -140,6 +140,9 @@ export function createView3D(info: SceneInfo): View {
     setColorMode(mode) {
       particleColors.mode = mode;
     },
+    setColorLimits(limits) {
+      particleColors.limits = limits;
+    },
     setTrace() {
       // Trace mode is 2D-only so far.
     },

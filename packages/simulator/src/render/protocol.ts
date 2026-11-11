@@ -1,7 +1,7 @@
 // Messages for the render worker. The physics worker streams frames to the renderer over
 // a MessagePort, so they never pass through the main thread; the main thread only sets
 // up the canvas and reports size changes.
-import type { ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
+import type { ColorLimits, ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
 import type { ViewSize } from './index';
 
 /** Main thread -> render worker. */
@@ -25,7 +25,10 @@ export type ToRenderWorker =
 /** Physics worker -> renderer, over the MessagePort. */
 export type RenderStream =
   /** Sent once the simulation is built, before any frame. */
-  { type: 'scene'; scene: SceneInfo } | { type: 'frame'; frame: RenderFrame };
+  | { type: 'scene'; scene: SceneInfo }
+  | { type: 'frame'; frame: RenderFrame }
+  /** The Color by Speed / KE limits changed (the plots' axis limits, VIEW-4). */
+  | { type: 'colorLimits'; limits: ColorLimits };
 
 /** Render worker -> main thread. */
 export type FromRenderWorker =

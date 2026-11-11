@@ -17,7 +17,7 @@ The program control area, View menu, Simulation menu options and the advanced ar
 - **VIEW-1** Color scheme: Dark background (black arena) or Light background (white arena, grey walls), with red and blue particles; 3D walls default to gold (right and front) and beige (others); Custom lets the user pick background, wall, divider and particle colours.
 - **VIEW-2** Lighting: toggles particle shading in 2D. Always on in 3D.
 - **VIEW-3** Display: toggles drawing the arena entirely, so statistics can accumulate faster without rendering.
-- **VIEW-4** Color by Speed / Color by KE / Normal coloring: particles coloured on a blue (low) → green → yellow → orange → red (high) scale using the matching plot's min and max; below the minimum is dark blue, above the maximum dark red.
+- **VIEW-4** Color by Speed / Color by KE / Normal coloring: particles coloured on a blue (low) → green → yellow → orange → red (high) scale using the matching plot's min and max; below the minimum is dark blue, above the maximum dark red. _Web port:_ done; the limits follow the plots' Min and Max fields.
 - **VIEW-5** Trajectory trace: instead of particles, draw a dot at each particle's centre every frame, in the particle's colour, so spacing shows speed. Dot size 1–20 px (default 2). A Clear action erases the trace.
 - **VIEW-6** 3D view angle: the user can tilt the view. The desktop app does this with arrow keys after clicking a ruler. _Web port:_ drag (mouse or touch) to orbit, keep arrow keys, and save the angle in `.set` files.
 
@@ -28,7 +28,7 @@ One Options dialog sets:
 - **OPT-1** Arena width, height and depth (nm). _Web port:_ in the sidebar's Arena size box (see SIM-10).
 - **OPT-2** Hole diameter for the divided box with a hole.
 - **OPT-3** Pressure averaging time (default 60 ps). _Web port:_ under the pressure readout; it applies at once without restarting.
-- **OPT-4** Forget time, as a multiple of the predicted collision time (default 4).
+- **OPT-4** Forget time, as a multiple of the predicted collision time (default 4). _Web port:_ in the statistics box's Statistics options; a change applies at once if the data hasn't been forgotten yet, and is kept by Restart and arena changes.
 - **OPT-5** RDF sampling interval, as a multiple of the predicted collision time (default 0.5).
 - **OPT-6** Piston speed and the isothermal thermostat's maximum percent energy change per wall collision (default 10%).
 

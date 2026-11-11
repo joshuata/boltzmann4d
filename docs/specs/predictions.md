@@ -18,7 +18,7 @@ Notation: d = dimension, M = molar mass, R = gas constant, T = temperature, N = 
 | Average relative speed | `sqrt(2) v_avg` | `sqrt(2) v_avg` | `sqrt(2) v_avg` |
 | Average kinetic energy (per mole) | `RT/2` | `RT` | `3RT/2` |
 
-- **PRED-2** Distributions drawn as black curves: Gaussian for velocity components; `f(v) = (Mv/RT) exp(−Mv²/2RT)` in 2D and `4π (M/2πRT)^{3/2} v² exp(−Mv²/2RT)` in 3D for speed; the Boltzmann distribution for kinetic energy; exponentials for free path and collision time.
+- **PRED-2** Distributions drawn as black curves: Gaussian for velocity components; `f(v) = (Mv/RT) exp(−Mv²/2RT)` in 2D and `4π (M/2πRT)^{3/2} v² exp(−Mv²/2RT)` in 3D for speed; the Boltzmann distribution for kinetic energy; exponentials for free path and collision time. _Web port:_ every density is normalised, so a mixture's curve weights its kinds correctly; the per-particle averages and the collision rate use Gaussians with Java's widths.
 - **PRED-3** Mean free path λ and collision lifetime τ (ideal):
 
 |     | 1D                    | 2D                          | 3D                             |
@@ -42,7 +42,7 @@ In 1D, `L_net = L − Σ 2rᵢ` (space not taken by particles).
 
 Widths follow PRED-4 and PRED-5.
 
-- **PRED-7** With Both selected, predictions are number-weighted averages of the two types' predictions.
+- **PRED-7** With Both selected, predictions are number-weighted averages of the two types' predictions. _Web port:_ except Free Path and Time per Collision, which weight each kind by its collision rate too (their cumulative data has one value per collision), giving Java's `λ = v̄ / rate`.
 
 ## Real gas (Real button)
 
@@ -62,11 +62,11 @@ Widths follow PRED-4 and PRED-5.
 
 ## Finite system corrections (option)
 
-- **PRED-11** The simulation is microcanonical (fixed N, V, E), so distributions differ from Maxwell–Boltzmann by order 1/N (about 1% at 100 particles, up to 5% at 20). With the option on, predictions apply known corrections:
+- **PRED-11** The simulation is microcanonical (fixed N, V, E), so distributions differ from Maxwell–Boltzmann by order 1/N (about 1% at 100 particles, up to 5% at 20). With the option on, predictions apply known corrections (_Web port:_ the Statistics options' Finite-system corrections, plan 0012; the corrected densities take the total energy from the measured temperatures):
   - With walls, density uses `N − 1` and the accessible volume `(L_x − 2r)(L_y − 2r)[(L_z − 2r)]`.
   - With walls, an effective `B₂` corrected for edges and corners (2D: `B₂ [1 − (2/π)(σ/L_x + σ/L_y) + (6/π) σ²/(L_x L_y)]`; 3D has terms to third order; _verify_).
   - With periodic boundaries, centre-of-mass momentum is conserved, so the velocity distribution is that of `N − 1` particles with the same average energy.
-  - RMS velocity with finite corrections must work on periodic arenas (it throws in the Java app; see plan 0004).
+  - RMS velocity with finite corrections must work on periodic arenas (it throws in the Java app; see plan 0004). _Web port:_ done (`correctedRmsVelocity`).
 
 ## Reaction equilibrium
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
+import type { ColorLimits, ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
 import type { View } from './view';
 import { createView2D } from './view-2d';
 import { createView3D } from './view-3d';
@@ -22,6 +22,8 @@ export interface Renderer {
   rotate(aboutX: number, aboutY: number): void;
   /** How particles are coloured (View menu: Normal, Speed, Kinetic energy). */
   setColorMode(mode: ColorMode): void;
+  /** The Color by Speed / KE limits (VIEW-4; the physics worker sends them). */
+  setColorLimits(limits: ColorLimits): void;
   /** Trace mode: accumulate particle marks of `pointSize` pixels (2D). */
   setTrace(enabled: boolean, pointSize: number): void;
   /** Whether kinds' markers are drawn (KIND-9; 2D). */
@@ -123,6 +125,10 @@ export function createRenderer(
     setColorMode(mode) {
       colorMode = mode;
       view?.setColorMode(mode);
+      scheduleDraw();
+    },
+    setColorLimits(limits) {
+      view?.setColorLimits?.(limits);
       scheduleDraw();
     },
     setTrace(enabled, pointSize) {

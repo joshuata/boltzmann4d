@@ -133,6 +133,9 @@ export function createView2D(info: SceneInfo): View {
     setColorMode(mode) {
       colors.mode = mode;
     },
+    setColorLimits(limits) {
+      colors.limits = limits;
+    },
     setTrace(enabled, pointSize) {
       trace.setEnabled(enabled, pointSize);
     },

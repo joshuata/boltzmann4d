@@ -1,6 +1,7 @@
 // What the renderer needs from a 1D/2D or 3D view of the arena (view-2d.ts, view-3d.ts).
 import * as THREE from 'three';
-import type { ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
+import type { ColorLimits, ColorMode, RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
+import { heatColor } from './color-scale';
 
 /** The scene is drawn in nanometres: simulation meters are ~1e-8, awkward for float32. */
 export const NM = 1e9;
@@ -19,6 +20,8 @@ export interface View {
   setColorMode(mode: ColorMode): void;
   /** Trace mode (2D): accumulate particle marks of `pointSize` pixels; off clears them. */
   setTrace(enabled: boolean, pointSize: number): void;
+  /** The Color by Speed / KE scale's limits (VIEW-4), from the next frame on. */
+  setColorLimits?(limits: ColorLimits): void;
   /** Whether kinds' markers are drawn over their particles (KIND-9; 2D only). */
   setMarkers?(enabled: boolean): void;
   /** Called before each draw, with the renderer (the trace draws into its own target). */
@@ -32,14 +35,14 @@ const KJ_PER_MOL = 1.0e3 / 6.02214179e23;
 
 /**
  * Each particle's colour (MainGuiFullView's colourers): its type's colour (which
- * reactions change), or for SPEED and KE a hue from red (0, at or above 2.5 × the
- * predicted average) to blue-violet (0.7, at rest): hue = 0.7 × clamp((limit − v) / limit).
+ * reactions change), or for SPEED and KE the heat scale over the matching plot's limits
+ * (color-scale.ts, VIEW-4).
  */
 export class ParticleColors {
   mode: ColorMode;
+  limits: ColorLimits | undefined;
   private readonly palette: THREE.Color[];
   private readonly masses: Float64Array | undefined;
-  private readonly limits: { speed: number; energy: number } | undefined;
   private readonly color = new THREE.Color();
 
   constructor(info: SceneInfo) {
@@ -58,15 +61,14 @@ export class ParticleColors {
     }
     const speed = frame.speeds[i]!;
     let value = speed;
-    let limit = limits.speed;
+    let [min, max] = limits.speed;
     if (mode === 'KE') {
       const mass = (this.masses?.[i] ?? 0) * AMU_KG;
       value = (0.5 * mass * speed * speed) / KJ_PER_MOL;
-      limit = limits.energy;
+      [min, max] = limits.energy;
     }
-    const percent = Math.min(1, Math.max(0, (limit - value) / limit));
-    // HSB with full saturation and brightness is HSL with lightness ½.
-    return this.color.setHSL(0.7 * percent, 1, 0.5);
+    const { h, s, l } = heatColor(value, min, max);
+    return this.color.setHSL(h, s, l);
   }
 }
 

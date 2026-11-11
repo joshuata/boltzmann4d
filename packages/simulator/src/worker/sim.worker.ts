@@ -18,19 +18,17 @@ import {
   type SceneInfo,
 } from '@boltzmann4d/engine/sim';
 import { DefaultParticleInfo, ParticleType } from '@boltzmann4d/engine/sim/particle-type';
-import { averageVelocity, avgKineticEnergy } from '@boltzmann4d/engine/stats/formulas';
 import {
   DEFAULT_PRESSURE_AVERAGING_TIME,
+  isStatisticId,
   PressureMeter,
   Statistics,
   statsContext,
-  weightedAverage,
+  type DistributionId,
+  type Range,
+  type StatisticId,
   type StatsContext,
 } from '@boltzmann4d/engine/stats';
-import { convert } from '@boltzmann4d/engine/utils/units';
-
-/** kg per amu. */
-const AMU_KG = 1.660538782e-27;
 import {
   ArenaType,
   DividerThermalMode,
@@ -68,9 +66,36 @@ let runningPressure: PressureMeter | null = null;
 /** The averaging time (s) the user chose, kept by Restart and arena changes; null: the scenario's. */
 let averagingTime: number | null = null;
 
-/** Sends the statistics, including the picked set of kinds. */
+/** The plot the user picked; null: the scenario's. */
+let statistic: StatisticId | null = null;
+/** Finite-system and real-gas predictions (the user's; kept across loads). */
+const predictionOptions = { finite: false, realGas: false };
+/** The forget multiplier the user chose, kept by Restart and arena changes; null: the scenario's. */
+let forgetMultiplier: number | null = null;
+/** Axis limits the user set since the last load, by plot (kept by Restart). */
+const userLimits = new Map<DistributionId, Range>();
+/** The running scenario's own plot, when it names one this app knows. */
+let scenarioStatistic: StatisticId | null = null;
+
+/** Sends the statistics: the selected plot, including the picked set of kinds. */
 function postSummary(statistics: Statistics, time: number): void {
-  post({ type: 'statistics', summary: statistics.summary(time, statKinds ? [statKinds] : []) });
+  post({
+    type: 'statistics',
+    summary: statistics.summary(time, {
+      statistic: statistic ?? scenarioStatistic ?? undefined,
+      extraSubsets: statKinds ? [statKinds] : [],
+    }),
+  });
+}
+
+/** Tells the renderer the Color by Speed / KE limits (the plots' limits, VIEW-4). */
+function postColorLimits(statistics: Statistics): void {
+  const speed = statistics.range('INSTANTANEOUS_SPEED');
+  const energy = statistics.range('KINETIC_ENERGY');
+  frames?.postMessage({
+    type: 'colorLimits',
+    limits: { speed: [speed.min, speed.max], energy: [energy.min, energy.max] },
+  } satisfies RenderStream);
 }
 
 scope.onmessage = (event: MessageEvent<ToWorker>) => {
@@ -82,7 +107,33 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       break;
     case 'load':
       averagingTime = message.pressureAveragingTime ?? null;
+      forgetMultiplier = message.forgetMultiplier ?? null;
       void load(message.source, message.arena);
+      break;
+    case 'statistic':
+      statistic = message.id;
+      if (running && runningStatistics) postSummary(runningStatistics, running.time);
+      break;
+    case 'statLimit':
+      if (runningStatistics) {
+        const range = runningStatistics.setLimit(message.id, message.edge, message.value);
+        userLimits.set(message.id, { ...range });
+        if (message.id === 'INSTANTANEOUS_SPEED' || message.id === 'KINETIC_ENERGY') {
+          postColorLimits(runningStatistics);
+        }
+        if (running) postSummary(runningStatistics, running.time);
+      }
+      break;
+    case 'statOptions':
+      if (message.finite !== undefined) predictionOptions.finite = message.finite;
+      if (message.realGas !== undefined) predictionOptions.realGas = message.realGas;
+      runningStatistics?.setPredictionOptions(predictionOptions);
+      if (running && runningStatistics) postSummary(runningStatistics, running.time);
+      break;
+    case 'forgetMultiplier':
+      forgetMultiplier = message.value;
+      runningStatistics?.setForgetMultiplier(message.value);
+      if (running && runningStatistics) postSummary(runningStatistics, running.time);
       break;
     case 'pressureAveragingTime':
       averagingTime = message.seconds;
@@ -269,8 +320,10 @@ async function load(
       speed: parseSimulationSpeed(scenario.simulationSpeed),
       typeColors: scenario.species.map((s) => s.type.defaultColor),
       viewingAngles: scenario.viewingAngles,
-      view: viewOf(scenario, ctx),
+      view: viewOf(scenario),
+      limits: scenarioLimits(scenario),
     };
+    userLimits.clear(); // a new scenario or arena brings its own axis limits
     built = build(prepared);
   } catch (error) {
     if (generation === loadGeneration) {
@@ -285,6 +338,8 @@ async function load(
 /** A loaded scenario with the user's arena options applied, ready to (re)build. */
 interface Prepared {
   name: string;
+  /** The scenario's axis limits by plot (STAT-11). */
+  limits: Map<string, Range>;
   scenario: ResolvedScenario;
   initialState: InitialState;
   ctx: StatsContext;
@@ -299,6 +354,24 @@ interface Built {
   simulation: Simulation;
   statistics: Statistics;
   pressure: PressureMeter;
+}
+
+/**
+ * The scenario's axis limits by plot (STAT-11): files give them for all kinds and per kind;
+ * the plots share one axis, so it spans them all.
+ */
+function scenarioLimits(scenario: ResolvedScenario): Map<string, Range> {
+  const limits = new Map<string, Range>();
+  for (const [name, given] of scenario.abscissaLimits) {
+    const ranges = [...(given.all ? [given.all] : []), ...given.species.values()];
+    if (ranges.length === 0) continue;
+    const min = Math.min(...ranges.map((r) => r[0]));
+    const max = Math.max(...ranges.map((r) => r[1]));
+    if (Number.isFinite(min) && Number.isFinite(max) && min < max) {
+      limits.set(name.toUpperCase(), { min, max });
+    }
+  }
+  return limits;
 }
 
 /** The scenario's averaging time in seconds (`.set` files give ps). */
@@ -327,10 +400,13 @@ function build(prepared: Prepared): Built {
     averagingTime ?? scenarioAveragingTime(prepared.scenario),
   ));
   const statistics = (stats = new Statistics(prepared.ctx, simulation.particles, {
-    forgetMultiplier: prepared.scenario.forgetMultiplier,
+    forgetMultiplier: forgetMultiplier ?? prepared.scenario.forgetMultiplier,
     typeNames: prepared.scenario.species.map((s) => s.type.displayName),
     typeColors: prepared.typeColors,
     typeMarkers: prepared.scenario.species.map((s) => s.marker),
+    reactions: prepared.scenario.reactions.length > 0,
+    limits: new Map([...prepared.limits, ...userLimits]),
+    ...predictionOptions,
   }));
   return { simulation, statistics, pressure };
 }
@@ -361,7 +437,7 @@ function start(prepared: Prepared, { simulation, statistics, pressure }: Built):
   send(
     {
       type: 'scene',
-      scene: sceneOf(simulation, prepared),
+      scene: sceneOf(simulation, statistics, prepared),
     },
     [],
   );
@@ -394,7 +470,7 @@ function start(prepared: Prepared, { simulation, statistics, pressure }: Built):
       }
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
         lastSummary = now;
-        statistics.sampleCurrent();
+        statistics.sampleCurrent(simulation.time);
         postSummary(statistics, simulation.time);
       }
     },
@@ -405,6 +481,8 @@ function start(prepared: Prepared, { simulation, statistics, pressure }: Built):
   runningStatistics = statistics;
   runningPressure = pressure;
   statKinds = null; // a new scenario has its own kinds
+  const name = prepared.scenario.statName.toUpperCase();
+  scenarioStatistic = isStatisticId(name) ? name : null;
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
   threadController.showCurrentFrame();
@@ -433,10 +511,17 @@ function start(prepared: Prepared, { simulation, statistics, pressure }: Built):
       averagingTime: averagingTime ?? scenarioAveragingTime(prepared.scenario),
       prediction: prepared.scenario.pressurePredictionMode,
     },
+    statistics: {
+      plot: scenarioStatistic,
+      cumulative: prepared.scenario.cumulative,
+      width: prepared.scenario.width,
+      history: prepared.scenario.history,
+      forgetMultiplier: statistics.options.forgetMultiplier,
+    },
   });
 }
 
-function sceneOf(simulation: Simulation, prepared: Prepared): SceneInfo {
+function sceneOf(simulation: Simulation, statistics: Statistics, prepared: Prepared): SceneInfo {
   const { typeColors, viewingAngles, view, scenario } = prepared;
   const p = simulation.particles;
   const arena = simulation.arena;
@@ -479,31 +564,28 @@ function sceneOf(simulation: Simulation, prepared: Prepared): SceneInfo {
       ? { valveRadius: PISTON_VALVE_RADIUS, shaftRadius: PISTON_SHAFT_RADIUS }
       : undefined,
     masses: p.mass.slice(),
-    colorLimits: view.colorLimits,
+    colorLimits: {
+      speed: [
+        statistics.range('INSTANTANEOUS_SPEED').min,
+        statistics.range('INSTANTANEOUS_SPEED').max,
+      ],
+      energy: [statistics.range('KINETIC_ENERGY').min, statistics.range('KINETIC_ENERGY').max],
+    },
     colorMode: view.colorMode,
     trace: view.trace,
   };
 }
 
-/** The scenario's view settings and the colour-mode limits (MainGuiFullView). */
-function viewOf(scenario: ResolvedScenario, ctx: StatsContext): ViewSettings {
-  const all = ctx.types.map((_, t) => t);
-  const speed = weightedAverage(ctx, all, (t) =>
-    averageVelocity(ctx.types[t]!.initialTemperature, ctx.types[t]!.mass * AMU_KG, ctx.dimension),
-  );
-  const energy = weightedAverage(ctx, all, (t) =>
-    convert('J', 'kJ/mol', avgKineticEnergy(ctx.types[t]!.initialTemperature, ctx.dimension)),
-  );
+/** The scenario's view settings. */
+function viewOf(scenario: ResolvedScenario): ViewSettings {
   const mode = scenario.coloringMode;
   return {
-    colorLimits: { speed: 2.5 * speed, energy: 2.5 * energy },
     colorMode: mode === 'SPEED' || mode === 'KE' ? mode : 'NORMAL',
     trace: { enabled: scenario.traceMode, pointSize: scenario.tracePointSize || 2 },
   };
 }
 
 interface ViewSettings {
-  colorLimits: { speed: number; energy: number };
   colorMode: ColorMode;
   trace: { enabled: boolean; pointSize: number };
 }

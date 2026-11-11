@@ -38,7 +38,7 @@ The **Pressure** box shows how hard the particles push on the walls, for each ki
 
 ## Read the statistics
 
-The speed histogram shows how many particles have each speed, next to the Maxwell–Boltzmann prediction for the gas's temperature. Choose **All kinds** or tap the kinds to show (each button names a kind with its colour and marker), and turn on **Cumulative** to average over time instead of showing the current instant.
+The statistics box starts with the speed histogram: how many particles have each speed, next to the Maxwell–Boltzmann prediction for the gas's temperature. Choose **All kinds** or tap the kinds to show (each button names a kind with its colour and marker), and turn on **Cumulative** to average over time instead of showing the current instant. The menu above it offers kinetic energy, velocity components, free paths, collision rates, pressure and more; see [Statistics and distributions](statistics).
 
 ## Learn more
 

@@ -4,6 +4,7 @@
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
 import type { ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
+import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
 import type { PressureReading } from '@boltzmann4d/engine/stats/pressure';
 import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
 
@@ -83,10 +84,17 @@ export type ToWorker =
    */
   | { type: 'connect'; frames: MessagePort; source?: ScenarioSource; arena?: ArenaOptions }
   /**
-   * Replace the running simulation (keeps play/pause). `pressureAveragingTime` (s) keeps
-   * the user's averaging time; absent, the scenario's applies.
+   * Replace the running simulation (keeps play/pause). `pressureAveragingTime` (s) and
+   * `forgetMultiplier` keep the user's choices; absent, the scenario's apply. Axis limits
+   * go back to the scenario's.
    */
-  | { type: 'load'; source: ScenarioSource; arena?: ArenaOptions; pressureAveragingTime?: number }
+  | {
+      type: 'load';
+      source: ScenarioSource;
+      arena?: ArenaOptions;
+      pressureAveragingTime?: number;
+      forgetMultiplier?: number;
+    }
   /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
   | { type: 'movePiston'; level: number; mode: PistonMode; speed: number }
   | { type: 'stopPiston' }
@@ -107,7 +115,15 @@ export type ToWorker =
    */
   | { type: 'statKinds'; types: number[] | null }
   /** The pressure averaging time T_avg in seconds (OPT-3; kept by Restart). */
-  | { type: 'pressureAveragingTime'; seconds: number };
+  | { type: 'pressureAveragingTime'; seconds: number }
+  /** Which plot the statistics summaries carry (STAT-1). */
+  | { type: 'statistic'; id: StatisticId }
+  /** One of a plot's axis limits (STAT-8–10; kept by Restart, reset by a load). */
+  | { type: 'statLimit'; id: DistributionId; edge: 'min' | 'max'; value: number }
+  /** Finite-system (PRED-11) and real-gas (PRED-9) predictions; kept across loads. */
+  | { type: 'statOptions'; finite?: boolean; realGas?: boolean }
+  /** The forget time, in predicted collision times (OPT-4; kept by Restart). */
+  | { type: 'forgetMultiplier'; value: number };
 
 /** One particle kind of the running simulation, for legends and pickers (KIND-4, KIND-9). */
 export interface KindInfo {
@@ -156,6 +172,17 @@ export type FromWorker =
       };
       /** The scenario's pressure settings: averaging time (s) and prediction (PRES-2, PRES-6). */
       pressure: { averagingTime: number; prediction: 'IDEAL' | 'REAL' };
+      /**
+       * The scenario's statistics view: its plot (a statistic id, when this app knows it),
+       * Cumulative, Width and History; and the forget multiplier in use.
+       */
+      statistics: {
+        plot: StatisticId | null;
+        cumulative: boolean;
+        width: boolean;
+        history: boolean;
+        forgetMultiplier: number;
+      };
     }
   /** About once a second (every SUMMARY_INTERVAL_MS), and after each step. */
   | { type: 'statistics'; summary: StatisticsSummary }
