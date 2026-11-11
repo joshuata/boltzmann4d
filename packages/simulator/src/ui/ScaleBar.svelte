@@ -1,14 +1,16 @@
 <!-- A scale bar over the 2D arena (the Java app's nm rulers): a round length in nm, sized
-     from how the 2D view fits the arena to the canvas (view-2d.ts). -->
+     from how the 2D view fits the arena to the canvas (view-2d.ts) and the zoom. -->
 <script lang="ts">
   interface Props {
     /** Arena size, m. */
     arena: { width: number; height: number };
     /** Canvas size, CSS pixels. */
     canvas: { width: number; height: number };
+    /** The view's zoom (CTRL-7): 1 fits the arena. */
+    zoom?: number;
   }
 
-  let { arena, canvas }: Props = $props();
+  let { arena, canvas, zoom = 1 }: Props = $props();
 
   /** Space around the arena, as a fraction of its larger side (view-2d.ts MARGIN). */
   const MARGIN = 0.04;
@@ -22,7 +24,7 @@
     const halfH = y / 2 + margin;
     const aspect = canvas.width / canvas.height;
     if (halfW / halfH < aspect) halfW = halfH * aspect;
-    const nmPerPixel = (2 * halfW) / canvas.width;
+    const nmPerPixel = (2 * halfW) / zoom / canvas.width;
     // A round length about a fifth of the canvas wide: 1, 2 or 5 × 10^k nm.
     const target = (canvas.width / 5) * nmPerPixel;
     const power = 10 ** Math.floor(Math.log10(target));

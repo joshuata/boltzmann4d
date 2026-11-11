@@ -35,6 +35,9 @@ scope.onmessage = (event: MessageEvent<ToRenderWorker>) => {
       case 'resize':
         renderer?.setSize(message.size);
         break;
+      case 'zoom':
+        renderer?.setZoom(message.zoom);
+        break;
       case 'rotate':
         renderer?.rotate(message.aboutX, message.aboutY);
         break;

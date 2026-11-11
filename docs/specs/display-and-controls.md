@@ -10,7 +10,7 @@ The program control area, View menu, Simulation menu options and the advanced ar
 - **CTRL-4** Pause / Play toggle. While paused the user can change settings, add particles and inspect plots.
 - **CTRL-5** Advance: one frame forward, only while paused.
 - **CTRL-6** Reverse (see `simulation.md` SIM-32). _Web port:_ a button beside Restart; it works while running or paused.
-- **CTRL-7** Zoom: default 1 pixel = 1 nm; steps of about 25%; minimum 33%; a typed percentage is allowed. _Web port:_ zoom should also respond to pinch and wheel, and default to fitting the arena in the available space.
+- **CTRL-7** Zoom: default 1 pixel = 1 nm; steps of about 25%; minimum 33%; a typed percentage is allowed. _Web port:_ zoom also responds to pinch, the wheel (and trackpad pinch) and the +, − and 0 keys, and defaults to fitting the arena in the available space. Percentages are relative to that fit (100% = the whole arena in view, not 1 pixel per nm), steps are powers of 1.25, the range is 33%–1600%, and a Fit button returns to 100%. The view zooms about the arena's centre, with no panning. In 2D, zooming clears the trajectory trace, as resizing does.
 
 ## View options
 

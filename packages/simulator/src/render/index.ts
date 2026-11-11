@@ -18,6 +18,8 @@ export interface Renderer {
   setSize(size: ViewSize): void;
   /** Queues a frame; it is drawn on the next animation tick (MainGuiView.setNextFrameToDisplay). */
   setNextFrameToDisplay(frame: RenderFrame): void;
+  /** Magnifies the view about the arena's centre: 1 fits the whole arena (CTRL-7). */
+  setZoom(zoom: number): void;
   /** 3D: turns the view about the x and y axes by these angles in degrees. */
   rotate(aboutX: number, aboutY: number): void;
   /** How particles are coloured (View menu: Normal, Speed, Kinetic energy). */
@@ -65,6 +67,7 @@ export function createRenderer(
   let markers: boolean | null = null;
   let nextFrame: RenderFrame | null = null;
   let size = initialSize;
+  let zoom = 1;
   let drawScheduled = false;
   let drawnCount = 0;
   let disposed = false;
@@ -73,7 +76,7 @@ export function createRenderer(
     const { width: w, height: h } = size;
     renderer.setPixelRatio(size.pixelRatio);
     renderer.setSize(w, h, false);
-    view?.fit(w / h || 1);
+    view?.fit(w / h || 1, zoom);
   };
 
   const draw = () => {
@@ -118,6 +121,11 @@ export function createRenderer(
     },
     setNextFrameToDisplay(frame) {
       nextFrame = frame; // only the latest frame is drawn if several arrive between refreshes
+      scheduleDraw();
+    },
+    setZoom(next) {
+      zoom = next;
+      fit();
       scheduleDraw();
     },
     rotate(aboutX, aboutY) {

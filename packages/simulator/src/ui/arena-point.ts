@@ -1,5 +1,6 @@
 // Where a click on the 2D arena lands, in meters, following the 2D view's fit (view-2d.ts:
-// the arena centred, with a margin of 4% of its larger side, letterboxed to the canvas).
+// the arena centred, with a margin of 4% of its larger side, letterboxed to the canvas,
+// then magnified by the zoom about the arena's centre).
 
 /** Same as view-2d.ts's MARGIN. */
 const MARGIN = 0.04;
@@ -13,6 +14,8 @@ export function arenaPoint(
   py: number,
   canvas: { width: number; height: number },
   arena: { width: number; height: number },
+  /** The view's zoom (CTRL-7): 1 fits the arena. */
+  zoom = 1,
 ): { x: number; y: number; metersPerPixel: number } {
   const margin = MARGIN * Math.max(arena.width, arena.height);
   let halfW = arena.width / 2 + margin;
@@ -20,6 +23,8 @@ export function arenaPoint(
   const aspect = canvas.width / canvas.height || 1;
   if (halfW / halfH < aspect) halfW = halfH * aspect;
   else halfH = halfW / aspect;
+  halfW /= zoom;
+  halfH /= zoom;
   const metersPerPixel = (2 * halfW) / canvas.width;
   return {
     x: arena.width / 2 - halfW + px * metersPerPixel,

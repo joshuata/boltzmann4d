@@ -14,6 +14,8 @@ export type ToRenderWorker =
       frames: MessagePort;
     }
   | { type: 'resize'; size: ViewSize }
+  /** Magnify the view about the arena's centre; 1 fits the arena (CTRL-7). */
+  | { type: 'zoom'; zoom: number }
   /** 3D: turn the view by these angles, in degrees. */
   | { type: 'rotate'; aboutX: number; aboutY: number }
   /** Colour mode and trace (the View menu). */
