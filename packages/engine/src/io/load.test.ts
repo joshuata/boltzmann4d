@@ -99,15 +99,19 @@ describe('loadSetFile', () => {
     expect(a).toEqual(b);
   });
 
-  it('converts explicitly placed particles (default.set)', async () => {
+  it('drops particle groups with no particles (default.set)', async () => {
     const { scenario } = loadSetFile(await loadDefaultSetFileText());
-    // The Blue group has no particles, so only Red remains.
     expect(scenario.species.map((s) => s.type.displayName)).toEqual(['Red']);
+    expect(scenario.species[0]!.positions).toHaveLength(50 * 3);
+  });
+
+  it('converts explicitly placed particles (2Dequal)', async () => {
+    const { scenario } = loadSetFile(await loadPresetText('2Dequal'));
     const [red] = scenario.species;
     const [position, velocity] = [rows(red!.positions)[0], rows(red!.velocities)[0]];
-    expect(position).toEqual([30.662509904308962 * 1e-9, 39.252027832806874 * 1e-9, 0]);
-    const speed = 1579.3484959644366;
-    const theta = 2.4096476097076787;
+    expect(position).toEqual([33.73 * 1e-9, 6.667 * 1e-9, 0]);
+    const speed = 1252.772;
+    const theta = 2.12;
     expect(velocity).toEqual([Math.cos(theta) * speed, Math.sin(theta) * speed, 0]);
   });
 
