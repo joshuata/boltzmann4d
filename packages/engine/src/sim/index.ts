@@ -59,14 +59,20 @@ export interface SceneInfo {
   viewingAngles?: readonly [number, number];
   /** Per particle, amu (for the kinetic-energy colour mode). */
   masses?: Float64Array;
-  /**
-   * Colour modes: the speed (m/s) and kinetic energy (kJ/mol) that map to the end of the
-   * hue scale, 2.5 × the predicted averages over all types (MainGuiFullView).
-   */
-  colorLimits?: { speed: number; energy: number };
+  /** Colour modes: the limits of the heat scale (VIEW-4). */
+  colorLimits?: ColorLimits;
   /** The settings file's view: colour mode and trace. */
   colorMode?: ColorMode;
   trace?: { enabled: boolean; pointSize: number };
+}
+
+/**
+ * The speeds (m/s) and kinetic energies (kJ/mol) at the ends of the Color by Speed / KE
+ * scale: the Instantaneous Speed and Kinetic Energy plots' min and max (VIEW-4).
+ */
+export interface ColorLimits {
+  speed: [number, number];
+  energy: [number, number];
 }
 
 /** How particles are coloured: by type, or by speed or kinetic energy on a hue scale. */
@@ -114,6 +120,25 @@ export {
   type EventInfo,
 } from './event';
 export { CellGrid } from './cell-grid';
+export {
+  addParticle,
+  census,
+  continueInArena,
+  MAX_PARTICLES,
+  PlacementError,
+  placementSpace,
+  removeNewest,
+  type AddOptions,
+  type Boundary,
+  type Census,
+} from './particle-edits';
+export {
+  PlacementSpace,
+  randomVelocity,
+  speedForTemperature,
+  velocityFromAngles,
+  zeroMomentum,
+} from './placement';
 export { EventHeap } from './event-heap';
 export { Particles, type Arena } from './particles';
 export {

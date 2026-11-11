@@ -54,6 +54,7 @@ export {
 } from './palettes';
 export {
   resolveScenario,
+  emptySpecies,
   calculateTotalKE,
   parseHexColor,
   type ResolveOptions,
@@ -67,6 +68,7 @@ export {
   SPECIES_LIMITS,
   describeSpecies,
   scenarioProblems,
+  withArenaSize,
   withSpecies,
   type SpeciesSetup,
   type SpeciesSummary,

@@ -99,6 +99,11 @@ export interface InitialSpecies {
   velocities: Float64Array;
   /** Initial temperature (K) the scenario asked for, or NaN/absent to infer it. */
   initialTemperature?: number;
+  /**
+   * Per particle, the species whose colour it shows (reactions recolour particles without
+   * changing their species). Absent: its own.
+   */
+  colors?: Uint16Array;
 }
 
 /** Everything the simulation starts from. io's ResolvedScenario satisfies this. */
@@ -140,6 +145,14 @@ export interface InitialState {
    */
   walls?: readonly WallShape[];
   species: readonly InitialSpecies[];
+  /**
+   * Starting a run from the middle of another (Simulation.currentState, mid-run edits): the
+   * clock (s), the piston's level and whether the demon's hole is open. Absent: 0, the top,
+   * closed.
+   */
+  time?: number;
+  pistonLevel?: number;
+  holeOpen?: boolean;
 }
 
 export interface SimulationOptions {
@@ -147,6 +160,12 @@ export interface SimulationOptions {
   frameDuration?: number;
   /** Called with each event just before it is performed (where statistics plug in). */
   onEvent?: (event: Readonly<EventInfo>) => void;
+  /**
+   * Called with each event just after it is performed, with the particles involved in
+   * their new state (where observers such as the pressure meter read the outcome). It must
+   * not change the simulation.
+   */
+  afterEvent?: (event: Readonly<EventInfo>) => void;
 }
 
 export class Simulation {
@@ -187,6 +206,8 @@ export class Simulation {
   frameDuration: number;
   /** Piston arenas: the piston (null otherwise). */
   readonly piston: Piston | null;
+  /** The level the piston's latest move started from, where reverse() sends it back to. */
+  private pistonMoveStart = 0;
   /** The wall thermostat, switched on by isothermal piston moves. */
   readonly thermostat = new Thermostat();
   /** The reaction rules, compiled (null without any). */
@@ -213,6 +234,7 @@ export class Simulation {
   private readonly boundaryValid: Uint8Array;
 
   private readonly onEvent: SimulationOptions['onEvent'];
+  private readonly afterEvent: SimulationOptions['afterEvent'];
   private readonly heap: EventHeap;
 
   // Each particle's next event (keys live in the heap).
@@ -265,6 +287,8 @@ export class Simulation {
   private readonly prediction = createEvent();
   private firstRun = true;
   private currentFrame: RenderFrame | null = null;
+  /** What the simulation was built from (currentState() starts from it). */
+  private readonly init: InitialState;
 
   constructor(init: InitialState, options: SimulationOptions = {}) {
     if (init.dimension !== 2 && init.dimension !== 3) {
@@ -277,6 +301,7 @@ export class Simulation {
       throw new Error('Conducting dividers are not supported in 3D yet');
     }
     const dimension = init.dimension;
+    this.init = init;
     this.dimension = dimension;
     this.is3D = dimension === 3;
     const motion: Motion = MOTION[dimension];
@@ -318,7 +343,11 @@ export class Simulation {
       (init.arenaType === ArenaType.DIVIDED_ARENA ||
         init.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE);
     this.piston =
-      init.arenaType === ArenaType.MOVABLE_PISTON ? new Piston(0, 0.0, init.arenaYSize) : null;
+      init.arenaType === ArenaType.MOVABLE_PISTON
+        ? new Piston(init.time ?? 0, init.pistonLevel ?? 0.0, init.arenaYSize)
+        : null;
+    this.time = init.time ?? 0;
+    this.holeOpen = this.nextFrameHoleOpen = this.arena.maxwellDemonMode && !!init.holeOpen;
     if (init.holeEdges) {
       if (init.holeEdges.y.length !== this.arena.edgeY.length) {
         throw new Error('holeEdges must have one entry per edge sphere');
@@ -328,6 +357,7 @@ export class Simulation {
     }
     this.frameDuration = options.frameDuration ?? DEFAULT_FRAME_DURATION;
     this.onEvent = options.onEvent;
+    this.afterEvent = options.afterEvent;
 
     // Particles in species order, as Physics does with SimulationInfo's particle types.
     const count = init.species.reduce((n, s) => n + s.positions.length / 3, 0);
@@ -343,8 +373,9 @@ export class Simulation {
         p.vz[i] = species.velocities[3 * k + 2]!;
         p.radius[i] = species.type.particleRadius;
         p.mass[i] = species.type.particleMass;
+        p.t0[i] = this.time;
         p.type[i] = typeIndex;
-        p.color[i] = typeIndex;
+        p.color[i] = species.colors?.[k] ?? typeIndex;
         motion.initPeriodicFlags(p, i, this.arena);
       }
     });
@@ -487,6 +518,7 @@ export class Simulation {
       throw new RangeError(`Piston level ${targetLevel} is outside 0..${this.maxPistonLevel()}`);
     }
     piston.speed = speed;
+    this.pistonMoveStart = piston.curLevel;
     if (mode === PistonMode.INSTANTANEOUS) {
       if (targetLevel > piston.curLevel) {
         throw new RangeError('An instantaneous piston move can only pull the piston out');
@@ -509,6 +541,104 @@ export class Simulation {
     const piston = this.requirePiston();
     piston.targetLevel = piston.curLevel;
     this.repredictAllBoundaries();
+  }
+
+  /**
+   * Reverse (SIM-32, CTRL-6): flips the velocity of every particle, and sends a moving
+   * piston back towards where its move started, at the current time. The clock keeps
+   * running forward and the motion retraces itself as closely as round-off allows, until
+   * chaos (SIM-4) takes over. The isothermal thermostat, a conducting divider and a
+   * reaction with its reverse suppressed aren't time-reversible, so there it won't retrace.
+   *
+   * Java has Particle.reverse() but never calls it (its Time Reverse button is disabled),
+   * so this has no parity counterpart.
+   */
+  reverse(): void {
+    this.synchronize();
+    const p = this.particles;
+    const n = p.count;
+
+    for (let k = 0; k < n; k++) {
+      p.vx[k] = -p.vx[k]!;
+      p.vy[k] = -p.vy[k]!;
+      p.vz[k] = -p.vz[k]!;
+    }
+    const piston = this.piston;
+    if (piston?.isMoving(this.time)) {
+      // The piston is at its current level as of this frame (advanceToTime moved it).
+      const back = this.pistonMoveStart;
+      this.pistonMoveStart = piston.targetLevel;
+      piston.targetLevel = back;
+    }
+    // Every particle starts afresh from here, as after an event of its own: predictions
+    // (boundaries included) start from its present state.
+    for (let k = 0; k < n; k++) {
+      this.collisionCount[k]!++; // pair events predicted with the old velocities are stale
+      this.recordEventState(k);
+    }
+    for (let k = 0; k < n; k++) this.repredict(k);
+  }
+
+  /**
+   * The present moment as a starting state (mid-run edits rebuild the simulation from it):
+   * every particle moved to the latest time, with its velocity and displayed colour, plus
+   * the clock, the piston's level, the demon's hole (as of the next frame) and the gates.
+   * Species keep their order and their particles' order. A moving piston comes back
+   * stopped, and the wall thermostat off.
+   */
+  currentState(): InitialState {
+    this.synchronize();
+    const p = this.particles;
+    let first = 0;
+    const species = this.init.species.map((s, t): InitialSpecies => {
+      let n = 0;
+      while (first + n < p.count && p.type[first + n] === t) n++;
+      const positions = new Float64Array(3 * n);
+      const velocities = new Float64Array(3 * n);
+      const colors = new Uint16Array(n);
+      for (let k = 0; k < n; k++) {
+        const i = first + k;
+        positions[3 * k] = p.x[i]!;
+        positions[3 * k + 1] = p.y[i]!;
+        positions[3 * k + 2] = p.z[i]!;
+        velocities[3 * k] = p.vx[i]!;
+        velocities[3 * k + 1] = p.vy[i]!;
+        velocities[3 * k + 2] = p.vz[i]!;
+        colors[k] = p.color[i]!;
+      }
+      first += n;
+      return { ...s, positions, velocities, colors };
+    });
+    const walls = this.init.walls?.map((w, index) =>
+      w.physics?.type === 'gate'
+        ? {
+            ...w,
+            physics: {
+              type: 'gate' as const,
+              open: this.pendingGates.get(index) ?? this.walls!.isOpen(index),
+            },
+          }
+        : w,
+    );
+    return {
+      ...this.init,
+      species,
+      ...(walls ? { walls } : {}),
+      time: this.time,
+      pistonLevel: this.piston?.curLevel ?? 0,
+      holeOpen: this.nextFrameHoleOpen,
+    };
+  }
+
+  /** After step() particles are at their own event times: brings them all to the latest. */
+  private synchronize(): void {
+    const p = this.particles;
+    const n = p.count;
+    let latest = this.time;
+    for (let k = 0; k < n; k++) if (p.t0[k]! > latest) latest = p.t0[k]!;
+    let together = latest === this.time;
+    for (let k = 0; together && k < n; k++) together = p.t0[k] === latest;
+    if (!together) this.advanceToTime(latest);
   }
 
   /** Highest piston level that leaves the particles room (Physics.calculateCompressionLimit). */
@@ -729,8 +859,15 @@ export class Simulation {
     this.repredict(i);
   }
 
-  /** Performs particle i's (valid, physical) next event and re-predicts what it changed. */
+  /** Performs particle i's (valid, physical) next event, then tells afterEvent. */
   private perform(i: number): Readonly<EventInfo> {
+    const event = this.performEvent(i);
+    this.afterEvent?.(event);
+    return event;
+  }
+
+  /** Performs particle i's (valid, physical) next event and re-predicts what it changed. */
+  private performEvent(i: number): Readonly<EventInfo> {
     const p = this.particles;
     const event = this.event;
     const type = this.nextType[i]!;

@@ -4,7 +4,7 @@ The distribution graph area at the top of the sidebar. Source: manual §I.C, §I
 
 ## Plot picker
 
-- **STAT-1** A dropdown picks one plot. Which plots are offered depends on dimension, boundary mode and reaction mode (table below). The user can step through the list with the + and − keys.
+- **STAT-1** A dropdown picks one plot. Which plots are offered depends on dimension, boundary mode and reaction mode (table below). The user can step through the list with the + and − keys. _Web port:_ done (plan 0012) except the RDF (STAT-2, 24) and the + and − keys, which the roadmap made optional. The menu also lists the pressure of each region, from the Pressure readout. Free Path's current view uses each particle's last completed path, as this table says (Java used the path still in progress).
 
 | Plot | Quantity per particle | Available |
 | --- | --- | --- |
@@ -32,19 +32,19 @@ The distribution graph area at the top of the sidebar. Source: manual §I.C, §I
 - **STAT-4** A black curve shows the predicted distribution for the plot (where one exists).
 - **STAT-5** Green vertical lines mark the measured average and average ± one width; orange lines mark the predicted average and ± one predicted width. The values are also shown as numbers.
 - **STAT-6** Bars and curve are each scaled so their maximum fills the plot height (the manual says full height; the 2013 Java app uses 80%, which we follow). It's a shape comparison, not a density.
-- **STAT-7** With Color by Speed and the Instantaneous Speed plot, or Color by KE and the Kinetic Energy plot, bars are coloured with the same colours as the particles in that range.
+- **STAT-7** With Color by Speed and the Instantaneous Speed plot, or Color by KE and the Kinetic Energy plot, bars are coloured with the same colours as the particles in that range. _Web port:_ done; bars are then one colour per bin rather than stacked by kind.
 
 ## Axis limits
 
-- **STAT-8** Each plot has its own abscissa minimum and maximum, shown in editable fields below the plot.
-- **STAT-9** If a typed maximum is below the minimum, it becomes 110% of the minimum; a minimum above the maximum becomes 90% of the maximum.
+- **STAT-8** Each plot has its own abscissa minimum and maximum, shown in editable fields below the plot. _Web port:_ a plot's Red, Blue and Both views share one axis, so they can be compared directly.
+- **STAT-9** If a typed maximum is below the minimum, it becomes 110% of the minimum; a minimum above the maximum becomes 90% of the maximum. _Web port:_ when the other limit is 0 or negative, the limit moves a tenth of that limit's size (or of the old span, at 0) past it instead.
 - **STAT-10** Changing a plot's limits clears that plot's cumulative data only.
-- **STAT-11** The limits are saved in `.set` files.
+- **STAT-11** The limits are saved in `.set` files. _Web port:_ a scenario's limits are applied when it loads (the union of its per-kind limits). Saving edited limits back to a file isn't done yet.
 
 ## Averages and widths
 
 - **STAT-12** Two numeric readouts below the plot: Predicted and Average (measured). In cumulative view they are for the cumulative distribution; otherwise for the current one.
-- **STAT-13** A Width toggle switches both readouts (and their marker lines) to the root-mean-square width `sqrt(<q²> − <q>²)`.
+- **STAT-13** A Width toggle switches both readouts (and their marker lines) to the root-mean-square width `sqrt(<q²> − <q>²)`. _Web port:_ the ± width lines are always drawn (STAT-5) and drawn heavier with Width on.
 - **STAT-14** Predictions are for an infinite system unless finite system corrections are on; path, collision time, collision rate and pressure predictions also depend on Ideal / Real (see `predictions.md`).
 
 ## Cumulative view
@@ -52,12 +52,12 @@ The distribution graph area at the top of the sidebar. Source: manual §I.C, §I
 - **STAT-15** A Cumulative toggle shows every recorded value since the data was last cleared, rather than the current frame. It updates at every collision.
 - **STAT-16** Velocity and energy values are weighted by how long each was held; path, time, collision rate and RDF are weighted by count.
 - **STAT-17** Cumulative data is cleared by Restart, by changing that plot's limits, and once automatically at the forget time (default 4 × the predicted collision time after restart, multiplier set in Options), so the initial equal-speed state doesn't skew it.
-- **STAT-18** Cumulative views of the per-particle averages (average speed, average RMS velocity, average KE, average path, collision rate) aren't meaningful; the app may still compute them but should not invite their use.
-- **STAT-19** The collision rate prediction curve is a Gaussian whose width shrinks with time; it is redrawn whenever the width has changed by 22%, not every frame.
+- **STAT-18** Cumulative views of the per-particle averages (average speed, average RMS velocity, average KE, average path, collision rate) aren't meaningful; the app may still compute them but should not invite their use. _Web port:_ Cumulative is disabled for them, with a note. Their values include each particle's interval still in progress, and a set of kinds averages over its own particles (Java divided by every particle; #18).
+- **STAT-19** The collision rate prediction curve is a Gaussian whose width shrinks with time; it is redrawn whenever the width has changed by 22%, not every frame. _Web port:_ the curve is recomputed with every summary (about once a second), so the 22% rule isn't needed.
 
 ## History view
 
-- **STAT-20** A History toggle plots the measured value over the most recent 150 frames.
+- **STAT-20** A History toggle plots the measured value over the most recent 150 frames. _Web port:_ the last 150 summaries (about one a second) for statistics, and the last 150 pressure readings (four a second) for pressures, as the roadmap allows. Every plot keeps its history while another is shown.
 - **STAT-21** The predicted value is a red line with dotted red lines at ± half the predicted width; the vertical range is four predicted widths. For pressures the width is taken to be the pressure itself, so the range is 0 to twice the prediction.
 - **STAT-22** Plots with no distribution (pressures, number of particles) always show history.
 

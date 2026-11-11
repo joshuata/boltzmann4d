@@ -24,7 +24,7 @@ Plan 0005 ports the remaining 2D physics modes (thermostat and piston, pair well
 
 ### Phase 1: Set up and run your own gas
 
-_Not started._ The core classroom loop.
+_Done_ (plan 0014, archived; setup itself moved to the scenario editor, plans 0008 and 0010): adding particles at a point or at random, removing the newest, the Particles panel with pending edits, boundary-mode buttons with mid-run arena switches, the clock, Left/Right counts, Restart with new placement and zero momentum, scenarios that load paused. Not done: the editor's drop-particle tool (EDIT-8). Collapsible panels (STAT-25), file loading (FILE-1, 3, 4) and zoom (CTRL-7) are being finished in their own sessions. The core classroom loop.
 
 - **Requirements:** PART-1–9, 12, 14–16; CTRL-1, 3; SIM-6, 12–16, 24 (demon toggle), 30; FILE-1 (user file picker), FILE-3, 4; STAT-25; CTRL-7 (fit-to-view default).
 - **Unlocks:** STORY-1, 2, 8, 10, 14, 15, 16, 17, 18, 19, 20, 28 (except Color by KE, Phase 3).
@@ -36,7 +36,7 @@ _Not started._ The core classroom loop.
 
 ### Phase 2: Pressure and the gas laws
 
-_Not started._
+_Done_ (plan 0011, archived): wall and virial pressure per kind and per side, Ideal/Real predictions, averaging time and arena size. PRES-9's history plots wait for Phase 3; 1D pressure waits for 1D physics.
 
 - **Requirements:** PRES-1–9; PRED-8, 9 (pressure part); OPT-1, 3; SIM-10, 18.
 - **Unlocks:** STORY-7, 9, 11, 12, 13.
@@ -45,7 +45,7 @@ _Not started._
 
 ### Phase 3: Complete statistics
 
-_Not started._ Finishes plan 0004 step 5.
+_Done_ (plan 0012, archived): every plot but the RDF with its predictions, Ideal/Real and finite-system corrections (Java bug 2 fixed), axis limits, history (including pressure and counts), forget time, heat-coloured bars. Not done: + and − stepping (optional), saving edited limits to a file. Finishes plan 0004 step 5.
 
 - **Requirements:** STAT-1, 3–5, 7–17, 19–23; PRED-1–7, 11; VIEW-4; OPT-4.
 - **Unlocks:** STORY-3, 4, 5, 6; history plots for STORY-7–13.
@@ -54,7 +54,7 @@ _Not started._ Finishes plan 0004 step 5.
 
 ### Phase 4: Chaos, reversibility and trajectories
 
-_Not started._
+_Done_ (plan 0013, archived): `Simulation.reverse()` (velocities and a moving piston) with a Reverse button, the `2Dequal` divergence test, speed in doubling steps up to 2048×, the trace in 3D (dot sprites in box coordinates) and a Clear trace button. Not done: a dot-size control.
 
 - **Requirements:** SIM-4, 32; CTRL-2 (doubling steps), CTRL-6; VIEW-5.
 - **Unlocks:** STORY-21, 22; the trace for STORY-15 and `2Dliquid`.

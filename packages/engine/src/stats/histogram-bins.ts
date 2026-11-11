@@ -29,13 +29,16 @@ export class HistogramBins {
   add(value: number, weight: number, typeIndex: number): void {
     if (!(value >= this.range.min)) return;
     const limits = this.limits;
-    for (let i = 0; i < limits.length; i++) {
-      if (value < limits[i]!) {
-        this.byType[typeIndex]![i] = this.byType[typeIndex]![i]! + weight;
-        this.total[i] = this.total[i]! + weight;
-        return;
-      }
-    }
+    const n = limits.length;
+    // Straight to the right bin, then nudged onto Java's edges (they're rounded).
+    let i = Math.floor(((value - this.range.min) / (this.range.max - this.range.min)) * n);
+    if (!(i >= 0)) i = 0; // a zero-width range
+    if (i > n) i = n;
+    while (i > 0 && value < limits[i - 1]!) i--;
+    while (i < n && value >= limits[i]!) i++;
+    if (i >= n) return;
+    this.byType[typeIndex]![i] = this.byType[typeIndex]![i]! + weight;
+    this.total[i] = this.total[i]! + weight;
   }
 
   reset(): void {

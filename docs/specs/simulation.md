@@ -7,9 +7,9 @@ The physical model and the arena configurations. Source: manual §I.A, §I.D (bo
 - **SIM-1** Particles are hard spheres (disks in 2D, rods on a line in 1D) with no forces between them except at contact. Between collisions they move in straight lines at constant velocity.
 - **SIM-2** Two particles collide when their centres are exactly the sum of their radii apart. A particle hits a wall when its centre is one radius from the wall. Collisions are perfectly elastic: total momentum and kinetic energy are conserved, and nothing else is assumed.
 - **SIM-3** Motion is computed exactly from event to event (no fixed time step), so energy is conserved to round-off. In a long single-species run, kinetic energy must drift by no more than about 1e-13 relative over several microseconds of simulated time.
-- **SIM-4** The motion is chaotic: tiny differences in initial conditions grow exponentially. The app must not hide this (for example by snapping or re-normalising positions); the `2Dequal` preset relies on round-off making two identical halves diverge after roughly 90–120 ps.
+- **SIM-4** The motion is chaotic: tiny differences in initial conditions grow exponentially. The app must not hide this (for example by snapping or re-normalising positions); the `2Dequal` preset relies on round-off making two identical halves diverge after roughly 90–120 ps. _Web port:_ done; `reverse.test.ts` checks that `2Dequal`'s halves differ only by round-off at first, grow apart exponentially, are a radius apart by 80–100 ps (about 88 ps) and unrelated by 120 ps (about 103 ps).
 - **SIM-5** Simulated time is shown in ps. At the default speed the clock advances roughly 1 ps per wall-clock second.
-- **SIM-6** On restart, every particle gets a random position (no overlaps) and a random direction, all with the same speed `v = sqrt(d R T / M)` (d = dimension), so every particle starts with the average kinetic energy `d R T / 2` per mole. Temperature is defined throughout as `T = 2 <KE> / (d R)`.
+- **SIM-6** On restart, every particle gets a random position (no overlaps) and a random direction, all with the same speed `v = sqrt(d R T / M)` (d = dimension), so every particle starts with the average kinetic energy `d R T / 2` per mole. Temperature is defined throughout as `T = 2 <KE> / (d R)`. _Web port:_ done for Restart and for added particles (`speedForTemperature` in `sim/placement.ts`).
 
 ## Dimensions
 
@@ -19,20 +19,20 @@ The physical model and the arena configurations. Source: manual §I.A, §I.D (bo
 
 ## Arena
 
-- **SIM-10** The arena is a box measured in nm with an adjustable width and height (and depth in 3D), set numerically in Options. _Web port:_ the desktop app also resizes by dragging the window corner; the web app must let the arena size be set numerically and should adapt the view to the screen without changing the physical size.
+- **SIM-10** The arena is a box measured in nm with an adjustable width and height (and depth in 3D), set numerically in Options. _Web port:_ the desktop app also resizes by dragging the window corner; the web app must let the arena size be set numerically and should adapt the view to the screen without changing the physical size. _Web port:_ the sidebar's Arena size box applies a new size by restarting with every particle placed anew at random, at its own speed and on its kind's side of a divider; drawn walls and spawn regions stretch with the arena.
 - **SIM-11** Axis rulers label the arena size in nm.
 
 ## Boundary modes
 
 Five modes, chosen with icons in the particle area. Default: Box with Walls.
 
-- **SIM-12** **Periodic boundaries**: no walls; a particle leaving one side re-enters on the opposite side with the same velocity, in every dimension in use (left/right only in 1D). Divider, hole and piston are not available in this mode.
+- **SIM-12** **Periodic boundaries**: no walls; a particle leaving one side re-enters on the opposite side with the same velocity, in every dimension in use (left/right only in 1D). Divider, hole and piston are not available in this mode. _Web port:_ the Boundaries buttons switch modes mid-run; periodic is off with drawn walls (WALL-3).
 - **SIM-13** **Box with walls**: particles reflect off all walls.
-- **SIM-14** **Divided box with walls**: a wall splits the arena into two equal halves. Switching to this mode restarts with all particles on the left. Left and right particle counts are shown.
-- **SIM-15** **Divided box with a hole** (2D and 3D only): the divider has an opening between the halves, for effusion and mixing. The hole diameter is set in Options. Switching from a divided box to the hole must not restart the simulation (the effusion experiments open the hole on a running gas).
-- **SIM-16** Switching from a divided box back to an undivided box removes the barrier without restarting, so the two halves can mix (diffusion and hot/cold experiments).
+- **SIM-14** **Divided box with walls**: a wall splits the arena into two equal halves. Switching to this mode restarts with all particles on the left. Left and right particle counts are shown. _Web port:_ done: the switch restarts with every particle (of every kind) placed at random on the left.
+- **SIM-15** **Divided box with a hole** (2D and 3D only): the divider has an opening between the halves, for effusion and mixing. The hole diameter is set in Options. Switching from a divided box to the hole must not restart the simulation (the effusion experiments open the hole on a running gas). _Web port:_ done: `continueInArena` keeps the particles, velocities and clock.
+- **SIM-16** Switching from a divided box back to an undivided box removes the barrier without restarting, so the two halves can mix (diffusion and hot/cold experiments). _Web port:_ done, as SIM-15. Other switches carry on too when every particle fits the new arena, and restart otherwise.
 - **SIM-17** **Piston**: one wall is a movable piston (see below).
-- **SIM-18** When the arena is divided, predictions are still computed as if it were not, except pressure predictions, which use the left and right counts.
+- **SIM-18** When the arena is divided, predictions are still computed as if it were not, except pressure predictions, which use the left and right counts. _Web port:_ and each side's current temperature (see PRES-4).
 
 ## Piston
 
@@ -58,12 +58,12 @@ _Web port:_ the editor generalizes reaction mode to a table of rules between any
 
 ## Total momentum
 
-- **SIM-30** By default, after random velocities are assigned, the total momentum is set to zero by shifting and rescaling velocities while keeping the total kinetic energy.
+- **SIM-30** By default, after random velocities are assigned, the total momentum is set to zero by shifting and rescaling velocities while keeping the total kinetic energy. _Web port:_ done on Restart, per randomly placed group, keeping its kinetic energy; particles at given positions keep their velocities (so a 0 K group stays still). The first run of a `.set` file keeps Java's velocities, which only zeroes periodic arenas (as the engine still does).
 - **SIM-31** With periodic boundaries the user can set a non-zero total momentum along any axis to study a drifting gas.
 
 ## Reverse
 
-- **SIM-32** Reverse flips the velocity of every particle. The clock keeps running forward and the motion retraces itself as closely as round-off allows (until chaos takes over).
+- **SIM-32** Reverse flips the velocity of every particle. The clock keeps running forward and the motion retraces itself as closely as round-off allows (until chaos takes over). _Web port:_ done (`Simulation.reverse()`; the Java app's button was never wired up). A moving piston heads back to where its move started, so adiabatic piston runs retrace too. The isothermal thermostat, a conducting divider and a reaction with its reverse suppressed aren't reversible, so there the velocities flip but the motion won't retrace.
 
 ## Beyond the manual
 

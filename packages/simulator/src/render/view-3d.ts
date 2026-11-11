@@ -2,7 +2,9 @@
 // the box, which turns about its centre (x axis, then y), lit instanced spheres, the
 // walls as coloured panels seen from inside, and the divider with its hole.
 //
-// Periodic arenas draw each sphere's wrapped images, clipped to the box.
+// Periodic arenas draw each sphere's wrapped images, clipped to the box. Trace mode
+// (VIEW-5) leaves a dot at each particle's centre every frame, in box coordinates, so
+// the trace turns with the box.
 import * as THREE from 'three';
 import type { RenderFrame, SceneInfo } from '@boltzmann4d/engine/sim';
 import { periodicImages3D } from './periodic-images';
@@ -84,6 +86,11 @@ export function createView3D(info: SceneInfo): View {
   };
   applyRotation();
 
+  const trace = createTrace3D();
+  box.add(trace.points);
+  if (info.trace?.enabled) trace.setEnabled(true, info.trace.pointSize);
+  let lastTime = -Infinity;
+
   const images = new Float64Array(24);
   const matrix = new THREE.Matrix4();
 
@@ -104,6 +111,9 @@ export function createView3D(info: SceneInfo): View {
     },
     display(frame: RenderFrame) {
       if (frame.dimension !== 3) return;
+      // The simulation went back in time: it restarted, so start the trace afresh.
+      if (frame.time < lastTime) trace.clear();
+      lastTime = frame.time;
       const coloured = particleColors.mode !== 'NORMAL';
       const n = Math.min(frame.types.length, count);
       const p = frame.positions;
@@ -113,6 +123,7 @@ export function createView3D(info: SceneInfo): View {
         const y = p[3 * i + 1]! * NM;
         const z = p[3 * i + 2]! * NM;
         const r = radii[i]! * NM;
+        trace.mark(x, y, z, particleColors.of(frame, i));
         if (!periodic) {
           matrix.makeScale(r, r, r).setPosition(x, y, z);
           if (coloured) particles.setColorAt(drawn, particleColors.of(frame, i));
@@ -128,6 +139,7 @@ export function createView3D(info: SceneInfo): View {
       }
       particles.count = drawn;
       particles.instanceMatrix.needsUpdate = true;
+      trace.marked();
       // Back to normal colours: restore them once.
       if (wasColoured && !coloured && !periodic) {
         for (let i = 0; i < count; i++) particles.setColorAt(i, colors[i]!);
@@ -140,8 +152,17 @@ export function createView3D(info: SceneInfo): View {
     setColorMode(mode) {
       particleColors.mode = mode;
     },
-    setTrace() {
-      // Trace mode is 2D-only so far.
+    setColorLimits(limits) {
+      particleColors.limits = limits;
+    },
+    setTrace(enabled, pointSize) {
+      trace.setEnabled(enabled, pointSize);
+    },
+    clearTrace() {
+      trace.clear();
+    },
+    beforeRender(renderer) {
+      trace.setPixelRatio(renderer.getPixelRatio());
     },
     rotate(dx, dy) {
       aboutX = (((aboutX + dx) % 360) + 360) % 360;
@@ -150,9 +171,128 @@ export function createView3D(info: SceneInfo): View {
     },
     dispose() {
       particles.dispose();
+      trace.dispose();
       disposeTree(root);
     },
   };
+}
+
+/**
+ * Dots the 3D trace keeps: about a minute of a 200-particle run at 60 frames a second.
+ * Once full, the oldest dots are overwritten.
+ */
+const TRACE_CAPACITY = 1 << 20;
+
+/**
+ * The 3D trace (VIEW-5): round dot sprites of `pointSize` pixels, whatever their depth,
+ * at each particle's centre every frame, in a ring buffer of TRACE_CAPACITY dots. Periodic
+ * arenas trace each particle's position in the box (not its wrapped images).
+ */
+function createTrace3D() {
+  // Allocated when tracing starts, so scenes that never trace don't pay for it.
+  let positions = new Float32Array(0);
+  let colors = new Float32Array(0);
+  const geometry = new THREE.BufferGeometry();
+  const material = new THREE.PointsMaterial({
+    size: 2,
+    sizeAttenuation: false,
+    vertexColors: true,
+    map: dotTexture(),
+    alphaTest: 0.5,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.frustumCulled = false; // the bounds change every frame
+  points.visible = false;
+
+  let enabled = false;
+  let pointSize = 2;
+  /** Next slot to write, and how many slots hold dots. */
+  let next = 0;
+  let filled = 0;
+  /** First slot written this frame, and how many. */
+  let frameStart = 0;
+  let frameCount = 0;
+
+  const allocate = () => {
+    if (positions.length > 0) return;
+    positions = new Float32Array(TRACE_CAPACITY * 3);
+    colors = new Float32Array(TRACE_CAPACITY * 3);
+    const position = new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage);
+    const color = new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('position', position);
+    geometry.setAttribute('color', color);
+  };
+
+  return {
+    points,
+    setEnabled(on: boolean, size: number) {
+      if (on) allocate();
+      if (!on) this.clear(); // off clears, as in 2D
+      enabled = on;
+      pointSize = size > 0 ? size : 2;
+      points.visible = on;
+    },
+    setPixelRatio(ratio: number) {
+      material.size = pointSize * ratio;
+    },
+    clear() {
+      next = 0;
+      filled = 0;
+      geometry.setDrawRange(0, 0);
+    },
+    mark(x: number, y: number, z: number, color: THREE.Color) {
+      if (!enabled) return;
+      if (frameCount === 0) frameStart = next;
+      const k = 3 * next;
+      positions[k] = x;
+      positions[k + 1] = y;
+      positions[k + 2] = z;
+      colors[k] = color.r;
+      colors[k + 1] = color.g;
+      colors[k + 2] = color.b;
+      next = (next + 1) % TRACE_CAPACITY;
+      filled = Math.min(filled + 1, TRACE_CAPACITY);
+      frameCount++;
+    },
+    /** Uploads this frame's dots (the slots written, which may wrap around the end). */
+    marked() {
+      if (!enabled || frameCount === 0) return;
+      const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+      const color = geometry.getAttribute('color') as THREE.BufferAttribute;
+      for (const attribute of [position, color]) {
+        const first = Math.min(frameCount, TRACE_CAPACITY - frameStart);
+        attribute.addUpdateRange(3 * frameStart, 3 * first);
+        if (first < frameCount) attribute.addUpdateRange(0, 3 * (frameCount - first));
+        attribute.needsUpdate = true;
+      }
+      geometry.setDrawRange(0, filled);
+      frameCount = 0;
+    },
+    dispose() {
+      geometry.dispose();
+      material.map?.dispose();
+      material.dispose();
+    },
+  };
+}
+
+/** A white disc on transparent, for round dot sprites (no canvas, so it works in workers). */
+function dotTexture(): THREE.DataTexture {
+  const size = 16;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x + 0.5 - size / 2;
+      const dy = y + 0.5 - size / 2;
+      const k = 4 * (y * size + x);
+      data[k] = data[k + 1] = data[k + 2] = 255;
+      data[k + 3] = dx * dx + dy * dy <= (size / 2) ** 2 ? 255 : 0;
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size);
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 /**

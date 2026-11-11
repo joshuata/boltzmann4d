@@ -1,5 +1,7 @@
-<!-- Scales how fast simulated time runs, from MIN_SCALE× to MAX_SCALE× the preset's speed.
-     The slider is logarithmic so 1× sits in the middle; double-click it to reset to 1×. -->
+<!-- Simulation speed (CTRL-2): multiplies how fast simulated time runs, in doubling steps
+     from MIN_STEP to MAX_STEP (⅛× to 2048×) of the scenario's own speed. 1× is the
+     default; double-click to go back to it. At high speeds particles jump too far per
+     frame to follow, and the physics may not keep up in real time; that's expected. -->
 <script lang="ts">
   import { Slider } from '@boltzmann4d/ui/slider';
 
@@ -11,13 +13,17 @@
 
   let { value, disabled = false, onChange }: Props = $props();
 
-  const MIN_SCALE = 0.1;
-  const MAX_SCALE = 10;
+  /** Powers of two: 2⁻³ = ⅛× to 2¹¹ = 2048×. */
+  const MIN_STEP = -3;
+  const MAX_STEP = 11;
+
+  /** The nearest step to a scale (scales set elsewhere may fall between steps). */
+  const stepOf = (scale: number) =>
+    Math.min(MAX_STEP, Math.max(MIN_STEP, Math.round(Math.log2(scale))));
 
   function format(scale: number): string {
-    if (scale < 1) return scale.toFixed(2);
-    if (scale < 10) return scale.toFixed(1);
-    return scale.toFixed(0);
+    if (scale >= 1) return scale.toFixed(0);
+    return { 0.5: '½', 0.25: '¼', 0.125: '⅛' }[scale] ?? scale.toPrecision(2);
   }
 </script>
 
@@ -31,19 +37,18 @@
     type="single"
     thumbLabel="Speed"
     class="py-2"
-    min={Math.log10(MIN_SCALE)}
-    max={Math.log10(MAX_SCALE)}
-    step={0.01}
-    value={Math.log10(value)}
+    min={MIN_STEP}
+    max={MAX_STEP}
+    step={1}
+    value={stepOf(value)}
     {disabled}
     title="Double-click to reset to 1×"
-    getValueText={(exponent) => `${format(10 ** exponent)} times`}
-    onValueChange={(exponent) => onChange(10 ** exponent)}
+    getValueText={(step) => `${format(2 ** step)} times`}
+    onValueChange={(step) => onChange(2 ** step)}
     ondblclick={() => onChange(1)}
   />
   <div class="text-muted-foreground flex justify-between text-xs" aria-hidden="true">
-    <span>{MIN_SCALE}×</span>
-    <span>1×</span>
-    <span>{MAX_SCALE}×</span>
+    <span>{format(2 ** MIN_STEP)}×</span>
+    <span>{format(2 ** MAX_STEP)}×</span>
   </div>
 </div>

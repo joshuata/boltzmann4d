@@ -49,7 +49,7 @@ for (const [label, load] of scenes) {
     const { simulation, stats } = withStatistics(await load());
     for (let k = 0; k < 10 * EVENTS; k++) simulation.step();
     await bench(`current sample + summary: ${label}`, () => {
-      stats.sampleCurrent();
+      stats.sampleCurrent(simulation.time);
       stats.summary(simulation.time);
     }).run();
   });
