@@ -19,7 +19,7 @@ The physical model and the arena configurations. Source: manual §I.A, §I.D (bo
 
 ## Arena
 
-- **SIM-10** The arena is a box measured in nm with an adjustable width and height (and depth in 3D), set numerically in Options. _Web port:_ the desktop app also resizes by dragging the window corner; the web app must let the arena size be set numerically and should adapt the view to the screen without changing the physical size.
+- **SIM-10** The arena is a box measured in nm with an adjustable width and height (and depth in 3D), set numerically in Options. _Web port:_ the desktop app also resizes by dragging the window corner; the web app must let the arena size be set numerically and should adapt the view to the screen without changing the physical size. _Web port:_ the sidebar's Arena size box applies a new size by restarting with every particle placed anew at random, at its own speed and on its kind's side of a divider; drawn walls and spawn regions stretch with the arena.
 - **SIM-11** Axis rulers label the arena size in nm.
 
 ## Boundary modes
@@ -32,7 +32,7 @@ Five modes, chosen with icons in the particle area. Default: Box with Walls.
 - **SIM-15** **Divided box with a hole** (2D and 3D only): the divider has an opening between the halves, for effusion and mixing. The hole diameter is set in Options. Switching from a divided box to the hole must not restart the simulation (the effusion experiments open the hole on a running gas).
 - **SIM-16** Switching from a divided box back to an undivided box removes the barrier without restarting, so the two halves can mix (diffusion and hot/cold experiments).
 - **SIM-17** **Piston**: one wall is a movable piston (see below).
-- **SIM-18** When the arena is divided, predictions are still computed as if it were not, except pressure predictions, which use the left and right counts.
+- **SIM-18** When the arena is divided, predictions are still computed as if it were not, except pressure predictions, which use the left and right counts. _Web port:_ and each side's current temperature (see PRES-4).
 
 ## Piston
 

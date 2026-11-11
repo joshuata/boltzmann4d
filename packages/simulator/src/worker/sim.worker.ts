@@ -5,6 +5,8 @@ import {
   MARKERS,
   parseScenario,
   resolveScenario,
+  scenarioProblems,
+  withArenaSize,
   type ResolvedScenario,
 } from '@boltzmann4d/engine/scenario';
 import type { RenderStream } from '../render/protocol';
@@ -18,6 +20,8 @@ import {
 import { DefaultParticleInfo, ParticleType } from '@boltzmann4d/engine/sim/particle-type';
 import { averageVelocity, avgKineticEnergy } from '@boltzmann4d/engine/stats/formulas';
 import {
+  DEFAULT_PRESSURE_AVERAGING_TIME,
+  PressureMeter,
   Statistics,
   statsContext,
   weightedAverage,
@@ -40,6 +44,8 @@ const scope = self as unknown as DedicatedWorkerGlobalScope;
 const post = (message: FromWorker) => scope.postMessage(message);
 /** Statistics are summarised about this often (real milliseconds), like the Java app. */
 const SUMMARY_INTERVAL_MS = 1000;
+/** The pressure readout is sent about this often (real milliseconds). */
+const PRESSURE_INTERVAL_MS = 250;
 
 /** The Reactions tab's defaults: forward and reverse activation energies, kJ/mol. */
 
@@ -57,6 +63,10 @@ let loadGeneration = 0;
 let runningStatistics: Statistics | null = null;
 /** Kinds the user picked for the statistics (KIND-4), if not a tracked set. */
 let statKinds: number[] | null = null;
+/** The running simulation's pressure meter. */
+let runningPressure: PressureMeter | null = null;
+/** The averaging time (s) the user chose, kept by Restart and arena changes; null: the scenario's. */
+let averagingTime: number | null = null;
 
 /** Sends the statistics, including the picked set of kinds. */
 function postSummary(statistics: Statistics, time: number): void {
@@ -71,7 +81,15 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       void load(message.source, message.arena);
       break;
     case 'load':
+      averagingTime = message.pressureAveragingTime ?? null;
       void load(message.source, message.arena);
+      break;
+    case 'pressureAveragingTime':
+      averagingTime = message.seconds;
+      if (runningPressure) {
+        runningPressure.setAveragingTime(message.seconds);
+        post({ type: 'pressure', reading: runningPressure.read() });
+      }
       break;
     case 'restart':
       restart();
@@ -134,11 +152,17 @@ async function load(
   let prepared: Prepared;
   let built: Built;
   try {
-    const loaded = resolveScenario(
+    let input =
       source.kind === 'preset'
         ? await loadPresetScenario(source.name)
-        : parseScenario(source.scenario),
-    );
+        : parseScenario(source.scenario);
+    if (arena.size && arena.size.some((s, axis) => s !== input.arena.size[axis])) {
+      // A new arena size re-places the particles (OPT-1); they must still fit.
+      input = withArenaSize(input, arena.size);
+      const [problem] = scenarioProblems(input);
+      if (problem) throw new Error(problem);
+    }
+    const loaded = resolveScenario(input);
     // Drawn walls can't be combined with the piston yet (WALL-3).
     const canHavePiston =
       loaded.walls.length === 0 &&
@@ -218,6 +242,8 @@ async function load(
       canHaveWells,
       canReact,
       typeNames: scenario.species.map((s) => s.type.displayName),
+      size: [...input.arena.size],
+      drawnWalls: scenario.walls.length > 0,
       gates: scenario.walls.flatMap((w, index) =>
         w.physics?.type === 'gate'
           ? [{ index, id: w.id, points: w.points.flat(), closed: w.closed ?? false }]
@@ -230,6 +256,7 @@ async function load(
         wells,
         attractiveWall,
         reactions,
+        size: [...input.arena.size],
       },
     };
     const ctx = statsContext(scenario);
@@ -271,7 +298,14 @@ interface Prepared {
 interface Built {
   simulation: Simulation;
   statistics: Statistics;
+  pressure: PressureMeter;
 }
+
+/** The scenario's averaging time in seconds (`.set` files give ps). */
+const scenarioAveragingTime = (scenario: ResolvedScenario) =>
+  scenario.pressureAveragingTime > 0
+    ? scenario.pressureAveragingTime * 1e-12
+    : DEFAULT_PRESSURE_AVERAGING_TIME;
 
 /** The last simulation started, so Restart can build it again from the same state. */
 let lastPrepared: Prepared | null = null;
@@ -279,16 +313,26 @@ let lastPrepared: Prepared | null = null;
 /** Builds the simulation and its statistics from the prepared state. */
 function build(prepared: Prepared): Built {
   let stats: Statistics | null = null;
+  let meter: PressureMeter | null = null;
   const simulation = new Simulation(prepared.initialState, {
-    onEvent: (event) => stats?.notifyOfEvent(event),
+    onEvent: (event) => {
+      stats?.notifyOfEvent(event);
+      meter?.beforeEvent(event);
+    },
+    afterEvent: (event) => meter?.afterEvent(event),
   });
+  const pressure = (meter = new PressureMeter(
+    simulation,
+    prepared.scenario.species.length,
+    averagingTime ?? scenarioAveragingTime(prepared.scenario),
+  ));
   const statistics = (stats = new Statistics(prepared.ctx, simulation.particles, {
     forgetMultiplier: prepared.scenario.forgetMultiplier,
     typeNames: prepared.scenario.species.map((s) => s.type.displayName),
     typeColors: prepared.typeColors,
     typeMarkers: prepared.scenario.species.map((s) => s.marker),
   }));
-  return { simulation, statistics };
+  return { simulation, statistics, pressure };
 }
 
 /**
@@ -307,7 +351,7 @@ function restart(): void {
 }
 
 /** Runs a built simulation: streams its scene and frames, and reports it loaded. */
-function start(prepared: Prepared, { simulation, statistics }: Built): void {
+function start(prepared: Prepared, { simulation, statistics, pressure }: Built): void {
   const port = frames;
   if (!port) return;
   lastPrepared = prepared;
@@ -323,6 +367,7 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
   );
 
   let lastSummary = -Infinity;
+  let lastPressure = -Infinity;
   const controller = new ThreadController(
     simulation,
     (frame, physicsMs) => {
@@ -343,6 +388,10 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
         openGates: frame.openGates ? [...frame.openGates] : undefined,
       });
       const now = performance.now();
+      if (now - lastPressure >= PRESSURE_INTERVAL_MS || controller.isPaused()) {
+        lastPressure = now;
+        post({ type: 'pressure', reading: pressure.read() });
+      }
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
         lastSummary = now;
         statistics.sampleCurrent();
@@ -354,6 +403,7 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
   threadController = controller;
   running = simulation;
   runningStatistics = statistics;
+  runningPressure = pressure;
   statKinds = null; // a new scenario has its own kinds
   threadController.setPaused(paused);
   threadController.startSimulationThreads();
@@ -378,6 +428,10 @@ function start(prepared: Prepared, { simulation, statistics }: Built): void {
       trace: prepared.view.trace,
       arenaWidth: simulation.arena.xSize,
       arenaHeight: simulation.arena.ySize,
+    },
+    pressure: {
+      averagingTime: averagingTime ?? scenarioAveragingTime(prepared.scenario),
+      prediction: prepared.scenario.pressurePredictionMode,
     },
   });
 }

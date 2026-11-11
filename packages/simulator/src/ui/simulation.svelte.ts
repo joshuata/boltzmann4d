@@ -10,6 +10,7 @@ import type { ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
+import type { PressureReading } from '@boltzmann4d/engine/stats/pressure';
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
 import type {
   ArenaInfo,
@@ -66,6 +67,14 @@ export class SimulationClient {
   piston = $state.raw<(PistonInfo & { level: number; moving: boolean }) | null>(null);
   /** Latest statistics from the physics worker (about once a second); null until the first. */
   statistics = $state.raw<StatisticsSummary | null>(null);
+  /** Latest pressure readout (a few times a second); null until the first. */
+  pressure = $state.raw<PressureReading | null>(null);
+  /** The pressure averaging time T_avg, s (OPT-3; the scenario's until changed). */
+  pressureAveragingTime = $state(60e-12);
+  #averagingChosen = false;
+  /** Which pressure prediction is shown (PRES-6; the scenario's until changed). */
+  pressurePrediction = $state<'IDEAL' | 'REAL'>('IDEAL');
+  #predictionChosen = false;
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
   /**
@@ -189,6 +198,9 @@ export class SimulationClient {
         case 'statistics':
           this.statistics = message.summary;
           break;
+        case 'pressure':
+          this.pressure = message.reading;
+          break;
         case 'loaded':
           this.particleCount = message.particles;
           this.arena = message.arena;
@@ -202,6 +214,8 @@ export class SimulationClient {
             this.#toRenderer({ type: 'markers', enabled: this.markers });
           }
           this.arenaSize = { width: message.view.arenaWidth, height: message.view.arenaHeight };
+          this.pressureAveragingTime = message.pressure.averagingTime;
+          if (!this.#predictionChosen) this.pressurePrediction = message.pressure.prediction;
           if (!this.#viewChosen) {
             this.colorMode = message.view.colorMode;
             this.trace = { ...message.view.trace };
@@ -227,6 +241,7 @@ export class SimulationClient {
     if (sameSource(source, this.source) && !this.error) return;
     this.source = source;
     this.loading = true;
+    this.#averagingChosen = false; // a new scenario brings its own averaging time
     this.#send({ type: 'load', source: cloneable(source) });
   }
 
@@ -237,7 +252,22 @@ export class SimulationClient {
       type: 'load',
       source: cloneable(this.source),
       arena: { ...this.arena?.options, ...options },
+      pressureAveragingTime: this.#averagingChosen ? this.pressureAveragingTime : undefined,
     });
+  }
+
+  /** The pressure averaging time T_avg, s (OPT-3). The readout warms up again. */
+  setPressureAveragingTime(seconds: number): void {
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    this.#averagingChosen = true;
+    this.pressureAveragingTime = seconds;
+    this.#send({ type: 'pressureAveragingTime', seconds });
+  }
+
+  /** Shows the Ideal or Real pressure prediction (PRES-6; kept across scenarios). */
+  setPressurePrediction(prediction: 'IDEAL' | 'REAL'): void {
+    this.#predictionChosen = true;
+    this.pressurePrediction = prediction;
   }
 
   /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */

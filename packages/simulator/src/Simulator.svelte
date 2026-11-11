@@ -13,8 +13,10 @@
   import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
   import { untrack } from 'svelte';
   import ArenaOptions from './ui/ArenaOptions.svelte';
+  import ArenaSize from './ui/ArenaSize.svelte';
   import PistonPanel from './ui/PistonPanel.svelte';
   import PlayPauseButton from './ui/PlayPauseButton.svelte';
+  import PressurePanel from './ui/PressurePanel.svelte';
   import RateSlider from './ui/RateSlider.svelte';
   import ScaleBar from './ui/ScaleBar.svelte';
   import ViewOptions from './ui/ViewOptions.svelte';
@@ -206,6 +208,12 @@
         disabled={sim.loading}
         onChange={(options) => sim?.setArenaOptions(options)}
       />
+      <ArenaSize
+        size={sim.arena.size}
+        dimension={sim.dimension}
+        disabled={sim.loading}
+        onChange={(size) => sim?.setArenaOptions({ size })}
+      />
     {/if}
     <div class="flex flex-wrap gap-2" role="group" aria-label="Simulation controls">
       <PlayPauseButton
@@ -268,6 +276,18 @@
         piston={sim.piston}
         onMove={(level, mode, speed) => sim?.movePiston(level, mode, speed)}
         onStop={() => sim?.stopPiston()}
+      />
+    {/if}
+    {#if sim?.pressure && sim.arena}
+      <PressurePanel
+        reading={sim.pressure}
+        kinds={sim.kinds}
+        prediction={sim.pressurePrediction}
+        averagingTime={sim.pressureAveragingTime}
+        showMarkers={sim.markers && sim.dimension !== 3}
+        drawnWalls={sim.arena.drawnWalls}
+        onPrediction={(prediction) => sim?.setPressurePrediction(prediction)}
+        onAveragingTime={(seconds) => sim?.setPressureAveragingTime(seconds)}
       />
     {/if}
     {#if sim?.statistics}

@@ -25,9 +25,9 @@ The program control area, View menu, Simulation menu options and the advanced ar
 
 One Options dialog sets:
 
-- **OPT-1** Arena width, height and depth (nm).
+- **OPT-1** Arena width, height and depth (nm). _Web port:_ in the sidebar's Arena size box (see SIM-10).
 - **OPT-2** Hole diameter for the divided box with a hole.
-- **OPT-3** Pressure averaging time (default 60 ps).
+- **OPT-3** Pressure averaging time (default 60 ps). _Web port:_ under the pressure readout; it applies at once without restarting.
 - **OPT-4** Forget time, as a multiple of the predicted collision time (default 4).
 - **OPT-5** RDF sampling interval, as a multiple of the predicted collision time (default 0.5).
 - **OPT-6** Piston speed and the isothermal thermostat's maximum percent energy change per wall collision (default 10%).

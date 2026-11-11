@@ -147,6 +147,12 @@ export interface SimulationOptions {
   frameDuration?: number;
   /** Called with each event just before it is performed (where statistics plug in). */
   onEvent?: (event: Readonly<EventInfo>) => void;
+  /**
+   * Called with each event just after it is performed, with the particles involved in
+   * their new state (where observers such as the pressure meter read the outcome). It must
+   * not change the simulation.
+   */
+  afterEvent?: (event: Readonly<EventInfo>) => void;
 }
 
 export class Simulation {
@@ -213,6 +219,7 @@ export class Simulation {
   private readonly boundaryValid: Uint8Array;
 
   private readonly onEvent: SimulationOptions['onEvent'];
+  private readonly afterEvent: SimulationOptions['afterEvent'];
   private readonly heap: EventHeap;
 
   // Each particle's next event (keys live in the heap).
@@ -328,6 +335,7 @@ export class Simulation {
     }
     this.frameDuration = options.frameDuration ?? DEFAULT_FRAME_DURATION;
     this.onEvent = options.onEvent;
+    this.afterEvent = options.afterEvent;
 
     // Particles in species order, as Physics does with SimulationInfo's particle types.
     const count = init.species.reduce((n, s) => n + s.positions.length / 3, 0);
@@ -729,8 +737,15 @@ export class Simulation {
     this.repredict(i);
   }
 
-  /** Performs particle i's (valid, physical) next event and re-predicts what it changed. */
+  /** Performs particle i's (valid, physical) next event, then tells afterEvent. */
   private perform(i: number): Readonly<EventInfo> {
+    const event = this.performEvent(i);
+    this.afterEvent?.(event);
+    return event;
+  }
+
+  /** Performs particle i's (valid, physical) next event and re-predicts what it changed. */
+  private performEvent(i: number): Readonly<EventInfo> {
     const p = this.particles;
     const event = this.event;
     const type = this.nextType[i]!;

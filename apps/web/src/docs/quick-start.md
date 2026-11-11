@@ -32,6 +32,10 @@ In 3D, drag the arena (or use the arrow keys) to turn it.
 
 Some simulations offer extra arena options in the sidebar, such as a movable piston, a divider or a hole. In the Maxwell's demon simulation, click the arena (or the **Open hole** button) to open and close the hole. Gates drawn in the [scenario editor](editor) open and close the same way: tap one, or use its button.
 
+## Read the pressure
+
+The **Pressure** box shows how hard the particles push on the walls, for each kind and in total (for each side of a divided box), next to the ideal or real gas prediction. See [Pressure and the gas laws](pressure).
+
 ## Read the statistics
 
 The speed histogram shows how many particles have each speed, next to the Maxwell–Boltzmann prediction for the gas's temperature. Choose **All kinds** or tap the kinds to show (each button names a kind with its colour and marker), and turn on **Cumulative** to average over time instead of showing the current instant.

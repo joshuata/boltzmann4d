@@ -4,6 +4,7 @@
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
 import type { ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
+import type { PressureReading } from '@boltzmann4d/engine/stats/pressure';
 import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
 
 /**
@@ -36,6 +37,11 @@ export interface ArenaOptions {
   reactions?: { forward: number; reverse: number; suppressReverse: boolean } | null;
   /** A square well along the bottom wall: width in m, depth in kJ/mol. null turns it off. */
   attractiveWall?: { width: number; depth: number } | null;
+  /**
+   * Arena side lengths x, y, z in nm (OPT-1, SIM-10). Particles are placed anew; drawn
+   * walls and spawn regions stretch with the arena.
+   */
+  size?: [number, number, number];
 }
 
 /** What the sidebar needs to offer a piston arena's controls. */
@@ -61,6 +67,10 @@ export interface ArenaInfo {
   canReact: boolean;
   /** Species names, for per-species settings. */
   typeNames: string[];
+  /** The arena's side lengths x, y, z in nm, as running. */
+  size: [number, number, number];
+  /** Whether the scenario has drawn walls (the pressure readout ignores them). */
+  drawnWalls: boolean;
   /** Drawn gates (WALL-4): wall index, id, and points (x, y pairs in m) for tapping them. */
   gates: { index: number; id: string; points: number[]; closed: boolean }[];
   options: ArenaOptions;
@@ -72,8 +82,11 @@ export type ToWorker =
    * absent). The worker starts after this.
    */
   | { type: 'connect'; frames: MessagePort; source?: ScenarioSource; arena?: ArenaOptions }
-  /** Replace the running simulation (keeps play/pause). */
-  | { type: 'load'; source: ScenarioSource; arena?: ArenaOptions }
+  /**
+   * Replace the running simulation (keeps play/pause). `pressureAveragingTime` (s) keeps
+   * the user's averaging time; absent, the scenario's applies.
+   */
+  | { type: 'load'; source: ScenarioSource; arena?: ArenaOptions; pressureAveragingTime?: number }
   /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
   | { type: 'movePiston'; level: number; mode: PistonMode; speed: number }
   | { type: 'stopPiston' }
@@ -92,7 +105,9 @@ export type ToWorker =
    * The kinds (species indices) the statistics should also cover (KIND-4), when they
    * aren't a set tracked anyway; null for none. Reset by each load.
    */
-  | { type: 'statKinds'; types: number[] | null };
+  | { type: 'statKinds'; types: number[] | null }
+  /** The pressure averaging time T_avg in seconds (OPT-3; kept by Restart). */
+  | { type: 'pressureAveragingTime'; seconds: number };
 
 /** One particle kind of the running simulation, for legends and pickers (KIND-4, KIND-9). */
 export interface KindInfo {
@@ -139,7 +154,11 @@ export type FromWorker =
         arenaWidth: number;
         arenaHeight: number;
       };
+      /** The scenario's pressure settings: averaging time (s) and prediction (PRES-2, PRES-6). */
+      pressure: { averagingTime: number; prediction: 'IDEAL' | 'REAL' };
     }
   /** About once a second (every SUMMARY_INTERVAL_MS), and after each step. */
   | { type: 'statistics'; summary: StatisticsSummary }
+  /** The pressure readout, a few times a second and after each step. */
+  | { type: 'pressure'; reading: PressureReading }
   | { type: 'error'; message: string };

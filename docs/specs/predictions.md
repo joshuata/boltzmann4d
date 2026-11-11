@@ -46,7 +46,7 @@ Widths follow PRED-4 and PRED-5.
 
 ## Real gas (Real button)
 
-- **PRED-8** Pressure uses the hard-disk / hard-sphere virial expansion in `x = B₂ ρ`, with `B₂ = 2πr²` (2D) or `16πr³/3` (3D), accurate to eight virial coefficients, written as `P V_d / (N k T) = 1 + x Q(x)`-style rational fit with these constants (_verify_ the exact form against `Formulas`):
+- **PRED-8** Pressure uses the hard-disk / hard-sphere virial expansion in `x = B₂ ρ`, with `B₂ = 2πr²` (2D) or `16πr³/3` (3D), accurate to eight virial coefficients, written as `P V_d / (N k T) = 1 + x Q(x)`-style rational fit with these constants (_verify_ the exact form against `Formulas`). _Web port:_ verified against `Pressure.getPredictionForAverage`: each kind's ideal pressure times `1 + x Q(x)`, with `Q(x) = (1 + e1 x + e2 x² + e3 x³) / (1 + f1 x + f2 x² + f3 x³)` (`realGasPressureFactor` in `formulas.ts`):
 
 |     | 2D          | 3D          |
 | --- | ----------- | ----------- |

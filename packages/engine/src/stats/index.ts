@@ -6,3 +6,11 @@ export { Statistics, type StatisticsOptions } from './statistics';
 export { statsContext, weightedAverage, weightedWidth, type StatsContext } from './stats-context';
 export type { DistributionSummary, StatisticSummary, StatisticsSummary } from './summary';
 export { WeightedValueTracker } from './weighted-value-tracker';
+export {
+  DEFAULT_PRESSURE_AVERAGING_TIME,
+  PressureMeter,
+  type PressureMethod,
+  type PressureReading,
+  type PressureRegion,
+  type PressureRegionReading,
+} from './pressure';

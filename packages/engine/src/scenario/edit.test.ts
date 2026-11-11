@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveScenario } from './resolve';
-import { describeSpecies, scenarioProblems, withSpecies } from './edit';
+import { describeSpecies, scenarioProblems, withArenaSize, withSpecies } from './edit';
 import { loadPresetScenario } from './sources';
 
 function seededRandom(seed: number): () => number {
@@ -105,5 +105,30 @@ describe('scenarioProblems', () => {
     expect(scenarioProblems({ ...many, arena: { ...many.arena, size: [500, 500, 10] } })).toEqual([
       'At most 999 particles in all (this has 1000).',
     ]);
+  });
+});
+
+describe('withArenaSize (OPT-1)', () => {
+  it('re-places every particle at its own speed, on its side of the divider', async () => {
+    const scenario = await loadPresetScenario('2Dhotcold');
+    const resized = withArenaSize(scenario, [35, 50, 10]);
+    expect(resized.arena.size).toEqual([35, 50, 10]);
+    for (const kind of ['red', 'blue']) {
+      expect(describeSpecies(resized, kind)).toEqual({
+        ...describeSpecies(scenario, kind)!,
+        placed: 0,
+      });
+    }
+    expect(scenarioProblems(resized)).toEqual([]);
+    const resolved = resolveScenario(resized, { random: seededRandom(1) });
+    expect(resolved.arenaXSize).toBeCloseTo(35e-9, 20);
+    const [red, blue] = resolved.species;
+    expect(Math.max(...xs(red!.positions))).toBeLessThan(17.5e-9);
+    expect(Math.min(...xs(blue!.positions))).toBeGreaterThan(17.5e-9);
+  });
+
+  it('reports an arena too small for its particles', async () => {
+    const resized = withArenaSize(await loadPresetScenario('2Dhotcold'), [5, 5, 10]);
+    expect(scenarioProblems(resized)).toHaveLength(1);
   });
 });

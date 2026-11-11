@@ -36,7 +36,7 @@ _Not started._ The core classroom loop.
 
 ### Phase 2: Pressure and the gas laws
 
-_Not started._
+_Done_ (plan 0011, archived): wall and virial pressure per kind and per side, Ideal/Real predictions, averaging time and arena size. PRES-9's history plots wait for Phase 3; 1D pressure waits for 1D physics.
 
 - **Requirements:** PRES-1–9; PRED-8, 9 (pressure part); OPT-1, 3; SIM-10, 18.
 - **Unlocks:** STORY-7, 9, 11, 12, 13.
