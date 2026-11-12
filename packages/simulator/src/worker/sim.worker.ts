@@ -24,6 +24,7 @@ import {
   DEFAULT_EVENT_CAP,
   EventRecorder,
   javaReaction,
+  PistonMode,
   PlacementError,
   removeNewest,
   Simulation,
@@ -58,6 +59,8 @@ import type {
   BoundaryMode,
   FromWorker,
   KindSetup,
+  PistonInfo,
+  PistonReference,
   ScenarioSource,
   SetupKind,
   SnapshotMessage,
@@ -100,6 +103,8 @@ let statKinds: number[] | null = null;
 let runningPressure: PressureMeter | null = null;
 /** The running simulation's reaction readouts (null without reactions). */
 let runningReactions: ReactionMeter | null = null;
+/** Piston arenas: what the panel's prediction starts from (see PistonReference). */
+let pistonReference: PistonReference | null = null;
 /** The averaging time (s) the user chose, kept by Restart and arena changes; null: the scenario's. */
 let averagingTime: number | null = null;
 
@@ -231,9 +236,10 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
     case 'movePiston':
     case 'stopPiston':
       try {
-        if (message.type === 'movePiston') {
-          running?.movePiston(message.level, message.mode, message.speed);
-        } else {
+        if (message.type === 'movePiston' && running) {
+          running.movePiston(message.level, message.mode, message.speed, message.dampFactor);
+          notePistonMove(running, message.mode);
+        } else if (message.type === 'stopPiston') {
           running?.stopPiston();
         }
       } catch (error) {
@@ -415,6 +421,51 @@ function prepare(
     view: viewOf(scenario),
     limits: scenarioLimits(scenario),
   };
+}
+
+/** A piston arena's limits and a fresh reference for the prediction (also resets it). */
+function pistonInfo(simulation: Simulation): PistonInfo | undefined {
+  const piston = simulation.piston;
+  if (!piston) {
+    pistonReference = null;
+    return undefined;
+  }
+  pistonReference = {
+    mode: null,
+    temperature: census(simulation.currentState()).temperature,
+    level: piston.curLevel,
+  };
+  return {
+    maxLevel: simulation.maxPistonLevel(),
+    arenaHeight: simulation.arena.ySize,
+    level: piston.curLevel,
+    reference: pistonReference,
+  };
+}
+
+/**
+ * After a piston move: an adiabatic move after adiabatic ones keeps the reference, and so
+ * does the first move after a load; any other move takes a new one from the move's start.
+ */
+function notePistonMove(simulation: Simulation, mode: PistonMode): void {
+  const previous = pistonReference;
+  if (
+    previous &&
+    (previous.mode === null || previous.mode === mode) &&
+    mode !== PistonMode.INSTANTANEOUS
+  ) {
+    if (previous.mode === null) {
+      pistonReference = { ...previous, mode };
+      post({ type: 'pistonReference', reference: pistonReference });
+    }
+    return;
+  }
+  pistonReference = {
+    mode,
+    temperature: census(simulation.currentState()).temperature,
+    level: simulation.piston!.curLevel,
+  };
+  post({ type: 'pistonReference', reference: pistonReference });
 }
 
 /** Which arena options a running scenario can take, and which are on. */
@@ -765,12 +816,18 @@ function start(
         frame.speeds.buffer,
       ]);
       const piston = simulation.piston;
+      const moving = piston?.isMoving(simulation.time) ?? false;
+      const thermostat = simulation.thermostat;
       post({
         type: 'timing',
         physicsMs,
         time: frame.time,
         piston: piston
-          ? { level: piston.curLevel, moving: piston.isMoving(simulation.time) }
+          ? {
+              level: piston.curLevel,
+              moving,
+              thermostatActive: thermostat.enabled && (moving || thermostat.isActive()),
+            }
           : undefined,
         holeOpen: simulation.arena.maxwellDemonMode ? simulation.holeOpen : undefined,
         openGates: frame.openGates ? [...frame.openGates] : undefined,
@@ -817,9 +874,7 @@ function start(
     particles: simulation.particles.count,
     reactions: reactions !== null,
     arena: prepared.arenaInfo,
-    piston: simulation.piston
-      ? { maxLevel: simulation.maxPistonLevel(), arenaHeight: simulation.arena.ySize }
-      : undefined,
+    piston: pistonInfo(simulation),
     dimension: simulation.dimension,
     kinds: prepared.scenario.species.map((s, t) => ({
       name: s.type.displayName,

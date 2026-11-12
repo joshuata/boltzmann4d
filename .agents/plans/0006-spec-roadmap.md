@@ -70,7 +70,7 @@ _Not started._
 
 ### Phase 6: Piston and thermostat
 
-_Not started._
+_Done_ (plan 0017, archived): the 3D piston and wall thermostat, bit for bit with Java (`3Dpiston-adiabatic`, `3Dpiston-isothermal` fixtures), drawn in the 3D view; one Piston box with the volume bar, Target slider and Move Piston, adiabatic, isothermal or instantaneous, the live temperature beside the PRED-15 prediction, "Thermostat active", and the speed and thermostat damping options; STORY-24 and 25 checked headless.
 
 - **Requirements:** SIM-17, 19–23; OPT-6; PART-13; PRED-15.
 - **Unlocks:** STORY-24, 25; the piston route through STORY-7.

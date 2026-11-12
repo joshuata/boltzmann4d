@@ -508,9 +508,10 @@ export class Simulation {
    * `speed` m/s, from where it is now (Physics.AdjustPistonLevel). Isothermal moves turn
    * the wall thermostat on; adiabatic ones turn it off. Instantaneous moves jump there and
    * may only pull the piston out (Java's piston panel only allows that), since jumping in
-   * could land the piston on particles.
+   * could land the piston on particles. `dampFactor` (isothermal only, OPT-6) sets the
+   * thermostat's damping; left out, it keeps its present one (10% from a reset).
    */
-  movePiston(targetLevel: number, mode: PistonMode, speed: number): void {
+  movePiston(targetLevel: number, mode: PistonMode, speed: number, dampFactor?: number): void {
     const piston = this.requirePiston();
     if (!(targetLevel >= 0 && targetLevel <= this.maxPistonLevel())) {
       throw new RangeError(`Piston level ${targetLevel} is outside 0..${this.maxPistonLevel()}`);
@@ -530,8 +531,10 @@ export class Simulation {
     }
     piston.targetLevel = targetLevel;
     this.repredictAllBoundaries();
-    if (mode === PistonMode.ISOTHERMAL) this.thermostat.enabled = true;
-    else this.thermostat.reset(false);
+    if (mode === PistonMode.ISOTHERMAL) {
+      this.thermostat.enabled = true;
+      if (dampFactor !== undefined) this.thermostat.dampFactor = dampFactor;
+    } else this.thermostat.reset(false);
   }
 
   /** Stops the piston where it is now (Controller.stopPiston). The thermostat stays as it is. */

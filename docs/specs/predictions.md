@@ -76,4 +76,4 @@ Widths follow PRED-4 and PRED-5.
 
 ## Adiabatic changes
 
-- **PRED-15** For a slow piston, `T₂ / T₁ = (V₁ / V₂)^{2/d}` (exponent R/c_v; 2/3 in 3D). After a compression and a re-expansion, a finite system usually ends slightly hotter than it started; the app must not force it back.
+- **PRED-15** For a slow piston, `T₂ / T₁ = (V₁ / V₂)^{2/d}` (exponent R/c_v; 2/3 in 3D). After a compression and a re-expansion, a finite system usually ends slightly hotter than it started; the app must not force it back. _Web port:_ done: the Piston box's Predicted line (`adiabaticTemperature` in `stats/formulas.ts`), from the temperature and volume when the present run of adiabatic moves began; `stats/stories.test.ts` checks a slow compression and the return in 2D and 3D.

@@ -26,7 +26,7 @@ Each value has a text field plus increase and decrease buttons. Typed values out
 ## Temperature field
 
 - **PART-12** When blue particles are added at a different temperature, the app recomputes the temperature of the whole system from the total kinetic energy and updates the field. _Web port:_ the panel shows the live temperature of the whole gas and of the picked kind, from their kinetic energy. The Temperature field holds the value the next additions use.
-- **PART-13** In piston mode and reaction mode the field keeps the starting value; the piston area shows the live temperature instead.
+- **PART-13** In piston mode and reaction mode the field keeps the starting value; the piston area shows the live temperature instead. _Web port:_ done: the Temperature field is always what new particles are added at, and the Piston box shows "Temperature now".
 
 ## Restart
 

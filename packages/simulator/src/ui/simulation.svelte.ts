@@ -21,6 +21,7 @@ import type {
   BoundaryMode,
   FromWorker,
   KindInfo,
+  PistonFrame,
   PistonInfo,
   ScenarioSource,
   SetupKind,
@@ -45,6 +46,12 @@ export interface KindDraft {
 
 /** Readings kept for the pressure history, like the statistics' history (STAT-20). */
 const HISTORY_LENGTH = 150;
+
+/** A piston arena's piston as the sidebar sees it: its limits and reference, and its latest frame. */
+export type PistonState = PistonInfo & PistonFrame;
+
+const pistonState = (info: PistonInfo | undefined): PistonState | null =>
+  info ? { ...info, moving: false, thermostatActive: false } : null;
 
 export class SimulationClient {
   /** The worker starts running, matching `new PlayPauseButton(false)` in the Java app. */
@@ -90,8 +97,11 @@ export class SimulationClient {
   loading = $state(true);
   /** Arena options the running scenario can take, and which are on (null until loaded). */
   arena = $state.raw<ArenaInfo | null>(null);
-  /** Piston arenas: limits, and the piston's level and motion as of the latest frame. */
-  piston = $state.raw<(PistonInfo & { level: number; moving: boolean }) | null>(null);
+  /**
+   * Piston arenas: limits, the prediction's reference, and the piston's level, motion and
+   * thermostat as of the latest frame.
+   */
+  piston = $state.raw<PistonState | null>(null);
   /** Latest statistics from the physics worker (about once a second); null until the first. */
   statistics = $state.raw<StatisticsSummary | null>(null);
   /** Latest pressure readout (a few times a second); null until the first. */
@@ -266,7 +276,8 @@ export class SimulationClient {
             message.piston &&
             this.piston &&
             (message.piston.level !== this.piston.level ||
-              message.piston.moving !== this.piston.moving)
+              message.piston.moving !== this.piston.moving ||
+              message.piston.thermostatActive !== this.piston.thermostatActive)
           ) {
             this.piston = { ...this.piston, ...message.piston };
           }
@@ -289,6 +300,9 @@ export class SimulationClient {
           break;
         case 'reactions':
           this.reactions = message.reading;
+          break;
+        case 'pistonReference':
+          if (this.piston) this.piston = { ...this.piston, reference: message.reference };
           break;
         case 'notice':
           this.notice = message.message;
@@ -313,8 +327,7 @@ export class SimulationClient {
             this.arena = message.arena;
             this.kinds = message.kinds;
             this.reactions = null; // the readouts start again with the edited gas
-            if (!message.piston) this.piston = null;
-            else if (!this.piston) this.piston = { ...message.piston, level: 0, moving: false };
+            this.piston = pistonState(message.piston);
             if (message.arena.gates.length !== this.gates.length) {
               this.gates = message.arena.gates.map(({ index, id }) => ({ index, id, open: false }));
             }
@@ -326,7 +339,7 @@ export class SimulationClient {
           this.particleCount = message.particles;
           this.arena = message.arena;
           this.gates = message.arena.gates.map(({ index, id }) => ({ index, id, open: false }));
-          this.piston = message.piston ? { ...message.piston, level: 0, moving: false } : null;
+          this.piston = pistonState(message.piston);
           this.dimension = message.dimension;
           this.kinds = message.kinds;
           this.statKinds = null; // the worker forgets the picked kinds on each load
@@ -464,9 +477,12 @@ export class SimulationClient {
     this.#send({ type: 'forgetMultiplier', value: multiplier });
   }
 
-  /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
-  movePiston(level: number, mode: PistonMode, speed: number): void {
-    this.#send({ type: 'movePiston', level, mode, speed });
+  /**
+   * Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s;
+   * isothermal moves set the thermostat's `dampFactor` (OPT-6).
+   */
+  movePiston(level: number, mode: PistonMode, speed: number, dampFactor?: number): void {
+    this.#send({ type: 'movePiston', level, mode, speed, dampFactor });
   }
 
   stopPiston(): void {

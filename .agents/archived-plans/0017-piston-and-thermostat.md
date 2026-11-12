@@ -1,5 +1,7 @@
 # 0017: Piston and thermostat in 2D and 3D (roadmap Phase 6)
 
+_Done._
+
 Roadmap Phase 6 (`0006-spec-roadmap.md`), tracked in #70.
 
 Requirements: SIM-17, SIM-19–23; OPT-6; PART-13; PRED-15. Unlocks STORY-24, STORY-25 and the piston route through STORY-7.
@@ -34,7 +36,7 @@ The live temperature comes from the census (already posted a few times a second)
 - **Level** (SIM-23): the piston's present position as the gas's volume, `V/V₀ = 1 − level`, as a percentage and in nm, and a bar showing it.
 - **Target volume** slider (SIM-19), as a fraction of the starting volume, from 100% down to the compression limit, and **Move Piston** / **Stop**.
 - **Mode**: Adiabatic, Isothermal or Instantaneous (outwards only, as Java).
-- **Readouts**: temperature now, the prediction for the present volume with its reference, PV/(PV)₀ for isothermal (Boyle, STORY-7), and the "Thermostat active" badge while it acts.
+- **Readouts**: temperature now, the prediction for the present volume with its reference, and the "Thermostat active" badge in the heading while it acts. PV for Boyle's law (STORY-7, 25) is read off the Wall pressure box, which already predicts from the live temperature.
 - **Options** (OPT-6, SIM-22): piston speed (nm/ps) and the thermostat's maximum change per wall collision (%, the `dampFactor`, default 10%). The damp factor reaches the engine through `movePiston` (it's reset to 10% when the thermostat is reset, as Java).
 
 ## Steps

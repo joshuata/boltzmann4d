@@ -51,6 +51,19 @@ export function pressure(numParticles: number, temperature: number, volume: numb
 }
 
 /**
+ * Temperature after a slow (reversible) adiabatic change of volume from V₁ to V₂ (PRED-15):
+ * T₂ = T₁ (V₁ / V₂)^{2/d}, the exponent being R/c_v for a monatomic gas in d dimensions.
+ */
+export function adiabaticTemperature(
+  t1: number,
+  v1: number,
+  v2: number,
+  dimension: number,
+): number {
+  return t1 * Math.pow(v1 / v2, 2 / dimension);
+}
+
+/**
  * Total kinetic energy in J of particles of one mass (amu), from x, y, z velocity triples
  * in m/s (Load.calculateTotalKE).
  */

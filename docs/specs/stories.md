@@ -41,8 +41,8 @@ Where an outcome is statistical, "matches" means within normal fluctuations for 
 
 ## Piston
 
-- **STORY-24 Adiabatic compression.** Piston mode, adiabatic, compress: temperature rises toward `T₁ (V₁/V₂)^{2/d}`. Expand back: the final temperature is close to but usually slightly above the start; slower pistons and more particles bring it closer.
-- **STORY-25 Isothermal compression.** Same in isothermal mode: "Thermostat active" shows while the piston moves, temperature stays put, PV stays constant.
+- **STORY-24 Adiabatic compression.** Piston mode, adiabatic, compress: temperature rises toward `T₁ (V₁/V₂)^{2/d}`. Expand back: the final temperature is close to but usually slightly above the start; slower pistons and more particles bring it closer. _Web port:_ checked headless in `stats/stories.test.ts` (2D and 3D, within 5% of the prediction for the volume the centres can reach); in the app, the Piston box shows both.
+- **STORY-25 Isothermal compression.** Same in isothermal mode: "Thermostat active" shows while the piston moves, temperature stays put, PV stays constant. _Web port:_ checked headless in `stats/stories.test.ts`; the Piston box shows the badge and the held temperature.
 
 ## Reactions
 

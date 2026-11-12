@@ -13,19 +13,25 @@ const AMU_JOULE = 1.660538782e-27;
 export const THERMOSTAT_EPSILON = (1.0 * AMU_JOULE) / 1.0;
 const MIN_GAMMA2 = 0.5;
 const MAX_GAMMA2 = 1.5;
+export const DEFAULT_DAMP_FACTOR = 0.1;
 
 export class Thermostat {
   enabled = false;
   /** Kinetic energy (J) added by boundary events and not yet taken back. */
   deltaKE = 0.0;
-  dampFactor = 0.1;
+  /**
+   * Share of the excess energy taken back at once when it's more than a bounce's normal
+   * kinetic energy (the Java piston panel's "Damp factor", 10%; OPT-6).
+   */
+  dampFactor = DEFAULT_DAMP_FACTOR;
 
   reset(enabled: boolean): void {
-    this.dampFactor = 0.1;
+    this.dampFactor = DEFAULT_DAMP_FACTOR;
     this.deltaKE = 0.0;
     this.enabled = enabled;
   }
 
+  /** Whether there is excess energy to correct (Java's isActive; the switch is `enabled`). */
   isActive(): boolean {
     return this.enabled && Math.abs(this.deltaKE) > THERMOSTAT_EPSILON;
   }
