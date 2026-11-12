@@ -1,5 +1,5 @@
 // The wall thermostat (Thermostat.java with WallController.java), used by the isothermal
-// piston: it tracks how much kinetic energy boundary events have added (`deltaKE`, J) and
+// piston in 2D and 3D: it tracks how much kinetic energy boundary events have added (`deltaKE`, J) and
 // scales the normal velocity of later wall bounces to take it back out.
 //
 // This is a heuristic, not a heat bath (see joshuata/boltzmann4d#24); it's ported as is so
@@ -42,6 +42,7 @@ export class Thermostat {
     if (!this.isActive()) return 1.0;
     let normal = 0.0;
     if (type === Collision.WALL) {
+      // WallController takes vy for the front and back walls too (a Java slip, kept for parity).
       normal = side === Wall.LEFT || side === Wall.RIGHT ? p.vx[i]! : p.vy[i]!;
     } else if (type === Collision.PISTON) {
       normal = p.vy[i]!;
@@ -63,6 +64,16 @@ export function particleKE2D(p: Particles, i: number): number {
   const vx = p.vx[i]!;
   const vy = p.vy[i]!;
   const speed = Math.sqrt(0.0 + vx * vx + vy * vy);
+  const energy = 0.5 * p.mass[i]! * speed * speed;
+  return (energy * AMU_JOULE) / 1.0;
+}
+
+/** Particle3D.getKE: 0.5·m·|v|² in amu·m²/s², converted to joules. */
+export function particleKE3D(p: Particles, i: number): number {
+  const vx = p.vx[i]!;
+  const vy = p.vy[i]!;
+  const vz = p.vz[i]!;
+  const speed = Math.sqrt(0.0 + vx * vx + vy * vy + vz * vz);
   const energy = 0.5 * p.mass[i]! * speed * speed;
   return (energy * AMU_JOULE) / 1.0;
 }

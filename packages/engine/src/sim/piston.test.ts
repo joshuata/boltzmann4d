@@ -40,8 +40,15 @@ describe('Piston', () => {
 
   it('leaves room for the particles (compression limit)', () => {
     // 100 discs of 1 nm diameter in a 20 nm wide arena: 5 nm of discs plus 2 nm to spare.
-    expect(compressionLimitPercent(20e-9, 50e-9, [{ radius: 0.5e-9, count: 100 }])).toBeCloseTo(
-      14,
+    const arena = { xSize: 20e-9, ySize: 50e-9, zSize: 0 };
+    expect(compressionLimitPercent(arena, [{ radius: 0.5e-9, count: 100 }])).toBeCloseTo(14, 10);
+  });
+
+  it('leaves room for the particles in 3D (cubes over x·z)', () => {
+    // 1000 spheres of 1 nm diameter under a 10 × 10 nm plate: 10 nm of cubes plus 2 nm.
+    const arena = { xSize: 10e-9, ySize: 50e-9, zSize: 10e-9 };
+    expect(compressionLimitPercent(arena, [{ radius: 0.5e-9, count: 1000 }], 3)).toBeCloseTo(
+      24,
       10,
     );
   });
