@@ -159,3 +159,18 @@ export {
   predictBoundary2D,
   predictPair2D,
 } from './particle-2d';
+export {
+  batchBuffers,
+  DEFAULT_EVENT_CAP,
+  emptyBatch,
+  EventRecorder,
+  FreePathAccumulator,
+  kineticEnergiesOf,
+  mergeBatches,
+  replay,
+  REVERSAL,
+  snapshotOf,
+  speedsOf,
+  type EventBatch,
+  type StateSnapshot,
+} from './snapshot';
