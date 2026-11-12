@@ -1,4 +1,4 @@
-# 0015: Reaction readouts and the equilibrium prediction (roadmap Phase 7)
+# 0016: Reaction readouts and the equilibrium prediction (roadmap Phase 7)
 
 Roadmap Phase 7 (`0006-spec-roadmap.md`), tracked in #71.
 

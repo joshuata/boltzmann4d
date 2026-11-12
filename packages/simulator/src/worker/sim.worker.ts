@@ -18,8 +18,11 @@ import {
 import type { RenderStream } from '../render/protocol';
 import {
   addParticle,
+  batchBuffers,
   census,
   continueInArena,
+  DEFAULT_EVENT_CAP,
+  EventRecorder,
   javaReaction,
   PlacementError,
   removeNewest,
@@ -57,6 +60,7 @@ import type {
   KindSetup,
   ScenarioSource,
   SetupKind,
+  SnapshotMessage,
   ToWorker,
 } from './index';
 import { parseSimulationSpeed, ThreadController } from './thread-controller';
@@ -78,6 +82,16 @@ let paused = false;
 let rateScale = 1;
 /** Bumped per load request, so a slow load can't replace a newer one. */
 let loadGeneration = 0;
+/** State snapshots (joshuata/boltzmann4d#84): real ms between them; null sends none. */
+let snapshotInterval: number | null = null;
+/** Records every event between snapshots while events are asked for (else null: no cost). */
+let recorder: EventRecorder | null = null;
+/** Bumped by each start(): particle indices may have changed. */
+let run = 0;
+/** The run whose masses and radii were last sent (they're sent once per run). */
+let constantsSentFor = -1;
+/** Wall-clock time of the last snapshot. */
+let lastSnapshot = -Infinity;
 /** The running simulation's statistics. */
 let runningStatistics: Statistics | null = null;
 /** Kinds the user picked for the statistics (KIND-4), if not a tracked set. */
@@ -239,7 +253,12 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       break;
     case 'reverse':
       // Between frames, so every particle is at the frame's time.
-      running?.reverse();
+      if (!running) break;
+      running.reverse();
+      recorder?.recordReversal(running.time);
+      break;
+    case 'snapshots':
+      setSnapshots(message.intervalMs, message.events, message.eventCap);
       break;
     case 'rate':
       rateScale = message.scale;
@@ -518,6 +537,7 @@ function build(prepared: Prepared): Built {
     afterEvent: (event) => {
       meter?.afterEvent(event);
       reactionMeter?.afterEvent(event);
+      recorder?.record(event, simulation.particles);
     },
   });
   const rules = prepared.scenario.reactions;
@@ -731,6 +751,9 @@ function start(
 
   let lastSummary = -Infinity;
   let lastPressure = -Infinity;
+  run++;
+  recorder?.clear();
+  lastSnapshot = -Infinity;
   const controller = new ThreadController(
     simulation,
     (frame, physicsMs) => {
@@ -761,6 +784,13 @@ function start(
         lastSummary = now;
         statistics.sampleCurrent(simulation.time);
         postSummary(statistics, simulation.time);
+      }
+      if (
+        snapshotInterval !== null &&
+        (now - lastSnapshot >= snapshotInterval || controller.isPaused() || recorder?.full)
+      ) {
+        lastSnapshot = now;
+        postSnapshot(simulation);
       }
     },
     { speed: prepared.speed, rateScale },
@@ -813,6 +843,45 @@ function start(
       forgetMultiplier: statistics.options.forgetMultiplier,
     },
   });
+}
+
+/**
+ * Turns the snapshot stream on or off. Posts a snapshot right away (without events) while
+ * running, so the next batch's events follow on from a state the consumer has.
+ */
+function setSnapshots(intervalMs: number | null, events: boolean, eventCap?: number): void {
+  snapshotInterval =
+    intervalMs !== null && Number.isFinite(intervalMs) && intervalMs >= 0 ? intervalMs : null;
+  const cap = eventCap !== undefined && eventCap >= 1 ? eventCap : DEFAULT_EVENT_CAP;
+  if (!events || snapshotInterval === null) recorder = null;
+  else if (!recorder || recorder.cap !== Math.floor(cap)) recorder = new EventRecorder(cap);
+  recorder?.clear();
+  if (snapshotInterval !== null && running) {
+    lastSnapshot = performance.now();
+    postSnapshot(running, false);
+  }
+}
+
+/** Posts the running simulation's state, and the events since the last snapshot. */
+function postSnapshot(simulation: Simulation, withEvents = true): void {
+  const full = simulation.stateSnapshot(run);
+  const snapshot: SnapshotMessage = full;
+  if (constantsSentFor === run) {
+    delete snapshot.masses;
+    delete snapshot.radii;
+  }
+  constantsSentFor = run;
+  if (recorder && withEvents) snapshot.events = recorder.take();
+  const transfer: Transferable[] = [
+    full.positions.buffer,
+    full.velocities.buffer,
+    full.types.buffer,
+    full.colors.buffer,
+    ...(snapshot.masses ? [full.masses.buffer] : []),
+    ...(snapshot.radii ? [full.radii.buffer] : []),
+    ...(snapshot.events ? batchBuffers(snapshot.events) : []),
+  ];
+  scope.postMessage({ type: 'snapshot', snapshot } satisfies FromWorker, transfer);
 }
 
 function sceneOf(simulation: Simulation, statistics: Statistics, prepared: Prepared): SceneInfo {

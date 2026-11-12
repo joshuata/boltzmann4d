@@ -6,6 +6,7 @@ import { parseScenario, resolveScenario, setFileToScenario, type ScenarioInput }
 import { syntheticGas, seededRandom } from './scenes';
 import { PistonMode } from './piston';
 import { Simulation, type InitialState } from './simulation';
+import { EventRecorder } from './snapshot';
 import { ArenaType, DividerThermalMode } from './simulation-info';
 
 const EVENTS = 1000;
@@ -85,6 +86,31 @@ for (const [label, load] of scenes) {
       { beforeAll: () => void (simulation = create()) },
       () => {
         for (let k = 0; k < EVENTS; k++) simulation.step();
+      },
+    ).run();
+  });
+}
+
+// State snapshots' event recording (joshuata/boltzmann4d#84): the same events with every
+// one recorded, and a batch taken per 1,000 (about one snapshot's worth). Compare with the
+// plain runs above; with events off nothing is chained in.
+for (const [label, load] of [scenes[0]!, scenes[10]!]) {
+  test(`${EVENTS} events, recorded: ${label}`, async ({ bench }) => {
+    const init = await load();
+    const recorder = new EventRecorder();
+    const create = () => {
+      const sim: Simulation = new Simulation(init, {
+        afterEvent: (event) => recorder.record(event, sim.particles),
+      });
+      return sim;
+    };
+    let simulation = create();
+    await bench(
+      `${EVENTS} events, recorded: ${label}`,
+      { beforeAll: () => void (simulation = create()) },
+      () => {
+        for (let k = 0; k < EVENTS; k++) simulation.step();
+        recorder.take();
       },
     ).run();
   });

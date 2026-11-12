@@ -6,7 +6,7 @@
 // only runs the UI. Browsers that can't hand a canvas to a worker draw on the main
 // thread instead, fed through the same channel.
 import type { Renderer, ViewSize } from '../render';
-import type { Census, ColorMode, Dimension } from '@boltzmann4d/engine/sim';
+import type { Census, ColorMode, Dimension, StateSnapshot } from '@boltzmann4d/engine/sim';
 import type { FromRenderWorker, RenderStream, ToRenderWorker } from '../render/protocol';
 import type { ArenaTheme } from '../render/view';
 import RenderWorker from '../render/render.worker?worker';
@@ -27,6 +27,7 @@ import type {
   ToWorker,
 } from '../worker';
 import SimWorker from '../worker/sim.worker?worker';
+import { SnapshotHub, type SnapshotListener } from './snapshot-hub';
 import { clampZoom } from './zoom';
 
 /** A plot the statistics area can show: a statistic, or a pressure history by region. */
@@ -137,6 +138,16 @@ export class SimulationClient {
   addTemperatures = $state<Record<string, number>>({});
   /** Why the last add, removal, switch or restart couldn't be done; cleared by the next. */
   notice = $state<string | null>(null);
+  /**
+   * The latest state snapshot (joshuata/boltzmann4d#84), for statistics computed here;
+   * null until the first. Svelte may coalesce updates, so consumers that need every
+   * snapshot (and its events) use addSnapshotListener instead.
+   */
+  snapshot = $state.raw<StateSnapshot | null>(null);
+  /** Real ms between snapshots (null: none), and whether they carry their events. */
+  snapshotInterval = $state<number | null>(null);
+  snapshotEvents = $state(false);
+  readonly #snapshots = new SnapshotHub((message) => (this.error = message));
   /** Where drawing happens. */
   readonly renderThread: 'worker' | 'main';
   /**
@@ -282,6 +293,11 @@ export class SimulationClient {
         case 'notice':
           this.notice = message.message;
           break;
+        case 'snapshot': {
+          const snapshot = this.#snapshots.receive(message.snapshot);
+          if (snapshot) this.snapshot = snapshot;
+          break;
+        }
         case 'loaded':
           this.paused = message.paused;
           this.setupKinds = message.setupKinds;
@@ -675,6 +691,31 @@ export class SimulationClient {
 
   advanceOneFrame(): void {
     if (this.paused) this.#send({ type: 'step' });
+  }
+
+  /**
+   * State snapshots (joshuata/boltzmann4d#84): one about every `intervalMs` real ms (null
+   * turns them off), each with every event since the previous when `events` is on. Kept
+   * across scenarios. Off by default, and free while off.
+   */
+  setSnapshotOptions(intervalMs: number | null, events = false, eventCap?: number): void {
+    const interval = intervalMs !== null && Number.isFinite(intervalMs) && intervalMs >= 0;
+    this.snapshotInterval = interval ? intervalMs : null;
+    this.snapshotEvents = interval && events;
+    this.#send({
+      type: 'snapshots',
+      intervalMs: this.snapshotInterval,
+      events: this.snapshotEvents,
+      eventCap,
+    });
+  }
+
+  /**
+   * Calls `listener` synchronously with every snapshot, in order, before `snapshot` changes
+   * (for consumers that accumulate events). Returns its remover.
+   */
+  addSnapshotListener(listener: SnapshotListener): () => void {
+    return this.#snapshots.add(listener);
   }
 
   /** Turns the last second's counts into rates. */

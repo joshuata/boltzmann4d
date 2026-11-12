@@ -31,7 +31,7 @@ const hasParticles = (g: { randomlyPlaced: { count: number }[]; particles: unkno
 /**
  * Whether reaction_mode TRUE runs: only with a single particle type, which turns into the
  * second (SIM-25). Otherwise the rule is kept, switched off. The Java app ran reactions
- * only in 2D; here they run in 3D too (plan 0015), as the manual's `3Dequil` expects.
+ * only in 2D; here they run in 3D too (plan 0016), as the manual's `3Dequil` expects.
  */
 function javaRunsReaction(v1: ScenarioV1): boolean {
   return !v1.particleGroups.some((g) => g.color === 'BLUE' && hasParticles(g));
