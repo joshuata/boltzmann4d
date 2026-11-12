@@ -29,14 +29,12 @@ const hasParticles = (g: { randomlyPlaced: { count: number }[]; particles: unkno
   g.particles.length > 0 || g.randomlyPlaced.some((b) => b.count > 0);
 
 /**
- * Whether reaction_mode TRUE runs: the Java app has reactions only in 2D, and only with a
- * single particle type, which turns into the second (SIM-25). Otherwise the rule is kept, switched off.
+ * Whether reaction_mode TRUE runs: only with a single particle type, which turns into the
+ * second (SIM-25). Otherwise the rule is kept, switched off. The Java app ran reactions
+ * only in 2D; here they run in 3D too (plan 0015), as the manual's `3Dequil` expects.
  */
 function javaRunsReaction(v1: ScenarioV1): boolean {
-  return (
-    v1.arena.dimensions === 2 &&
-    !v1.particleGroups.some((g) => g.color === 'BLUE' && hasParticles(g))
-  );
+  return !v1.particleGroups.some((g) => g.color === 'BLUE' && hasParticles(g));
 }
 
 /**
@@ -174,13 +172,11 @@ export function toV1(scenario: Scenario): V1Conversion {
       // reaction_mode TRUE; whether it runs follows from the arena and particles
       // (javaRunsReaction), so a rule switched on or off against that is lost.
       reaction = true;
-      const runs =
-        scenario.arena.dimensions === 2 &&
-        !scenario.populations.some((p) => p.kind === b.id && hasParticles(p));
+      const runs = !scenario.populations.some((p) => p.kind === b.id && hasParticles(p));
       if (rule.enabled !== runs) {
         warnings.push(
           rule.enabled
-            ? `the reaction (which only runs in 2D with no ${b.name} particles at the start)`
+            ? `the reaction (which only runs with no ${b.name} particles at the start)`
             : 'the switched-off reaction',
         );
       }

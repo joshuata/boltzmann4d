@@ -455,3 +455,55 @@ export function statisticSubsets(count: number): number[][] {
   const all = Array.from({ length: count }, (_, t) => t);
   return [...all.map((t) => [t]), all];
 }
+
+/**
+ * ln C(n, k), the log of the binomial coefficient, by summing logs (exact enough for the
+ * few thousand particles a scene has, and free of lnGamma's Stirling error at small n).
+ */
+export function lnBinomial(n: number, k: number): number {
+  const m = Math.min(k, n - k);
+  let value = 0;
+  for (let j = 1; j <= m; j++) value += Math.log((n - m + j) / j);
+  return value;
+}
+
+/**
+ * The predicted equilibrium of `2 X ⇌ 2 Y` at fixed total energy (PRED-12): the average
+ * number of products Y and its width, from the microcanonical partition function
+ * Σ C(N, N₂) · [E − N₂ ΔE / 2]^{dN/2 − 1} over the product counts N₂ the run can reach
+ * (each reaction changes N₂ by two, so those with the starting count's parity), skipping
+ * those with no kinetic energy left. `energy` is the total energy with the reactant as
+ * zero (kinetic energy plus ΔE/2 per product present) and `deltaE` the energy one
+ * forward reaction stores, E_f − E_r, in the same unit. The results needn't be integers.
+ */
+export function reactionEquilibrium(
+  particles: number,
+  dimension: number,
+  energy: number,
+  deltaE: number,
+  oddProducts: boolean,
+): { average: number; width: number } {
+  const exponent = (dimension * particles) / 2 - 1;
+  const logs: number[] = [];
+  const counts: number[] = [];
+  for (let n2 = oddProducts ? 1 : 0; n2 <= particles; n2 += 2) {
+    const kinetic = energy - (n2 * deltaE) / 2;
+    if (!(kinetic > 0)) continue;
+    logs.push(lnBinomial(particles, n2) + exponent * Math.log(kinetic));
+    counts.push(n2);
+  }
+  if (logs.length === 0) return { average: NaN, width: NaN };
+  const top = Math.max(...logs);
+  let z = 0;
+  let sum = 0;
+  let squares = 0;
+  logs.forEach((log, k) => {
+    const w = Math.exp(log - top);
+    const n2 = counts[k]!;
+    z += w;
+    sum += w * n2;
+    squares += w * n2 * n2;
+  });
+  const average = sum / z;
+  return { average, width: Math.sqrt(Math.max(0, squares / z - average * average)) };
+}

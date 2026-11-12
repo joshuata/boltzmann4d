@@ -70,9 +70,9 @@ Widths follow PRED-4 and PRED-5.
 
 ## Reaction equilibrium
 
-- **PRED-12** For `2 red ⇌ 2 blue` at fixed energy, the predicted blue count and its width come from the microcanonical partition function: a sum over N₂ (even only, or odd only if the run started with an odd number of blue) of `C(N, N₂) · [E − N₂ ΔE / 2]^{dN/2 − 1}`, skipping terms where the bracket is negative. `<N₂>` and `<N₂²>` give the average and width. These need not be integers.
-- **PRED-13** In the large-N limit this matches `K = N₂/N₁ = exp(−ΔE / RT)` with T the final (not initial) temperature, `d N k T / 2 = E₀ − <N₂> ΔE / 2`. Only ΔE affects the equilibrium; the activation energies set the rate.
-- **PRED-14** Reference values: the `2Dequil` preset (50 particles, defaults) predicts 13.3 blue in 2D; `3Dequil` predicts 14.1.
+- **PRED-12** For `2 red ⇌ 2 blue` at fixed energy, the predicted blue count and its width come from the microcanonical partition function: a sum over N₂ (even only, or odd only if the run started with an odd number of blue) of `C(N, N₂) · [E − N₂ ΔE / 2]^{dN/2 − 1}`, skipping terms where the bracket is negative. `<N₂>` and `<N₂²>` give the average and width. These need not be integers. _Web port:_ done (plan 0015): `reactionEquilibrium` in `packages/engine/src/stats/formulas.ts`, summed in logs; the readout recomputes it from the present kinetic energy, so it follows a piston or thermostat. It is offered for a single rule `X + X ⇌ Y + Y` with the reverse on, in an arena with walls and no wells (periodic boundaries would also fix the momentum).
+- **PRED-13** In the large-N limit this matches `K = N₂/N₁ = exp(−ΔE / RT)` with T the final (not initial) temperature, `d N k T / 2 = E₀ − <N₂> ΔE / 2`. Only ΔE affects the equilibrium; the activation energies set the rate. _Web port:_ `formulas.test.ts` checks the large-N limit against `K` at the final temperature.
+- **PRED-14** Reference values: the `2Dequil` preset (50 particles, defaults) predicts 13.3 blue in 2D; `3Dequil` predicts 14.1. _Web port:_ the formula gives 13.37 and 14.09 at 300 K, and seeded long runs of both presets average within a few tenths of their predictions (`reaction-meter.test.ts`). The `3Dequil` file gives every particle 2183 m/s, which is about 382 K in 3D rather than 300 K, so in the app (as in the Java app's loader) it predicts 16.4.
 
 ## Adiabatic changes
 

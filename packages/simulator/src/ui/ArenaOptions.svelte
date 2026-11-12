@@ -47,24 +47,11 @@
   );
   const applyWall = () =>
     onChange({ attractiveWall: { width: wallWidth * 1e-9, depth: wallDepth } });
-  // Reactions: Java's defaults, forward 8 and reverse 4 kJ/mol.
-  let forward = $state(8);
-  let reverse = $state(4);
-  let suppressReverse = $state(false);
-  $effect.pre(() => {
-    forward = arena.options.reactions?.forward ?? 8;
-    reverse = arena.options.reactions?.reverse ?? 4;
-    suppressReverse = arena.options.reactions?.suppressReverse ?? false;
-  });
+  // Reactions: Java's defaults, forward 8 and reverse 4 kJ/mol; the Reactions panel's
+  // energy diagram changes them (SIM-27).
   const reactionsOn = $derived(Boolean(arena.options.reactions));
-  const reactionsValid = $derived(forward >= 0 && reverse >= 0);
-  const reactionsChanged = $derived(
-    !arena.options.reactions ||
-      arena.options.reactions.forward !== forward ||
-      arena.options.reactions.reverse !== reverse ||
-      arena.options.reactions.suppressReverse !== suppressReverse,
-  );
-  const applyReactions = () => onChange({ reactions: { forward, reverse, suppressReverse } });
+  const applyReactions = () =>
+    onChange({ reactions: { forward: 8, reverse: 4, suppressReverse: false } });
   const applyWells = () =>
     onChange({ wells: { radiusMultiplier: multiplier, depths: [...depths] } });
 </script>
@@ -194,29 +181,6 @@
           />
           Reactions ({arena.typeNames[0]} ⇌ {arena.typeNames[1] ?? 'Reacted'})
         </label>
-        {#if reactionsOn}
-          <div class="wells">
-            <label class="field">
-              <span>Forward (kJ/mol)</span>
-              <input type="number" min="0" max="50" step="0.5" bind:value={forward} {disabled} />
-            </label>
-            <label class="field">
-              <span>Reverse (kJ/mol)</span>
-              <input type="number" min="0" max="50" step="0.5" bind:value={reverse} {disabled} />
-            </label>
-            <label class="inline">
-              <input type="checkbox" bind:checked={suppressReverse} {disabled} />
-              No reverse
-            </label>
-            <button
-              type="button"
-              disabled={disabled || !reactionsValid || !reactionsChanged}
-              onclick={applyReactions}
-            >
-              Apply
-            </button>
-          </div>
-        {/if}
       {/if}
     </div>
   </SidebarPanel>
@@ -264,10 +228,6 @@
   }
   .wells button {
     align-self: end;
-  }
-  .inline {
-    align-self: end;
-    min-height: 2.25rem;
   }
   .wells button:disabled {
     opacity: 0.5;

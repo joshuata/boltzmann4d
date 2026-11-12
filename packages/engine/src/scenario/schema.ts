@@ -126,8 +126,9 @@ export const ReactionSchema = z.object({
   reverse: nonNegative(),
   suppressReverse: z.boolean().default(false),
   /**
-   * Off: kept in the scenario but not simulated. 3D `.set` files with reaction_mode TRUE
-   * migrate to a disabled rule, since the Java app never ran reactions in 3D.
+   * Off: kept in the scenario but not simulated. `.set` files with reaction_mode TRUE and
+   * Type B particles at the start migrate to a disabled rule, since the Java app refuses
+   * reactions then (SIM-25).
    */
   enabled: z.boolean().default(true),
 });

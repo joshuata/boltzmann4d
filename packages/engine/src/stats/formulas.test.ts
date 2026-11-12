@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { syntheticGas } from '../sim/scenes';
 import { ArenaType } from '../sim/simulation-info';
+import { convert } from '../utils/units';
 import {
   allTypeSubsets,
   statisticSubsets,
@@ -14,9 +15,11 @@ import {
   effectiveVolume,
   gamma,
   gammaFrac,
+  lnBinomial,
   lnGamma,
   predictCollisionRate,
   predictCollisionRateForTypes,
+  reactionEquilibrium,
   realGasQx,
   rmsVelocity,
   temperature,
@@ -204,5 +207,43 @@ describe('real-gas correction and subsets', () => {
     expect(statisticSubsets(3)).toEqual(allTypeSubsets(3));
     expect(statisticSubsets(4)).toEqual([[0], [1], [2], [3], [0, 1, 2, 3]]);
     expect(statisticSubsets(10)).toHaveLength(11);
+  });
+});
+
+describe('reactionEquilibrium (PRED-12–14)', () => {
+  const dE = convert('kJ/mol', 'J', 8 - 4);
+  const k = BOLTZMANN_CONST;
+
+  it("matches the manual's 13.3 (2D) and 14.1 (3D) products out of 50 at 300 K", () => {
+    // The kinetic energy at 300 K, all reactant: d/2 · N k T.
+    expect(reactionEquilibrium(50, 2, 50 * k * 300, dE, false).average).toBeCloseTo(13.3, 0.7);
+    expect(reactionEquilibrium(50, 3, 75 * k * 300, dE, false).average).toBeCloseTo(14.1, 1);
+    const { width } = reactionEquilibrium(50, 2, 50 * k * 300, dE, false);
+    expect(width).toBeGreaterThan(2);
+    expect(width).toBeLessThan(4);
+  });
+
+  it('approaches K = exp(−ΔE / RT) at the final temperature for large N (PRED-13)', () => {
+    const n = 4000;
+    const e0 = n * k * 300; // 2D, 300 K
+    const { average } = reactionEquilibrium(n, 2, e0, dE, false);
+    // d N k T / 2 = E₀ − <N₂> ΔE / 2, and (N₂/N₁)² = exp(−ΔE / kT).
+    const kT = (e0 - (average * dE) / 2) / n;
+    const ratio = average / (n - average);
+    expect(ratio / Math.exp(-dE / (2 * kT))).toBeCloseTo(1, 2);
+  });
+
+  it('keeps the parity of the starting count and skips states without energy', () => {
+    // Too little energy for even two products: none.
+    expect(reactionEquilibrium(10, 2, 0.5 * dE, dE, false)).toEqual({ average: 0, width: 0 });
+    // Started with one product and just enough for it: stays at one.
+    expect(reactionEquilibrium(10, 2, 0.6 * dE, dE, true)).toEqual({ average: 1, width: 0 });
+    expect(reactionEquilibrium(10, 2, 0.4 * dE, dE, true).average).toBeNaN();
+  });
+
+  it('computes ln C(n, k)', () => {
+    expect(Math.exp(lnBinomial(50, 13)) / 354860518600).toBeCloseTo(1, 10);
+    expect(lnBinomial(7, 0)).toBe(0);
+    expect(lnBinomial(7, 7)).toBe(0);
   });
 });

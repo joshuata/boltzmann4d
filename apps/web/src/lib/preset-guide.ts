@@ -53,8 +53,7 @@ const TOPICS: { title: string; ideas: Record<string, string> }[] = [
     ideas: {
       entropy:
         'One very hot particle hits a cold cluster: its energy spreads out and never gathers back. Starts paused.',
-      equil:
-        'Particles turn Type A ⇌ Type B until the mix settles at equilibrium (reactions run in 2D).',
+      equil: 'Particles turn Type A ⇌ Type B until the mix settles at the predicted equilibrium.',
       equal: 'Two halves start identical; chaos makes them drift apart after about 100 ps.',
       liquid: 'Large particles packed closely in a periodic box behave like a liquid.',
     },

@@ -6,6 +6,7 @@ import type { Census, ColorMode, Dimension } from '@boltzmann4d/engine/sim';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
 import type { PressureReading } from '@boltzmann4d/engine/stats/pressure';
+import type { ReactionReading } from '@boltzmann4d/engine/stats/reaction-meter';
 import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
 
 /**
@@ -31,7 +32,7 @@ export interface ArenaOptions {
    */
   wells?: { radiusMultiplier: number; depths: number[] } | null;
   /**
-   * The Java reaction, species 0 + 0 ⇌ 1 + 1 (2D scenarios with one species or that rule
+   * The Java reaction, species 0 + 0 ⇌ 1 + 1 (scenarios with one species or that rule
    * already): activation energies in kJ/mol. null turns it off; absent follows the
    * scenario's rules.
    */
@@ -181,7 +182,9 @@ export type ToWorker =
   /** Finite-system (PRED-11) and real-gas (PRED-9) predictions; kept across loads. */
   | { type: 'statOptions'; finite?: boolean; realGas?: boolean }
   /** The forget time, in predicted collision times (OPT-4; kept by Restart). */
-  | { type: 'forgetMultiplier'; value: number };
+  | { type: 'forgetMultiplier'; value: number }
+  /** Start the reaction readout's time averages again from now (SIM-28). */
+  | { type: 'resetReactionAverage' };
 
 /** One particle kind of the running simulation, for legends and pickers (KIND-4, KIND-9). */
 export interface KindInfo {
@@ -223,6 +226,8 @@ export type FromWorker =
       /** The source's name. */
       name: string;
       particles: number;
+      /** Whether particles react (SIM-28): the `reactions` readout comes with the census. */
+      reactions: boolean;
       dimension: Dimension;
       /** Per species, in type order. */
       kinds: KindInfo[];
@@ -260,6 +265,8 @@ export type FromWorker =
    * pressure readout. Per species, as `loaded.kinds`.
    */
   | { type: 'census'; time: number; census: Census }
+  /** The reaction readout (SIM-28), with the census, while particles react. */
+  | { type: 'reactions'; reading: ReactionReading }
   /** Something the user asked for couldn't be done (a taken spot, no room); the run is fine. */
   | { type: 'notice'; message: string }
   | { type: 'error'; message: string };

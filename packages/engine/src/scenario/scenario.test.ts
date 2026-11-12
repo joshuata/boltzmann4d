@@ -283,16 +283,28 @@ describe('version 2 scenarios', () => {
     ]);
   });
 
-  it('keeps reaction mode switched off where the Java app ignores it', async () => {
-    // 3D: Java has no reactions there, so 3Dequil has never reacted.
+  it('runs reaction mode in 3D too (3Dequil, PRED-14)', async () => {
+    // The Java app never reacted in 3D; the manual's 3Dequil expects it to.
     const { scenario } = setFileToScenario(await loadPresetText('3Dequil'));
-    expect(scenario.reactions.map((r) => r.enabled)).toEqual([false]);
+    expect(scenario.reactions.map((r) => r.enabled)).toEqual([true]);
     const resolved = resolveScenario(scenario);
-    expect(resolved.reactions).toEqual([]);
-    expect(resolved.species.map((s) => s.kindId)).toEqual(['a']);
-    // It still round-trips as reaction_mode TRUE.
+    expect(resolved.reactions).toEqual([
+      { reactants: [0, 0], products: [1, 1], forward: 8, reverse: 4, suppressReverse: false },
+    ]);
+    expect(resolved.species.map((s) => s.kindId)).toEqual(['a', 'b']);
     expect(toV1(scenario).scenario?.modes.reaction).toBe(true);
     expect(toV1(scenario).warnings).toEqual([]);
+  });
+
+  it('keeps reaction mode switched off with Type B particles at the start (SIM-25)', async () => {
+    const text = (await loadPresetText('2Dequil')).replace(
+      /ParticleGroup \{\s*color Blue([^}]*)\}/,
+      'ParticleGroup {\n  color Blue$1\n  RandomlyPlaced {\n    count 5\n    average_velocity 1500\n  }\n}',
+    );
+    const { scenario } = setFileToScenario(text);
+    expect(scenario.reactions.map((r) => r.enabled)).toEqual([false]);
+    expect(resolveScenario(scenario).reactions).toEqual([]);
+    expect(toV1(scenario).scenario?.modes.reaction).toBe(true);
   });
 
   it('checks references to kinds and regions', async () => {
