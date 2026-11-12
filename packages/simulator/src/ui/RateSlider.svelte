@@ -24,7 +24,7 @@
   const format = (scale: number) => (scale >= 1 ? scale.toFixed(0) : scale.toPrecision(2));
 </script>
 
-<div class="my-4 grid gap-2 text-sm">
+<div class="mt-3 grid gap-2 text-sm">
   <div class="flex justify-between">
     <span class="font-medium">Speed</span>
     <output class="tabular-nums">{format(value)}×</output>

@@ -36,7 +36,7 @@ The copies' starting positions differ only in the last digits the computer keeps
 
 - **Clear trace** erases the dots so far and keeps tracing.
 - In 3D the dots stay where they were in the box, so you can turn the box to look at the paths from any side.
-- The trace starts afresh when you restart or load a simulation. The dot size comes from the simulation's settings (2 pixels by default).
+- The trace starts afresh when you restart or load a simulation. **Dot size** sets how big the dots are, in pixels; it starts at the simulation's own setting (2 pixels by default). Changing it in 2D starts the trace afresh.
 
 The **Liquid** simulation starts with tracing on, so you can follow the blue particle as it wanders through the dense fluid.
 

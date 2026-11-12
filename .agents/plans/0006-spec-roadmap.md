@@ -4,7 +4,7 @@ A phased plan for bringing the requirements in `docs/specs/` into the app. Each 
 
 ## Context
 
-`docs/specs/` lists what the app must do, with requirement IDs and 28 classroom stories (`STORY-*`). Today the app covers part of it: 2D and 3D hard-sphere physics (walls, periodic, divider, hole, the demon gate); in 2D also the conducting divider, the movable piston with its thermostat, pair wells, the attractive wall and red↔blue reactions, turned on from the sidebar's Arena box; Restart and the demon's open/close toggle; loading bundled presets from a SvelteKit site with 2D/3D menus; play/pause/step, a rate slider and collapsible performance readouts; colour by type, speed or KE (2D and 3D), trace (2D), the demon's closed hole and a scale bar; and the Instantaneous Speed histogram with Red/Blue/Both, checked against kinetic theory (plans 0002, 0003, 0004 steps 1–4, 0005 steps 1–7, 0007). There are no particle controls, pressure, 1D, 3D piston or reactions, reverse, 3D trace, coloured histogram bars, save or export.
+`docs/specs/` lists what the app must do, with requirement IDs and 28 classroom stories (`STORY-*`). Today the app covers part of it: 2D and 3D hard-sphere physics (walls, periodic, divider, hole, the demon gate); in 2D also the conducting divider, the movable piston with its thermostat, pair wells, the attractive wall and red↔blue reactions, turned on from the sidebar's Arena and Wells and reactions boxes; Restart and the demon's open/close toggle; loading bundled presets from a SvelteKit site with 2D/3D menus; play/pause/step, a rate slider and collapsible performance readouts; colour by type, speed or KE (2D and 3D), trace (2D), the demon's closed hole and a scale bar; and the Instantaneous Speed histogram with Red/Blue/Both, checked against kinetic theory (plans 0002, 0003, 0004 steps 1–4, 0005 steps 1–7, 0007). There are no particle controls, pressure, 1D, 3D piston or reactions, reverse, 3D trace, coloured histogram bars, save or export.
 
 The aim is to **enable the learning outcomes, not replicate the desktop app exactly**. Phases are ordered by the classroom stories they unlock, and each one says where it deliberately simplifies the desktop UI.
 
@@ -54,7 +54,7 @@ _Done_ (plan 0012, archived): every plot but the RDF with its predictions, Ideal
 
 ### Phase 4: Chaos, reversibility and trajectories
 
-_Done_ (plan 0013, archived): `Simulation.reverse()` (velocities and a moving piston) with a Reverse button, the `2Dequal` divergence test, speed in doubling steps up to 2048×, the trace in 3D (dot sprites in box coordinates) and a Clear trace button. Not done: a dot-size control.
+_Done_ (plan 0013, archived): `Simulation.reverse()` (velocities and a moving piston) with a Reverse button, the `2Dequal` divergence test, speed in doubling steps up to 2048×, the trace in 3D (dot sprites in box coordinates) and a Clear trace button. A Dot size control followed with joshuata/boltzmann4d#42.
 
 - **Requirements:** SIM-4, 32; CTRL-2 (doubling steps), CTRL-6; VIEW-5.
 - **Unlocks:** STORY-21, 22; the trace for STORY-15 and `2Dliquid`.

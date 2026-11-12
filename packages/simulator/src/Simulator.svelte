@@ -6,22 +6,16 @@
   import MinimizeIcon from '@lucide/svelte/icons/minimize';
   import PanelRightCloseIcon from '@lucide/svelte/icons/panel-right-close';
   import PanelRightOpenIcon from '@lucide/svelte/icons/panel-right-open';
-  import RewindIcon from '@lucide/svelte/icons/rewind';
-  import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
-  import StepForwardIcon from '@lucide/svelte/icons/step-forward';
   import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
   import { untrack } from 'svelte';
-  import ArenaOptions from './ui/ArenaOptions.svelte';
-  import ArenaSize from './ui/ArenaSize.svelte';
-  import BoundaryButtons from './ui/BoundaryButtons.svelte';
-  import ClockReadout from './ui/ClockReadout.svelte';
+  import ArenaPanel from './ui/ArenaPanel.svelte';
+  import InteractionsPanel from './ui/InteractionsPanel.svelte';
   import ParticlesPanel from './ui/ParticlesPanel.svelte';
   import PerformancePanel from './ui/PerformancePanel.svelte';
   import PistonPanel from './ui/PistonPanel.svelte';
-  import PlayPauseButton from './ui/PlayPauseButton.svelte';
   import PressurePanel from './ui/PressurePanel.svelte';
   import ReactionsPanel from './ui/ReactionsPanel.svelte';
-  import RateSlider from './ui/RateSlider.svelte';
+  import RunPanel from './ui/RunPanel.svelte';
   import ScaleBar from './ui/ScaleBar.svelte';
   import ViewOptions from './ui/ViewOptions.svelte';
   import ZoomControls from './ui/ZoomControls.svelte';
@@ -230,14 +224,16 @@
     hidden={sidebarHidden}
     class="bg-muted/40 min-h-0 overflow-y-auto overscroll-contain border-t p-4 md:border-t-0 md:border-l"
   >
+    <RunPanel {sim} />
     {#if sim}
       <ViewOptions
         colorMode={sim.colorMode}
         trace={sim.trace.enabled}
+        tracePointSize={sim.trace.pointSize}
         markers={sim.markers}
         canMark={sim.dimension !== 3}
         onColorMode={(mode) => sim?.setColorMode(mode)}
-        onTrace={(enabled) => sim?.setTrace(enabled)}
+        onTrace={(enabled, pointSize) => sim?.setTrace(enabled, pointSize)}
         onClearTrace={() => sim?.clearTrace()}
         onMarkers={(enabled) => sim?.setMarkers(enabled)}
       />
@@ -248,93 +244,19 @@
         showMarkers={sim.markers && sim.dimension !== 3}
         tap={sim.dimension === 3 ? 'random' : sim.holeOpen !== null ? 'other' : 'drop'}
       />
-      <BoundaryButtons
-        boundary={sim.arena.boundary}
-        drawnWalls={sim.arena.drawnWalls}
+      <ArenaPanel
+        arena={sim.arena}
+        dimension={sim.dimension}
         disabled={sim.loading}
-        onChange={(boundary) => sim?.setBoundary(boundary)}
+        onBoundary={(boundary) => sim?.setBoundary(boundary)}
+        onChange={(options) => sim?.setArenaOptions(options)}
       />
-      <ArenaOptions
+      <InteractionsPanel
         arena={sim.arena}
         disabled={sim.loading}
         onChange={(options) => sim?.setArenaOptions(options)}
       />
-      <ArenaSize
-        size={sim.arena.size}
-        dimension={sim.dimension}
-        disabled={sim.loading}
-        onChange={(size) => sim?.setArenaOptions({ size })}
-      />
     {/if}
-    <div class="flex flex-wrap gap-2" role="group" aria-label="Simulation controls">
-      <ClockReadout time={sim?.time ?? 0} />
-      <PlayPauseButton
-        paused={sim?.paused ?? false}
-        disabled={!sim}
-        onToggle={(paused) => sim?.setPaused(paused)}
-      />
-      <!-- btnFrameStep in MainGuiFullView: enabled only while paused. -->
-      <Button
-        variant="outline"
-        size="icon-lg"
-        disabled={!sim?.paused}
-        aria-label="Step one frame"
-        title="Step one frame"
-        onclick={() => sim?.advanceOneFrame()}
-      >
-        <StepForwardIcon aria-hidden="true" />
-      </Button>
-      <!-- Reverse (SIM-32, CTRL-6): every velocity flips and the motion retraces itself. -->
-      <Button
-        variant="outline"
-        size="icon-lg"
-        disabled={!sim || sim.loading}
-        aria-label="Reverse"
-        title="Reverse: flip every particle’s velocity"
-        onclick={() => sim?.reverse()}
-      >
-        <RewindIcon aria-hidden="true" />
-      </Button>
-      <!-- Restart (CTRL-3, PART-14): particles placed anew, the clock at zero, the Particles
-           panel's pending values applied. -->
-      <Button
-        variant="outline"
-        size="icon-lg"
-        disabled={!sim || sim.loading}
-        aria-label="Restart"
-        title="Restart: place the particles anew at random, clock to zero"
-        onclick={() => sim?.restart()}
-      >
-        <RotateCcwIcon aria-hidden="true" />
-      </Button>
-      {#each sim?.gates ?? [] as gate (gate.index)}
-        <Button
-          variant="outline"
-          size="lg"
-          aria-pressed={gate.open}
-          title="Or tap the gate in the arena"
-          onclick={() => sim?.setGate(gate.index, !gate.open)}
-        >
-          {gate.open ? 'Close' : 'Open'}
-          {sim && sim.gates.length > 1 ? `gate ${gate.id}` : 'gate'}
-        </Button>
-      {/each}
-      {#if sim?.holeOpen !== null && sim?.holeOpen !== undefined}
-        <Button
-          variant="outline"
-          size="lg"
-          aria-pressed={sim.holeOpen}
-          onclick={() => sim?.setHoleOpen(!sim.holeOpen)}
-        >
-          {sim.holeOpen ? 'Close hole' : 'Open hole'}
-        </Button>
-      {/if}
-    </div>
-    <RateSlider
-      value={sim?.rateScale ?? 1}
-      disabled={!sim}
-      onChange={(scale) => sim?.setRateScale(scale)}
-    />
     {#if sim?.piston}
       <PistonPanel
         piston={sim.piston}

@@ -4,7 +4,7 @@ description: Watch Type A turn into Type B, compare the counts with the predicte
 order: 1.65
 ---
 
-In reaction mode two particles can turn into two others when they collide hard enough. The **Equilibration** simulations (2D and 3D) start with reactions on. In any simulation with a single kind of particle, tick **Reactions** in the sidebar's **Arena** box to turn them on.
+In reaction mode two particles can turn into two others when they collide hard enough. The **Equilibration** simulations (2D and 3D) start with reactions on. In any simulation with a single kind of particle, tick **Reactions** in the sidebar's **Wells and reactions** box to turn them on.
 
 ## How a reaction works
 

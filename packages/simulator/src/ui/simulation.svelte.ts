@@ -568,11 +568,14 @@ export class SimulationClient {
     this.#toRenderer({ type: 'colorMode', mode });
   }
 
-  /** Trace mode (VIEW-5): particles leave a dot each frame (kept across scenarios). */
-  setTrace(enabled: boolean): void {
+  /**
+   * Trace mode (VIEW-5): particles leave a dot each frame, `pointSize` pixels across
+   * (kept across scenarios). A new size starts the 2D trace afresh.
+   */
+  setTrace(enabled: boolean, pointSize = this.trace.pointSize): void {
     this.#viewChosen = true;
-    this.trace = { ...this.trace, enabled };
-    this.#toRenderer({ type: 'trace', enabled, pointSize: this.trace.pointSize });
+    this.trace = { enabled, pointSize };
+    this.#toRenderer({ type: 'trace', enabled, pointSize });
   }
 
   /** Erases the trace drawn so far (VIEW-5); tracing carries on. */
