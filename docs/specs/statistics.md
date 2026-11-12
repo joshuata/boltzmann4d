@@ -50,9 +50,9 @@ The distribution graph area at the top of the sidebar. Source: manual §I.C, §I
 ## Cumulative view
 
 - **STAT-15** A Cumulative toggle shows every recorded value since the data was last cleared, rather than the current frame. It updates at every collision.
-- **STAT-16** Velocity and energy values are weighted by how long each was held; path, time, collision rate and RDF are weighted by count.
-- **STAT-17** Cumulative data is cleared by Restart, by changing that plot's limits, and once automatically at the forget time (default 4 × the predicted collision time after restart, multiplier set in Options), so the initial equal-speed state doesn't skew it.
-- **STAT-18** Cumulative views of the per-particle averages (average speed, average RMS velocity, average KE, average path, collision rate) aren't meaningful; the app may still compute them but should not invite their use. _Web port:_ Cumulative is disabled for them, with a note. Their values include each particle's interval still in progress, and a set of kinds averages over its own particles (Java divided by every particle; #18).
+- **STAT-16** Velocity and energy values are weighted by how long each was held; path, time, collision rate and RDF are weighted by count. _Web port:_ each velocity is weighted by exactly how long the particle held it, wall bounces included; Java weighted the velocity before each particle collision by the whole time since the previous one (#18, `docs/physics-differences.md`).
+- **STAT-17** Cumulative data is cleared by Restart, by changing that plot's limits, and once automatically at the forget time (default 4 × the predicted collision time after restart, multiplier set in Options), so the initial equal-speed state doesn't skew it. _Web port:_ the forget also restarts the per-particle averages (#18).
+- **STAT-18** Cumulative views of the per-particle averages (average speed, average RMS velocity, average KE, average path, collision rate) aren't meaningful; the app may still compute them but should not invite their use. _Web port:_ Cumulative is disabled for them, with a note. Their values include each particle's interval still in progress, and a set of kinds averages over its own particles (Java divided by every particle), and they run from the forget time (#18).
 - **STAT-19** The collision rate prediction curve is a Gaussian whose width shrinks with time; it is redrawn whenever the width has changed by 22%, not every frame. _Web port:_ the curve is recomputed with every summary (about once a second), so the 22% rule isn't needed.
 
 ## History view

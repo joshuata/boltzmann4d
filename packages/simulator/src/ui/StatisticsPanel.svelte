@@ -324,8 +324,8 @@
 
   {#if perParticle}
     <p class="text-muted-foreground mt-1.5 text-xs">
-      One value per particle: its own average since the start. The spread narrows as the run goes
-      on, so there is no cumulative view.
+      One value per particle: its own average since the start, or since early data was forgotten.
+      The spread narrows as the run goes on, so there is no cumulative view.
     </p>
   {:else if statistic && cumulative && !summary.forgotten}
     <p class="text-muted-foreground mt-1.5 text-xs">

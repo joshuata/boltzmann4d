@@ -3,15 +3,19 @@
 // sampled at frame boundaries.
 //
 // - Time-weighted plots (speed, RMS velocity, velocity components, kinetic energy): each
-//   particle's value since its previous particle–particle collision goes into the
-//   cumulative data, weighted by that time (wall bounces not counted, as in Java; #18).
-//   The current data is every particle in the sampled frame.
-// - Free Path and Time per Collision: one value per particle per collision; the current
-//   data is each particle's last completed interval.
+//   particle's velocity goes into the cumulative data for as long as it held it, from one
+//   change of velocity (any event of its own: collisions, walls, pistons, wells, reversal)
+//   to the next. Java weighted the velocity before each particle–particle collision by the
+//   whole time since the previous one, ignoring wall bounces in between (#18; see
+//   docs/physics-differences.md). The current data is every particle in the sampled frame.
+// - Free Path and Time per Collision: one value per particle per particle–particle
+//   collision; the path is the distance travelled since the previous one, wall bounces
+//   included (Java used the last speed × the time). The current data is each particle's
+//   last completed interval.
 // - Per-particle averages (average speed, RMS velocity, kinetic energy and path, and the
-//   collision rate): running sums per particle since the start, including the interval in
-//   progress when sampled, one value per particle. The forget doesn't clear them (as in
-//   Java), and their cumulative view shows the same data (STAT-18).
+//   collision rate): running sums per particle since the forget (the start before it),
+//   including the stretch in progress when sampled, one value per particle. Java never
+//   cleared them (#18). Their cumulative view shows the same data (STAT-18).
 // - Kinds are the colour each particle shows (reactions recolour particles), as in Java.
 import type { EventInfo } from '../sim/event';
 import { Collision } from '../sim/event';
@@ -40,7 +44,7 @@ import type {
   StatisticSummary,
 } from './summary';
 
-const PARTICLE = Collision.PARTICLE;
+const { PARTICLE, ENTER_WELL, EXIT_WELL, BOUNDARY, EOB } = Collision;
 /** kg per amu. */
 const AMU_KG = 1.660538782e-27;
 const NM = 1e-9;
@@ -112,18 +116,27 @@ export class Statistics {
   readonly available: readonly StatisticId[];
   /** Time each particle was last in a particle–particle collision (0 before the first). */
   readonly lastCollisionTime: Float64Array;
+  /** Time each particle's velocity was last recorded (it has held it since). */
+  readonly lastRecordTime: Float64Array;
+  /** Simulated time the per-particle averages start from (the forget, once it's passed). */
+  averagesStart = 0;
   /** Simulated time after which cumulative data is forgotten (once). */
   forgetTime = 0;
   forgotten = false;
   readonly recorders: readonly Recorder[];
 
   private settings: StatisticsSettings;
-  /** Per particle since the start: Σ v·dt, Σ v²·dt (m/s·s, m²/s²·s), Σ KE·dt (kJ/mol·s), distance (m). */
+  /**
+   * Per particle since `averagesStart`: Σ v·dt, Σ v²·dt (m/s·s, m²/s²·s), Σ KE·dt
+   * (kJ/mol·s), distance over completed free paths (m) and particle collisions.
+   */
   private readonly speedTime: Float64Array;
   private readonly squareTime: Float64Array;
   private readonly energyTime: Float64Array;
   private readonly distance: Float64Array;
   private readonly collisions: Float64Array;
+  /** Distance each particle has travelled since its last particle collision (m). */
+  private readonly pathSoFar: Float64Array;
   /** Each particle's last completed free path (nm) and time between collisions (ps). */
   private readonly lastPath: Float64Array;
   private readonly lastInterval: Float64Array;
@@ -164,6 +177,8 @@ export class Statistics {
     this.setForgetMultiplier(options.forgetMultiplier ?? DEFAULT_FORGET_MULTIPLIER);
 
     this.lastCollisionTime = new Float64Array(n);
+    this.lastRecordTime = new Float64Array(n);
+    this.pathSoFar = new Float64Array(n);
     this.speedTime = new Float64Array(n);
     this.squareTime = new Float64Array(n);
     this.energyTime = new Float64Array(n);
@@ -241,15 +256,43 @@ export class Statistics {
 
   /** Every event, just before it is performed (Physics.updateStatistics). */
   notifyOfEvent(event: Readonly<EventInfo>): void {
-    if (!this.forgotten && event.time > this.forgetTime) {
-      this.forgotten = true;
-      for (let r = SPEED; r <= TIME; r++) this.recorders[r]!.clearCumulative();
-      this.cumulativeSquares.fill(0);
-      this.cumulativeWeight.fill(0);
+    if (!this.forgotten && event.time > this.forgetTime) this.forget(event.time);
+    const type = event.type;
+    // Periodic boundary crossings don't change velocities.
+    if (type === BOUNDARY || type === EOB) return;
+    this.recordVelocity(event.part1, event.time);
+    if (type === PARTICLE || type === ENTER_WELL || type === EXIT_WELL) {
+      this.recordVelocity(event.part2, event.time);
     }
-    if (event.type !== PARTICLE) return;
-    this.recordInterval(event.part1, event.time);
-    this.recordInterval(event.part2, event.time);
+    if (type !== PARTICLE) return;
+    this.recordCollision(event.part1, event.time);
+    this.recordCollision(event.part2, event.time);
+  }
+
+  /**
+   * Every particle's velocity is about to change outside an event (time reversal): records
+   * each one's velocity up to `time` (s), so the old one isn't credited with what follows.
+   */
+  velocitiesWillChange(time: number): void {
+    for (let i = 0; i < this.particles.count; i++) this.recordVelocity(i, time);
+  }
+
+  /**
+   * Clears the cumulative data once at the forget time (STAT-17), after crediting every
+   * particle's velocity up to it, and restarts the per-particle averages from there.
+   */
+  private forget(time: number): void {
+    this.forgotten = true;
+    this.velocitiesWillChange(time);
+    for (let r = SPEED; r <= TIME; r++) this.recorders[r]!.clearCumulative();
+    this.cumulativeSquares.fill(0);
+    this.cumulativeWeight.fill(0);
+    this.averagesStart = time;
+    this.speedTime.fill(0);
+    this.squareTime.fill(0);
+    this.energyTime.fill(0);
+    this.distance.fill(0);
+    this.collisions.fill(0);
   }
 
   /**
@@ -285,13 +328,14 @@ export class Statistics {
         rec[PATH]!.addCurrent(type, this.lastPath[i]!);
         rec[TIME]!.addCurrent(type, this.lastInterval[i]!);
       }
-      if (time > 0) {
-        // Running averages, including the interval still in progress.
-        const dt = time - this.lastCollisionTime[i]!;
-        this.addPerParticle(AVG_SPEED, type, (this.speedTime[i]! + speed * dt) / time);
-        this.addPerParticle(AVG_RMS, type, Math.sqrt((this.squareTime[i]! + squared * dt) / time));
-        this.addPerParticle(AVG_ENERGY, type, (this.energyTime[i]! + energy * dt) / time);
-        this.addPerParticle(RATE, type, this.collisions[i]! / (time / PS));
+      const span = time - this.averagesStart;
+      if (span > 0) {
+        // Running averages, including the velocity held since it was last recorded.
+        const dt = time - Math.max(this.lastRecordTime[i]!, this.averagesStart);
+        this.addPerParticle(AVG_SPEED, type, (this.speedTime[i]! + speed * dt) / span);
+        this.addPerParticle(AVG_RMS, type, Math.sqrt((this.squareTime[i]! + squared * dt) / span));
+        this.addPerParticle(AVG_ENERGY, type, (this.energyTime[i]! + energy * dt) / span);
+        this.addPerParticle(RATE, type, this.collisions[i]! / (span / PS));
         if (this.collisions[i]! > 0) {
           this.addPerParticle(AVG_PATH, type, this.distance[i]! / this.collisions[i]! / NM);
         }
@@ -448,22 +492,22 @@ export class Statistics {
   }
 
   /**
-   * Particle i's state since its previous particle collision goes into the cumulative
-   * statistics, weighted by that time (ParticleStateAnalyzer). Its velocity hasn't been
-   * changed by this event yet.
+   * Particle i's velocity, held since it was last recorded, goes into the time-weighted
+   * statistics, weighted by that time. It hasn't been changed by this event yet.
    */
-  private recordInterval(i: number, time: number): void {
+  private recordVelocity(i: number, time: number): void {
+    const elapsed = time - this.lastRecordTime[i]!;
+    this.lastRecordTime[i] = time;
+    if (!(elapsed > 0)) return;
     const p = this.particles;
     const rec = this.recorders;
-    const elapsed = time - this.lastCollisionTime[i]!;
-    const type = p.color[i]!; // the colour it showed over this interval
+    const type = p.color[i]!; // the colour it showed meanwhile
     const vx = p.vx[i]!;
     const vy = p.vy[i]!;
     const vz = p.vz[i]!;
     const squared = vx * vx + vy * vy + vz * vz;
     const speed = Math.sqrt(squared);
     const energy = (0.5 * p.mass[i]! * AMU_KG * squared) / J_PER_KJ_MOL;
-    const path = speed * elapsed;
 
     rec[SPEED]!.addCumulative(type, speed, elapsed);
     rec[RMS]!.addCumulative(type, speed, elapsed);
@@ -471,18 +515,30 @@ export class Statistics {
     if (this.hasY) rec[VY]!.addCumulative(type, vy, elapsed);
     if (this.hasZ) rec[VZ]!.addCumulative(type, vz, elapsed);
     rec[ENERGY]!.addCumulative(type, energy, elapsed);
-    rec[PATH]!.addCumulative(type, path / NM, 1.0);
-    rec[TIME]!.addCumulative(type, elapsed / PS, 1.0);
     this.cumulativeSquares[type] = this.cumulativeSquares[type]! + squared * elapsed;
     this.cumulativeWeight[type] = this.cumulativeWeight[type]! + elapsed;
 
     this.speedTime[i] = this.speedTime[i]! + speed * elapsed;
     this.squareTime[i] = this.squareTime[i]! + squared * elapsed;
     this.energyTime[i] = this.energyTime[i]! + energy * elapsed;
+    this.pathSoFar[i] = this.pathSoFar[i]! + speed * elapsed;
+  }
+
+  /**
+   * Particle i's free path and time since its previous particle collision (count-weighted;
+   * its velocity was just recorded up to `time`).
+   */
+  private recordCollision(i: number, time: number): void {
+    const elapsed = time - this.lastCollisionTime[i]!;
+    const path = this.pathSoFar[i]!;
+    const type = this.particles.color[i]!;
+    this.recorders[PATH]!.addCumulative(type, path / NM, 1.0);
+    this.recorders[TIME]!.addCumulative(type, elapsed / PS, 1.0);
     this.distance[i] = this.distance[i]! + path;
     this.collisions[i] = this.collisions[i]! + 1;
     this.lastPath[i] = path / NM;
     this.lastInterval[i] = elapsed / PS;
     this.lastCollisionTime[i] = time;
+    this.pathSoFar[i] = 0;
   }
 }
