@@ -2,7 +2,7 @@
 // Frames don't come back here: they stream to the renderer over the `frames` port
 // (render/protocol.ts), so the main thread only handles controls and readouts.
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
-import type { Census, ColorMode, Dimension } from '@boltzmann4d/engine/sim';
+import type { Census, ColorMode, Dimension, StateSnapshot } from '@boltzmann4d/engine/sim';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
 import type { PressureReading } from '@boltzmann4d/engine/stats/pressure';
@@ -181,7 +181,14 @@ export type ToWorker =
   /** Finite-system (PRED-11) and real-gas (PRED-9) predictions; kept across loads. */
   | { type: 'statOptions'; finite?: boolean; realGas?: boolean }
   /** The forget time, in predicted collision times (OPT-4; kept by Restart). */
-  | { type: 'forgetMultiplier'; value: number };
+  | { type: 'forgetMultiplier'; value: number }
+  /**
+   * State snapshots for statistics computed outside the worker (joshuata/boltzmann4d#84):
+   * one about every `intervalMs` real milliseconds (null: none), and with each one every
+   * event since the previous when `events` is on (at most `eventCap` per snapshot). Kept
+   * across loads.
+   */
+  | { type: 'snapshots'; intervalMs: number | null; events: boolean; eventCap?: number };
 
 /** One particle kind of the running simulation, for legends and pickers (KIND-4, KIND-9). */
 export interface KindInfo {
@@ -260,6 +267,15 @@ export type FromWorker =
    * pressure readout. Per species, as `loaded.kinds`.
    */
   | { type: 'census'; time: number; census: Census }
+  /**
+   * A state snapshot (see `snapshots`). Masses and radii come only with a run's first one,
+   * as they don't change within a run; the client fills them in on the others.
+   */
+  | { type: 'snapshot'; snapshot: SnapshotMessage }
   /** Something the user asked for couldn't be done (a taken spot, no room); the run is fine. */
   | { type: 'notice'; message: string }
   | { type: 'error'; message: string };
+
+/** A snapshot as the worker sends it: masses and radii only with a run's first. */
+export type SnapshotMessage = Omit<StateSnapshot, 'masses' | 'radii'> &
+  Partial<Pick<StateSnapshot, 'masses' | 'radii'>>;

@@ -42,6 +42,7 @@ import { createArena, Particles, type Arena } from './particles';
 import { compressionLimitPercent, Piston, PistonMode } from './piston';
 import { ReactionTable, type ReactionRule } from './reactions';
 import { SegmentWalls, type WallHit, type WallShape } from './segment-walls';
+import { snapshotOf, type StateSnapshot } from './snapshot';
 import { Thermostat } from './thermostat';
 import { convert } from '../utils/units';
 import { ArenaType, DividerThermalMode } from './simulation-info';
@@ -628,6 +629,16 @@ export class Simulation {
       pistonLevel: this.piston?.curLevel ?? 0,
       holeOpen: this.nextFrameHoleOpen,
     };
+  }
+
+  /**
+   * The present state for statistics outside the worker (see snapshot.ts): every particle
+   * at the latest time. Only reads the simulation (at a frame boundary the particles are
+   * already together), so it can't change the physics.
+   */
+  stateSnapshot(run: number): StateSnapshot {
+    this.synchronize();
+    return snapshotOf(this.particles, run, this.time, this.dimension);
   }
 
   /** After step() particles are at their own event times: brings them all to the latest. */

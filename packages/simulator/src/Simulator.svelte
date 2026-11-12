@@ -7,6 +7,7 @@
   import PanelRightCloseIcon from '@lucide/svelte/icons/panel-right-close';
   import PanelRightOpenIcon from '@lucide/svelte/icons/panel-right-open';
   import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
+  import type { StateSnapshot } from '@boltzmann4d/engine/sim';
   import { untrack } from 'svelte';
   import ArenaPanel from './ui/ArenaPanel.svelte';
   import InteractionsPanel from './ui/InteractionsPanel.svelte';
@@ -36,9 +37,30 @@
      * it in errors. Passing a different object loads it.
      */
     scenario?: { name: string; scenario: ScenarioInput };
+    /**
+     * State snapshots for custom statistics (joshuata/boltzmann4d#84): real milliseconds
+     * between them, or null (the default) for none.
+     */
+    snapshotInterval?: number | null;
+    /** Whether each snapshot carries every event since the previous one. */
+    snapshotEvents?: boolean;
+    /** The latest snapshot (`bind:snapshot`); updates may be coalesced. */
+    snapshot?: StateSnapshot | null;
+    /** The viewer's SimulationClient (`bind:client`), null while it isn't running. */
+    client?: SimulationClient | null;
+    /** Called synchronously with every snapshot, in order: for consumers of events. */
+    onsnapshot?: (snapshot: StateSnapshot) => void;
   }
 
-  let { preset = 'default', scenario }: Props = $props();
+  let {
+    preset = 'default',
+    scenario,
+    snapshotInterval = null,
+    snapshotEvents = false,
+    snapshot = $bindable(null),
+    client = $bindable(null),
+    onsnapshot,
+  }: Props = $props();
 
   const source = $derived<ScenarioSource>(
     scenario
@@ -87,6 +109,31 @@
     const observer = new MutationObserver(apply);
     observer.observe(html, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
+  });
+
+  // Snapshots for custom statistics: the stream, the binding and the listener.
+  $effect(() => {
+    client = sim;
+  });
+  $effect(() => {
+    const c = sim;
+    if (!c) return;
+    const interval = snapshotInterval;
+    const events = snapshotEvents;
+    untrack(() => {
+      if (interval !== c.snapshotInterval || events !== c.snapshotEvents) {
+        c.setSnapshotOptions(interval, events);
+      }
+    });
+  });
+  $effect(() => {
+    snapshot = sim?.snapshot ?? null;
+  });
+  $effect(() => {
+    const c = sim;
+    const listener = onsnapshot;
+    if (!c || !listener) return;
+    return c.addSnapshotListener(listener);
   });
 
   // Follow later changes to `preset` or `scenario` (load ignores the one already running).
