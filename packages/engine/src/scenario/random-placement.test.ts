@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { loadSetFile } from '../io/load';
 import { loadPresetText, presetCatalog } from '../io/presets';
 import { seededRandom } from '../sim/scenes';
+import { Simulation } from '../sim/simulation';
 import { ScenarioError } from './format';
 import { resolveScenario } from './resolve';
 import { parseScenario, type ScenarioInput } from './schema';
@@ -74,4 +75,25 @@ describe('random placement without walls or spawn regions', () => {
       /Only \d+ of 100000 .* particles fit in the arena without overlapping/,
     );
   });
+});
+
+// Issue #10: overlapping starts made pairs re-collide at the same instant, so event order
+// hung on the calendar's tie-breaking. 2Dequal is left out: its explicitly placed halves
+// mirror each other across the divider, so its simultaneous events are real.
+describe('no equal-time events from overlapping starts (issue #10)', () => {
+  const EVENTS = 5000;
+  it.each(presetCatalog.filter((p) => p.name !== '2Dequal').map((p) => p.name))(
+    '%s: no two consecutive events share a time',
+    async (name) => {
+      const { scenario } = loadSetFile(await loadPresetText(name), { random: seededRandom(1) });
+      const simulation = new Simulation(scenario);
+      let previous = NaN;
+      for (let k = 0; k < EVENTS; k++) {
+        const time = simulation.nextEventTime();
+        if (!simulation.step()) break;
+        expect(time, `event ${k}`).not.toBe(previous);
+        previous = time;
+      }
+    },
+  );
 });

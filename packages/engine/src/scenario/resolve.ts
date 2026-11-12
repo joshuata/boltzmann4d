@@ -11,7 +11,10 @@
 // Scenarios with drawn walls or spawn regions place randomly placed particles anew
 // (EDIT-3): uniformly inside their region (or the arena), clear of walls, the divider and
 // every particle placed before them. Scenarios without either, such as every `.set` file,
-// keep Java's placement and its random draws exactly.
+// place them in the box with Java's random draws, but redraw a spot that overlaps a
+// particle placed before (BoxPlacer). Java never checked, so overlapping pairs re-collided
+// at the same instant and event order hung on tie-breaking (issue #10). Parity fixtures
+// record Java's own positions, so they are unaffected.
 //
 import type { ReactionRule } from '../sim/reactions';
 import {

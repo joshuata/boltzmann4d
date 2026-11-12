@@ -16,9 +16,9 @@ The statistics box at the bottom of the sidebar plots what the particles are doi
 | Kinetic energy | ½ m v² | kJ/mol |
 | Free path | the distance it travelled between two collisions with other particles | nm |
 | Time per collision | the time between two collisions with other particles | ps |
-| Average speed, average RMS velocity, average kinetic energy | its own average since the start | m/s, kJ/mol |
+| Average speed, average RMS velocity, average kinetic energy | its own average since the early data was forgotten (since the start until then) | m/s, kJ/mol |
 | Average path | its total distance ÷ its number of collisions | nm |
-| Collision rate | its collisions per picosecond since the start | 1/ps |
+| Collision rate | its collisions per picosecond over the same time | 1/ps |
 | Number of particles | how many of each kind there are over time (simulations with [reactions](reactions)) | — |
 | Wall pressure or virial pressure | the pressure from the Pressure box, over time | µN/m or MPa |
 
@@ -37,7 +37,7 @@ Predictions use the temperature each kind actually has in the data shown, so the
 ## Current, cumulative and history
 
 - Normally the plot shows the **current** frame: every particle as it is now, in 15 bars.
-- **Cumulative** shows everything since the data was last cleared, in 30 bars. Speeds and energies are weighted by how long each particle kept them, and paths and times count once per collision. Cumulative plots match the predictions much more closely than single frames do.
+- **Cumulative** shows everything since the data was last cleared, in 30 bars. Speeds and energies are weighted by how long each particle kept them (a bounce off a wall starts a new value), and paths and times count once per collision. Cumulative plots match the predictions much more closely than single frames do.
 - The first few collision times are dropped once, so the equal speeds that many simulations start with don't skew the cumulative plot. The note under the plot says when.
 - **History** plots the measured average over the most recent 150 updates. The red line is the prediction and the dotted red lines are half a predicted width either side. For pressures, the range runs from 0 to twice the prediction.
 

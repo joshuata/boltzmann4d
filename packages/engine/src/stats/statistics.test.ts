@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { syntheticGas } from '../sim/scenes';
+import { Collision } from '../sim/event';
 import { Simulation, type InitialState } from '../sim/simulation';
 import { ArenaType } from '../sim/simulation-info';
 import { averageVelocity, velocityWidth } from './formulas';
@@ -187,5 +188,127 @@ describe('Statistics', () => {
       lower = upper;
     });
     expect(worst).toBeLessThan(0.01);
+  });
+});
+
+describe('time weighting follows every change of velocity (#18)', () => {
+  /** Two particles moving along x in a reflecting box, on lines that never meet. */
+  function twoBouncers(): InitialState {
+    const gas = syntheticGas({ count: 2, seed: 1 });
+    const side = gas.arenaXSize;
+    const [a, b] = gas.species;
+    return {
+      ...gas,
+      species: [
+        {
+          ...a!,
+          positions: Float64Array.of(side / 3, side / 4, 0),
+          velocities: Float64Array.of(1579, 0, 0),
+        },
+        {
+          ...b!,
+          positions: Float64Array.of(side / 2, (3 * side) / 4, 0),
+          velocities: Float64Array.of(-395, 0, 0),
+        },
+      ],
+    };
+  }
+
+  it('credits wall bounces: each particle counts for the whole time, at ± its speed', () => {
+    const init = twoBouncers();
+    const { sim, stats } = simulate(init, { forgetMultiplier: 1e9 });
+    // Many crossings of the box for the fast particle, several for the slow one.
+    const end = (200 * init.arenaXSize) / 395;
+    sim.advanceToTime(end);
+    stats.velocitiesWillChange(end);
+    const vx = stats.recorder('X_VELOCITY');
+    const speed = stats.recorder('INSTANTANEOUS_SPEED');
+    for (const [type, v] of [
+      [0, 1579],
+      [1, 395],
+    ] as const) {
+      const values = vx.compose([type], 'cumulative').values;
+      // Java recorded nothing here: these particles never collide with each other.
+      expect(values.weight / end).toBeCloseTo(1, 12);
+      // Half the time each way, give or take the crossing still in progress.
+      expect(Math.abs(values.average()) / v).toBeLessThan(0.01);
+      expect(values.width() / v).toBeCloseTo(1, 3);
+      expect(speed.compose([type], 'cumulative').values.average()).toBeCloseTo(v, 6);
+    }
+  });
+
+  it('credits the old velocities up to a time reversal', () => {
+    const init = twoBouncers();
+    const { sim, stats } = simulate(init, { forgetMultiplier: 1e9 });
+    const half = (0.1 * init.arenaXSize) / 1579; // before the first wall
+    sim.advanceToTime(half);
+    stats.velocitiesWillChange(half);
+    sim.reverse();
+    sim.advanceToTime(2 * half);
+    stats.velocitiesWillChange(2 * half);
+    const values = stats.recorder('X_VELOCITY').compose([0], 'cumulative').values;
+    expect(values.weight / (2 * half)).toBeCloseTo(1, 12);
+    expect(values.average() / 1579).toBeCloseTo(0, 9);
+  });
+
+  it('integrates speeds exactly when an attractive wall changes them', () => {
+    // Over an attractive wall, particles speed up falling in and slow down climbing out,
+    // so the velocity before a collision isn't the one held since the last. Velocities
+    // only change at events, so Σv² held between consecutive events, times the gap,
+    // integrates the gas's v² exactly: the time-weighted RMS speed must match it.
+    const gas = syntheticGas({ count: 200, seed: 3, packing: 0.02 });
+    const init: InitialState = {
+      ...gas,
+      species: [gas.species[0]!],
+      attractiveWall: { width: gas.arenaYSize / 5, depth: 2.5 },
+    };
+    const { sim, stats } = simulate(init, { forgetMultiplier: 20 });
+    while (!stats.forgotten) sim.step();
+    const p = sim.particles;
+    const sumSquares = () => {
+      let sum = 0;
+      for (let i = 0; i < p.count; i++) sum += p.vx[i]! ** 2 + p.vy[i]! ** 2;
+      return sum;
+    };
+    let last = stats.averagesStart;
+    let held = sumSquares();
+    let integral = 0;
+    let wellEvents = 0;
+    for (let k = 0; k < 100_000; k++) {
+      const event = sim.step()!;
+      integral += held * (event.time - last);
+      last = event.time;
+      held = sumSquares();
+      if (event.type === Collision.ENTER_GRAVITY_WELL) wellEvents++;
+    }
+    expect(wellEvents).toBeGreaterThan(1000);
+    stats.velocitiesWillChange(last);
+    const rms = stats.recorder('RMS_VELOCITY').compose([0], 'cumulative').values;
+    expect(rms.weight / (p.count * (last - stats.averagesStart))).toBeCloseTo(1, 9);
+    expect(rms.rms() ** 2 / (integral / (p.count * (last - stats.averagesStart)))).toBeCloseTo(
+      1,
+      9,
+    );
+  });
+});
+
+describe('per-particle averages (#18)', () => {
+  it('restart at the forget time', () => {
+    const { sim, stats } = simulate(syntheticGas({ count: 60, seed: 4 }), { forgetMultiplier: 1 });
+    while (!stats.forgotten) sim.step();
+    expect(stats.averagesStart).toBeGreaterThan(0);
+    // Just after the forget, a particle's average speed is its speed since then.
+    const start = stats.averagesStart;
+    sim.advanceToTime(start + 1e-15);
+    stats.sampleCurrent(sim.time);
+    const p = sim.particles;
+    const values = stats.recorder('AVERAGE_SPEED').compose([0, 1], 'current').values;
+    let mean = 0;
+    for (let i = 0; i < p.count; i++) mean += Math.hypot(p.vx[i]!, p.vy[i]!) / p.count;
+    expect(values.average() / mean).toBeCloseTo(1, 3);
+    // Collision rates count collisions since the forget only.
+    expect(
+      stats.recorder('COLLISION_RATE').compose([0, 1], 'current').values.average(),
+    ).toBeLessThan(1e3);
   });
 });
