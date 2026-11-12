@@ -7,13 +7,12 @@
   import { SPECIES_LIMITS } from '@boltzmann4d/engine/scenario/edit';
   import { MAX_PARTICLES } from '@boltzmann4d/engine/sim/particle-edits';
   import { Button } from '@boltzmann4d/ui/button';
-  import * as Collapsible from '@boltzmann4d/ui/collapsible';
   import { Input } from '@boltzmann4d/ui/input';
   import { Label } from '@boltzmann4d/ui/label';
-  import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import MinusIcon from '@lucide/svelte/icons/minus';
   import PlusIcon from '@lucide/svelte/icons/plus';
   import KindSwatch from './KindSwatch.svelte';
+  import SidebarPanel from './SidebarPanel.svelte';
   import type { SimulationClient } from './simulation.svelte';
 
   interface Props {
@@ -25,7 +24,6 @@
 
   let { sim, showMarkers, tap }: Props = $props();
 
-  let open = $state(true);
   const id = $props.id();
 
   /** PART-4's range, K. */
@@ -76,17 +74,8 @@
   const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
 </script>
 
-<Collapsible.Root bind:open class="mb-3 rounded-md border px-3 py-2 text-sm">
-  <Collapsible.Trigger
-    class="-mx-1 flex min-h-8 w-[calc(100%+0.5rem)] items-center justify-between rounded-md px-1 font-medium"
-  >
-    <span>Particles <span class="text-muted-foreground font-normal">({total})</span></span>
-    <ChevronDownIcon
-      class={['size-4 transition-transform', open && 'rotate-180']}
-      aria-hidden="true"
-    />
-  </Collapsible.Trigger>
-  <Collapsible.Content class="grid gap-3 pt-2">
+<SidebarPanel id="particles" title="Particles" subtitle="({total})">
+  <div class="grid gap-3">
     <div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Kind to add or change">
       {#each sim.setupKinds as k (k.id)}
         <button
@@ -215,8 +204,8 @@
     {#if sim.notice}
       <p class="text-destructive text-xs" role="status">{sim.notice}</p>
     {/if}
-  </Collapsible.Content>
-</Collapsible.Root>
+  </div>
+</SidebarPanel>
 
 {#snippet field(
   name: 'mass' | 'radius' | 'temperature',

@@ -149,7 +149,8 @@ export class Statistics {
     this.particles = particles;
     const typeCount = ctx.types.length;
     const n = particles.count;
-    this.typeNames = options.typeNames ?? ctx.types.map((_, t) => `Type ${t + 1}`);
+    this.typeNames =
+      options.typeNames ?? ctx.types.map((_, t) => `Type ${String.fromCharCode(65 + t)}`);
     this.typeColors = options.typeColors ?? ctx.types.map(() => 0xffffff);
     this.typeMarkers = options.typeMarkers;
     this.available = availableStatistics(ctx.dimension, options.reactions ?? false);

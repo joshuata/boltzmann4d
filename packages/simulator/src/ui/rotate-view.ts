@@ -1,6 +1,8 @@
 // Svelte action for turning a 3D view: drag with a mouse, pen or finger, or hold the arrow
 // keys while the canvas has focus (the Java app's controls: left/right turn about the
-// vertical axis, up/down about the horizontal one, one degree per step).
+// vertical axis, up/down about the horizontal one, one degree per step). A second finger
+// stops the turn, so a pinch zooms (zoom-view.ts) without twisting the view; the turn
+// starts again only when every finger has lifted.
 import type { Action } from 'svelte/action';
 
 /** Called with the angles to turn by, in degrees, about the x and y axes. */
@@ -20,8 +22,17 @@ const KEY_DEGREES = 2;
 export const rotateView: Action<HTMLElement, Rotate | null> = (node, initial) => {
   let rotate = initial;
   let dragging: { id: number; x: number; y: number; travelled: number } | null = null;
+  /** Pointers down on the canvas; more than one is a pinch. */
+  const pointers = new Set<number>();
 
   const down = (event: PointerEvent) => {
+    pointers.add(event.pointerId);
+    if (pointers.size > 1) {
+      // A pinch (zoom-view.ts) is never a tap.
+      dragging = null;
+      node.dataset.dragged = 'true';
+      return;
+    }
     if (!rotate || dragging || (event.pointerType === 'mouse' && event.button !== 0)) return;
     dragging = { id: event.pointerId, x: event.clientX, y: event.clientY, travelled: 0 };
     node.dataset.dragged = 'false';
@@ -40,6 +51,7 @@ export const rotateView: Action<HTMLElement, Rotate | null> = (node, initial) =>
     }
   };
   const up = (event: PointerEvent) => {
+    pointers.delete(event.pointerId);
     if (dragging?.id === event.pointerId) dragging = null;
   };
   const key = (event: KeyboardEvent) => {

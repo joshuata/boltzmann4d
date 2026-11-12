@@ -4,6 +4,7 @@
      options (finite-system corrections, forget time, Ideal / Real). Everything comes from
      the SimulationClient; predictions use each kind's temperature in the data shown (#23). -->
 <script lang="ts">
+  import SidebarPanel from './SidebarPanel.svelte';
   import { Button } from '@boltzmann4d/ui/button';
   import { Checkbox } from '@boltzmann4d/ui/checkbox';
   import * as Collapsible from '@boltzmann4d/ui/collapsible';
@@ -158,7 +159,7 @@
     'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 min-w-0 flex-1 rounded-md border bg-transparent px-2.5 text-base shadow-xs outline-none focus-visible:ring-3 md:text-sm';
 </script>
 
-<section class="mt-4 border-t pt-3" aria-label="Statistics">
+<SidebarPanel id="statistics" title="Statistics">
   <div class="mb-2 flex items-center gap-2">
     <Label for="{ids}-plot" class="sr-only">Plot</Label>
     <select
@@ -385,4 +386,4 @@
       </p>
     </Collapsible.Content>
   </Collapsible.Root>
-</section>
+</SidebarPanel>

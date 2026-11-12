@@ -97,8 +97,9 @@ export function createView3D(info: SceneInfo): View {
   return {
     root,
     camera,
-    fit(aspect) {
+    fit(aspect, zoom) {
       camera.aspect = aspect || 1;
+      camera.zoom = zoom; // narrows the field of view, so the box grows about its centre
       // Keep at least the Java field of view horizontally too, so narrow (portrait)
       // screens still show the whole box.
       const tanHalf = Math.tan((FIELD_OF_VIEW * Math.PI) / 360);

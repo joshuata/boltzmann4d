@@ -2,8 +2,6 @@
      It fills its container, so the page decides how big it is. -->
 <script lang="ts">
   import { Button } from '@boltzmann4d/ui/button';
-  import * as Collapsible from '@boltzmann4d/ui/collapsible';
-  import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import MaximizeIcon from '@lucide/svelte/icons/maximize';
   import MinimizeIcon from '@lucide/svelte/icons/minimize';
   import PanelRightCloseIcon from '@lucide/svelte/icons/panel-right-close';
@@ -18,15 +16,18 @@
   import BoundaryButtons from './ui/BoundaryButtons.svelte';
   import ClockReadout from './ui/ClockReadout.svelte';
   import ParticlesPanel from './ui/ParticlesPanel.svelte';
+  import PerformancePanel from './ui/PerformancePanel.svelte';
   import PistonPanel from './ui/PistonPanel.svelte';
   import PlayPauseButton from './ui/PlayPauseButton.svelte';
   import PressurePanel from './ui/PressurePanel.svelte';
   import RateSlider from './ui/RateSlider.svelte';
   import ScaleBar from './ui/ScaleBar.svelte';
   import ViewOptions from './ui/ViewOptions.svelte';
+  import ZoomControls from './ui/ZoomControls.svelte';
   import { missingBrowserFeatures } from './ui/browser-support';
   import { arenaPoint, distanceToPolyline } from './ui/arena-point';
   import { rotateView, wasDragged } from './ui/rotate-view';
+  import { zoomView } from './ui/zoom-view';
   import { SimulationClient } from './ui/simulation.svelte';
   import type { ScenarioSource } from './worker';
 
@@ -65,8 +66,6 @@
     else void root.requestFullscreen().catch(() => {});
   }
   let sim = $state<SimulationClient | null>(null);
-  /** The performance readouts under the particle count (frame rates, physics time, renderer). */
-  let detailsOpen = $state(true);
   /** Browser features the simulator needs but can't find (it doesn't start without them). */
   const missing = missingBrowserFeatures();
 
@@ -125,10 +124,11 @@
         sim?.dimension === 3 && 'cursor-grab touch-none active:cursor-grabbing',
       ]}
       use:rotateView={sim?.dimension === 3 ? (x, y) => sim?.rotate(x, y) : null}
-      tabindex={sim?.dimension === 3 ? 0 : -1}
+      use:zoomView={(update) => sim?.setZoom(update(sim.zoom))}
+      tabindex="0"
       aria-label={sim?.dimension === 3
-        ? 'Simulation arena; drag or use the arrow keys to turn it, tap to add a particle'
-        : 'Simulation arena; tap to drop a particle'}
+        ? 'Simulation arena; drag or use the arrow keys to turn it, tap to add a particle, pinch or + and − to zoom'
+        : 'Simulation arena; tap to drop a particle, pinch or + and − to zoom'}
       onclick={(event) => {
         if (!sim || sim.loading) return;
         // 3D: a tap adds a particle at random (PART-8); dragging turns the view.
@@ -144,6 +144,7 @@
             event.clientY - box.top,
             box,
             sim.arenaSize,
+            sim.zoom,
           );
           const gate = sim.arena.gates.find(
             (g) => distanceToPolyline(at.x, at.y, g.points, g.closed) <= 10 * at.metersPerPixel,
@@ -166,12 +167,16 @@
           event.clientY - box.top,
           box,
           sim.arenaSize,
+          sim.zoom,
         );
         sim.addParticle([at.x, at.y]);
       }}
     ></canvas>
     {#if sim && sim.dimension !== 3 && !sim.error}
-      <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} />
+      <ScaleBar arena={sim.arenaSize} canvas={sim.canvasSize} zoom={sim.zoom} />
+    {/if}
+    {#if sim && !sim.error}
+      <ZoomControls zoom={sim.zoom} onZoom={(zoom) => sim?.setZoom(zoom)} />
     {/if}
     <div class="absolute top-2 right-2 flex gap-1" role="group" aria-label="Presentation">
       {#if canFullscreen}
@@ -359,26 +364,7 @@
     {/if}
     <!-- Diagnostics last: particle count, frame rates and where drawing happens. -->
     {#if sim && !sim.error}
-      <Collapsible.Root bind:open={detailsOpen} class="mt-4 border-t pt-2">
-        <Collapsible.Trigger
-          class="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 w-[calc(100%+0.5rem)] items-center justify-between rounded-md px-1 text-xs font-medium"
-        >
-          {sim.loading
-            ? 'Loading…'
-            : `${sim.particleCount} particles, ${sim.simulationFps.toFixed(0)} fps`}
-          <ChevronDownIcon
-            class={['size-4 transition-transform', detailsOpen && 'rotate-180']}
-            aria-hidden="true"
-          />
-        </Collapsible.Trigger>
-        <Collapsible.Content class="text-muted-foreground space-y-1 text-xs tabular-nums">
-          <p>
-            {sim.drawnFps.toFixed(0)} frames drawn per second · physics {sim.physicsMs.toFixed(2)} ms/frame
-          </p>
-          <p>{sim.simulatedPsPerSecond.toFixed(1)} ps simulated per second</p>
-          <p>Rendering on the {sim.renderThread === 'worker' ? 'render worker' : 'main thread'}</p>
-        </Collapsible.Content>
-      </Collapsible.Root>
+      <PerformancePanel {sim} />
     {/if}
   </aside>
 </div>

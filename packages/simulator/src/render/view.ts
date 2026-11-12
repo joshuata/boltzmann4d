@@ -22,8 +22,11 @@ export interface View {
   /** Everything the view draws, added to the renderer's scene. */
   readonly root: THREE.Object3D;
   readonly camera: THREE.Camera;
-  /** Fits the camera to a drawing area of this aspect ratio (width / height). */
-  fit(aspect: number): void;
+  /**
+   * Fits the camera to a drawing area of this aspect ratio (width / height), magnified by
+   * `zoom` about the arena's centre (1 shows the whole arena; CTRL-7).
+   */
+  fit(aspect: number, zoom: number): void;
   /** Places the particles where the frame has them. */
   display(frame: RenderFrame): void;
   /** Turns the view by these angles in degrees (3D only; 2D views ignore it). */
