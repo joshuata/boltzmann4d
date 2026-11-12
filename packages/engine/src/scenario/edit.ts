@@ -163,6 +163,33 @@ export function withArenaSize(scenario: Scenario, size: [number, number, number]
 }
 
 /**
+ * The scenario in another dimension (SIM-7), as the Java app's Dimension control does it:
+ * every kind keeps its count, mass, radius and temperature, and its particles are placed
+ * anew at random with the speed for that temperature in the new dimension (SIM-6). What the
+ * new dimension can't have goes: a 1D divider has no hole and 1D has no piston yet, and
+ * drawn walls and spawn regions are 2D only. Run scenarioProblems on the result to check
+ * the particles fit.
+ */
+export function withDimension(scenario: Scenario, dimensions: 1 | 2 | 3): Scenario {
+  if (dimensions === scenario.arena.dimensions) return scenario;
+  const setups = scenario.kinds.map((k) => [k.id, describeSpecies(scenario, k.id)] as const);
+  let boundary = scenario.arena.boundary;
+  if (dimensions === 1 && boundary === 'HOLE') boundary = 'DIVIDED';
+  if (dimensions === 1 && boundary === 'PISTON') boundary = 'REFLECTING';
+  let result: Scenario = {
+    ...scenario,
+    arena: { ...scenario.arena, dimensions, boundary },
+    populations: [],
+    walls: dimensions === 2 ? scenario.walls : [],
+    spawnRegions: dimensions === 2 ? scenario.spawnRegions : [],
+  };
+  for (const [kind, setup] of setups) {
+    if (setup) result = withSpecies(result, kind, setup, { keepPlaced: false });
+  }
+  return result;
+}
+
+/**
  * Problems a valid scenario can still have, as the Java dialog checks them: particles placed
  * at random must fit in the space they're placed in, with room to move
  * (SimSettingsController.getTotalNeededVolume), and there may be at most 999 of them.

@@ -8,11 +8,13 @@
     boundary: ArenaInfo['boundary'];
     /** Drawn walls need box walls (WALL-3), so no periodic boundaries. */
     drawnWalls: boolean;
+    /** A 1D divider has no hole (SIM-15). */
+    dimension: number;
     disabled?: boolean;
     onChange: (boundary: BoundaryMode) => void;
   }
 
-  let { boundary, drawnWalls, disabled = false, onChange }: Props = $props();
+  let { boundary, drawnWalls, dimension, disabled = false, onChange }: Props = $props();
 
   const MODES: { mode: BoundaryMode; label: string; title: string }[] = [
     { mode: 'PERIODIC', label: 'Periodic', title: 'Periodic boundaries: no walls (SIM-12)' },
@@ -38,7 +40,9 @@
         role="radio"
         aria-checked={current === mode}
         {title}
-        disabled={disabled || (mode === 'PERIODIC' && drawnWalls)}
+        disabled={disabled ||
+          (mode === 'PERIODIC' && drawnWalls) ||
+          (mode === 'HOLE' && dimension === 1)}
         class={[
           'min-h-9 rounded-md border px-1 text-xs font-medium disabled:opacity-50',
           current === mode

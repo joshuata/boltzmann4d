@@ -38,7 +38,7 @@ export function createArena(
   zSize: number,
   holeDiameter = -1,
   maxwellDemonMode = false,
-  dimension: 2 | 3 = 2,
+  dimension: 1 | 2 | 3 = 2,
 ): Arena {
   const dividerRadius = ARENA_DIVIDER_RADIUS;
   const hasHole = type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
@@ -46,7 +46,8 @@ export function createArena(
   const holeRadius = 0.5 * holeDiameter + dividerRadius;
   let edgeY: Float64Array;
   let edgeZ: Float64Array;
-  if (dimension === 2) {
+  if (dimension < 3) {
+    // 1D never uses the edges (its divider has no hole).
     edgeY = Float64Array.of(0.5 * ySize + holeRadius, 0.5 * ySize - holeRadius);
     edgeZ = new Float64Array(2);
   } else {

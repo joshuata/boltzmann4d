@@ -9,7 +9,7 @@ Where an outcome is statistical, "matches" means within normal fluctuations for 
 - **STORY-1 Speed distribution develops.** Restart with the Instantaneous Speed plot. Start: one bar (all speeds equal). After a few collision times: the histogram has the Maxwell–Boltzmann shape. Repeat with `2D/3Dhyd100`, `hyd1000`, `oxy100`, `oxy1000`: averages match predictions; O₂ is slower than H₂ by about 4×.
 - **STORY-2 More particles, smaller fluctuations.** Compare 50 and 450 particles (shrinking radius or enlarging the arena to fit). Fluctuations about the curve drop by about 3×.
 - **STORY-3 Cumulative beats instantaneous.** Run 500 ps–1 ns at high speed, then switch to Cumulative: the kinetic-energy and speed histograms match the curves more closely than the current view.
-- **STORY-4 RMS vs average speed.** RMS exceeds average by about 25% (1D), 13% (2D), 8.5% (3D).
+- **STORY-4 RMS vs average speed.** RMS exceeds average by about 25% (1D), 13% (2D), 8.5% (3D). _Web port:_ 1D runs since plan 0017 (`1Dheavy`, or the Dimension buttons).
 - **STORY-5 Dimension changes the shape.** Switch a single-species run from 2D to 3D with RMS Velocity shown: the 3D curve starts flatter (∝ v²) at low speed.
 - **STORY-6 Ergodicity.** Follow one slow and one fast particle (low speed setting, Color by Speed): each changes speed over time. Average Speed and Average KE distributions narrow as the run continues.
 
@@ -37,7 +37,7 @@ Where an outcome is statistical, "matches" means within normal fluctuations for 
 
 - **STORY-21 Chaos.** Load `2Dequal`: the halves move identically, then visibly differ by about 95 ps and are unrelated by about 120 ps.
 - **STORY-22 Reverse.** Run a while, press Reverse: the motion retraces back toward the start, for a time limited by chaos.
-- **STORY-23 1D doesn't thermalize.** 1D, one species: the speed histogram keeps its initial shape. Add one particle of a different mass: it relaxes to Maxwell–Boltzmann.
+- **STORY-23 1D doesn't thermalize.** 1D, one species: the speed histogram keeps its initial shape. Add one particle of a different mass: it relaxes to Maxwell–Boltzmann. _Web port:_ the `1Dequalmass` and `1Dheavy` presets (1D menu); `sim/particle-1d.test.ts` checks both halves.
 
 ## Piston
 

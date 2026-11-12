@@ -97,8 +97,8 @@ describe('parity with the Java app', () => {
       const f = await load();
       if (
         !SUPPORTED.has(f.arenaType) ||
-        f.dimension === 1 ||
-        (f.dimension === 3 && f.dividerThermalMode === 'CONDUCTING')
+        (f.dimension === 3 && f.dividerThermalMode === 'CONDUCTING') ||
+        (f.dimension === 3 && f.arenaType === ArenaType.MOVABLE_PISTON)
       ) {
         context.skip(`${f.dimension}D ${f.arenaType} is not ported yet`);
       }

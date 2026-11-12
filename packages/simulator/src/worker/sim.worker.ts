@@ -9,6 +9,7 @@ import {
   resolveScenario,
   scenarioProblems,
   withArenaSize,
+  withDimension,
   withSpecies,
   type ParticleSpecies,
   type ResolvedScenario,
@@ -64,6 +65,7 @@ import type {
   ToWorker,
 } from './index';
 import { parseSimulationSpeed, ThreadController } from './thread-controller';
+import { laneHeight } from '../render/lane';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const post = (message: FromWorker) => scope.postMessage(message);
@@ -298,17 +300,27 @@ async function load(
       source.kind === 'preset'
         ? await loadPresetScenario(source.name)
         : parseScenario(source.scenario);
+    if (arena.dimension && arena.dimension !== input.arena.dimensions) {
+      // The Dimension control (SIM-7) restarts with every particle placed anew.
+      input = withDimension(input, arena.dimension);
+      const [problem] = scenarioProblems(input);
+      if (problem) throw new RejectedChange(problem);
+    }
     if (arena.size && arena.size.some((s, axis) => s !== input.arena.size[axis])) {
       // A new arena size re-places the particles (OPT-1); they must still fit.
       input = withArenaSize(input, arena.size);
       const [problem] = scenarioProblems(input);
-      if (problem) throw new Error(problem);
+      if (problem) throw new RejectedChange(problem);
     }
     prepared = prepare(source.name, input, arena);
     userLimits.clear(); // a new scenario or arena brings its own axis limits
     built = build(prepared);
   } catch (error) {
-    if (generation === loadGeneration) {
+    if (generation !== loadGeneration) return;
+    if (error instanceof RejectedChange && running) {
+      // A new dimension or size that doesn't fit: the present run carries on.
+      post({ type: 'notice', message: error.message, loadRejected: true });
+    } else {
       post({ type: 'error', message: `Can't load ${source.name}: ${errorText(error)}` });
     }
     return;
@@ -318,6 +330,9 @@ async function load(
   start(prepared, built);
 }
 
+/** An arena change the scenario's particles can't take (they don't fit). */
+class RejectedChange extends Error {}
+
 /** Resolves a scenario (placing its particles) and applies the user's arena options. */
 function prepare(
   name: string,
@@ -326,8 +341,9 @@ function prepare(
   resolveOptions?: ResolveOptions,
 ): Prepared {
   const loaded = resolveScenario(input, resolveOptions);
-  // Drawn walls can't be combined with the piston yet (WALL-3).
+  // Drawn walls can't be combined with the piston yet (WALL-3), and 1D has none yet.
   const canHavePiston =
+    loaded.dimension !== 1 &&
     loaded.walls.length === 0 &&
     (loaded.arenaType === ArenaType.REFLECTING_BOUNDARIES ||
       loaded.arenaType === ArenaType.MOVABLE_PISTON);
@@ -425,8 +441,9 @@ function describeArena(
   canReact: boolean,
 ): ArenaInfo {
   const type = scenario.arenaType;
-  // Drawn walls can't be combined with the piston yet (WALL-3).
+  // Drawn walls can't be combined with the piston yet (WALL-3), and 1D has none yet.
   const canHavePiston =
+    scenario.dimension !== 1 &&
     scenario.walls.length === 0 &&
     (type === ArenaType.REFLECTING_BOUNDARIES || type === ArenaType.MOVABLE_PISTON);
   const canConduct = type === ArenaType.DIVIDED_ARENA || type === ArenaType.DIVIDED_ARENA_WITH_HOLE;
@@ -455,6 +472,7 @@ function describeArena(
       attractiveWall: options.attractiveWall ?? null,
       reactions: options.reactions ?? null,
       size: [...xyz],
+      dimension: scenario.dimension,
     },
   };
 }
@@ -664,6 +682,10 @@ function editParticles(
 function setBoundary(mode: BoundaryMode): void {
   const prev = lastPrepared;
   if (!prev || !running) return;
+  if (mode === 'HOLE' && prev.input.arena.dimensions === 1) {
+    post({ type: 'notice', message: 'A 1D divider has no hole' });
+    return;
+  }
   const input: Scenario = { ...prev.input, arena: { ...prev.input.arena, boundary: mode } };
   const arena: ArenaOptions = { ...prev.arenaOptions, piston: false };
   const state = running.currentState();
@@ -831,7 +853,7 @@ function start(
       colorMode: prepared.view.colorMode,
       trace: prepared.view.trace,
       arenaWidth: simulation.arena.xSize,
-      arenaHeight: simulation.arena.ySize,
+      arenaHeight: drawnHeight(simulation),
     },
     pressure: {
       averagingTime: averagingTime ?? scenarioAveragingTime(prepared.scenario),
@@ -886,6 +908,14 @@ function postSnapshot(simulation: Simulation, withEvents = true): void {
   scope.postMessage({ type: 'snapshot', snapshot } satisfies FromWorker, transfer);
 }
 
+/** The arena's height as drawn: a 1D arena's lane (render/lane.ts), else its y size. */
+function drawnHeight(simulation: Simulation): number {
+  const arena = simulation.arena;
+  return simulation.dimension === 1
+    ? laneHeight(arena.xSize, simulation.particles.radius)
+    : arena.ySize;
+}
+
 function sceneOf(simulation: Simulation, statistics: Statistics, prepared: Prepared): SceneInfo {
   const { typeColors, viewingAngles, view, scenario } = prepared;
   const p = simulation.particles;
@@ -896,7 +926,7 @@ function sceneOf(simulation: Simulation, statistics: Statistics, prepared: Prepa
   return {
     dimension: simulation.dimension,
     arenaXSize: arena.xSize,
-    arenaYSize: arena.ySize,
+    arenaYSize: drawnHeight(simulation),
     arenaZSize: arena.zSize,
     periodic: arena.type === ArenaType.PERIODIC_BOUNDARIES,
     radii: p.radius.slice(),

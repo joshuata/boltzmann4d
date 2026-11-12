@@ -1,6 +1,6 @@
-<!-- The arena's size in nm (OPT-1, SIM-10): width and height, and depth in 3D. Applying a
-     new size restarts the simulation with the particles placed anew. Part of the Arena
-     panel. -->
+<!-- The arena's size in nm (OPT-1, SIM-10): the length in 1D, width and height in 2D, and
+     depth too in 3D. Applying a new size restarts the simulation with the particles placed
+     anew. Part of the Arena panel. -->
 <script lang="ts">
   import { ARENA_SIZE_LIMITS } from '@boltzmann4d/engine/scenario/edit';
   import { Button } from '@boltzmann4d/ui/button';
@@ -24,7 +24,11 @@
     next[axis] = value;
     draft = next;
   };
-  const axes = $derived((['Width', 'Height', 'Depth'] as const).slice(0, dimension === 3 ? 3 : 2));
+  const axes = $derived(
+    dimension === 1
+      ? (['Length'] as const)
+      : (['Width', 'Height', 'Depth'] as const).slice(0, dimension),
+  );
   const valid = $derived(
     axes.every(
       (_, axis) =>

@@ -26,7 +26,7 @@ Notation: d = dimension, M = molar mass, R = gas constant, T = temperature, N = 
 | λ   | `L_net / (sqrt(2) N)` | `A / (4 sqrt(2) r N)`       | `V / (4 sqrt(2) π r² N)`       |
 | τ   | `λ / v_avg`           | `A / (4 sqrt(2) r N v_avg)` | `V / (4 sqrt(2) π r² N v_avg)` |
 
-In 1D, `L_net = L − Σ 2rᵢ` (space not taken by particles).
+In 1D, `L_net = L − Σ 2rᵢ` (space not taken by particles). _Web port:_ done (plan 0017): 1D collision rates divide by L_net (`netLength` in `stats/formulas.ts`), with N − 1 partners as in 2D and 3D; Java used L − 2r.
 
 - **PRED-4** Free path and collision time are exponentially distributed, so width = average (σ_λ = λ, σ_τ = τ).
 - **PRED-5** Collision rate averages `1/τ` with width `1/sqrt(t τ)` at simulated time t; its curve is a Gaussian centred at `1/τ` (from a Poisson process, via Stirling's approximation).
@@ -58,7 +58,7 @@ Widths follow PRED-4 and PRED-5.
 | f3  | −0.01974721 | 0.09148337  |
 
 - **PRED-9** With Real on, `λ_real = λ_ideal / Q(x)`, `τ_real = τ_ideal / Q(x)`, `rate_real = rate_ideal × Q(x)`. These corrections are less accurate for mixtures.
-- **PRED-10** 1D with walls has an exact equation of state: pressure from momentum transfer at a wall with `L` replaced by `L_net` (diverges at close packing).
+- **PRED-10** 1D with walls has an exact equation of state: pressure from momentum transfer at a wall with `L` replaced by `L_net` (diverges at close packing). _Web port:_ done (plan 0017): in 1D, Real is N k T / L_net, with walls or periodic (`stats/pressure.ts`), and agrees with the measured pressure (`pressure.test.ts`).
 
 ## Finite system corrections (option)
 

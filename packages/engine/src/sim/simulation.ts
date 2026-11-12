@@ -18,6 +18,14 @@ import { Collision, MAX_TIME, MIN_TIME, Wall, createEvent, type EventInfo } from
 import { EventHeap, INTERNAL_ROW } from './event-heap';
 import type { Dimension, RenderFrame } from './index';
 import {
+  boundaryCollide1D,
+  collide1D,
+  initPeriodicFlags1D,
+  moveToTime1D,
+  predictBoundary1D,
+  predictPair1D,
+} from './particle-1d';
+import {
   boundaryCollide2D,
   collide2D,
   initPeriodicFlags2D,
@@ -47,8 +55,16 @@ import { Thermostat } from './thermostat';
 import { convert } from '../utils/units';
 import { ArenaType, DividerThermalMode } from './simulation-info';
 
-/** The per-dimension particle functions (particle-2d.ts, particle-3d.ts). */
+/** The per-dimension particle functions (particle-1d.ts, particle-2d.ts, particle-3d.ts). */
 const MOTION = {
+  1: {
+    predictPair: predictPair1D,
+    predictBoundary: predictBoundary1D,
+    collide: collide1D,
+    boundaryCollide: boundaryCollide1D,
+    moveToTime: moveToTime1D,
+    initPeriodicFlags: initPeriodicFlags1D,
+  },
   2: {
     predictPair: predictPair2D,
     predictBoundary: predictBoundary2D,
@@ -66,8 +82,8 @@ const MOTION = {
     initPeriodicFlags: initPeriodicFlags3D,
   },
 } as const;
-// The 2D signatures are the widest (the piston and thermostat are 2D-only so far); the 3D
-// functions take a prefix of the same arguments.
+// The 2D signatures are the widest (the piston and thermostat are 2D-only so far); the 1D
+// and 3D functions take a prefix of the same arguments.
 // collide returns the event performed in 2D (a well exit may become WELL_REFLECT).
 type Motion = Omit<(typeof MOTION)[2], 'collide'> & {
   collide: (...args: Parameters<typeof collide2D>) => number | void;
@@ -292,11 +308,14 @@ export class Simulation {
   private readonly init: InitialState;
 
   constructor(init: InitialState, options: SimulationOptions = {}) {
-    if (init.dimension !== 2 && init.dimension !== 3) {
-      throw new Error(`${init.dimension}D simulation is not supported yet`);
+    if (init.dimension !== 1 && init.dimension !== 2 && init.dimension !== 3) {
+      throw new Error(`${String(init.dimension)}D simulation is not supported`);
     }
-    if (init.dimension === 3 && init.arenaType === ArenaType.MOVABLE_PISTON) {
-      throw new Error('The movable piston is not supported in 3D yet');
+    if (init.dimension !== 2 && init.arenaType === ArenaType.MOVABLE_PISTON) {
+      throw new Error(`The movable piston is not supported in ${init.dimension}D yet`);
+    }
+    if (init.dimension === 1 && init.arenaType === ArenaType.DIVIDED_ARENA_WITH_HOLE) {
+      throw new Error('A divider with a hole needs 2D or 3D');
     }
     if (init.dimension === 3 && init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
       throw new Error('Conducting dividers are not supported in 3D yet');
@@ -321,12 +340,17 @@ export class Simulation {
       dimension,
     );
     const wells = init.wells;
-    this.wellMultiplier =
+    const wellsOn =
       wells &&
       wells.radiusMultiplier > 0 &&
-      init.dimension === 2 && // 2D only so far
-      init.arenaType !== ArenaType.PERIODIC_BOUNDARIES
-        ? wells.radiusMultiplier
+      init.dimension !== 3 && // 1D and 2D so far
+      init.arenaType !== ArenaType.PERIODIC_BOUNDARIES;
+    // Java's 1D predicts well events even with wells off, with a multiplier of −1 (see
+    // particle-1d.ts); 0 means none are predicted.
+    this.wellMultiplier = wellsOn
+      ? wells.radiusMultiplier
+      : dimension === 1 && init.arenaType !== ArenaType.PERIODIC_BOUNDARIES
+        ? -1
         : 0;
     this.wellDepths = Float64Array.from(init.species, (_, t) => wells?.depths[t] ?? 0);
     this.reactions =
@@ -754,7 +778,7 @@ export class Simulation {
     const speeds = new Float32Array(p.count);
     for (let k = 0; k < p.count; k++) {
       positions[d * k] = p.x[k]!;
-      positions[d * k + 1] = p.y[k]!;
+      if (d > 1) positions[d * k + 1] = p.y[k]!;
       if (d === 3) positions[d * k + 2] = p.z[k]!;
       const vx = p.vx[k]!;
       const vy = p.vy[k]!;
@@ -795,7 +819,7 @@ export class Simulation {
       for (let k = 0; k < p.count; k++)
         if (this.inWallWell[k]) total -= this.wall.energy * AMU_JOULE;
     }
-    for (const [key, type] of this.lastPairType) {
+    for (const [key, type] of this.hasWells ? this.lastPairType : []) {
       if (type === EXIT_WELL) continue; // every other recorded pair event leaves it inside
       const a = Math.floor(key / p.count);
       const b = key - a * p.count;
@@ -816,6 +840,7 @@ export class Simulation {
   pairsInWells(): [number, number][] {
     const count = this.particles.count;
     const pairs: [number, number][] = [];
+    if (!this.hasWells) return pairs;
     for (const [key, type] of this.lastPairType) {
       if (type === EXIT_WELL) continue; // every other recorded pair event leaves it inside
       const a = Math.floor(key / count);
@@ -917,9 +942,9 @@ export class Simulation {
             );
       // An exit without the energy to leave comes back as WELL_REFLECT.
       const performed = this.collide(p, a, b, event, this.arena, wellEnergy, this.reactions);
-      if (this.wellMultiplier > 0) {
+      if (this.wellMultiplier !== 0) {
         const key = a * p.count + b;
-        this.lastPairType.set(key, performed as number); // wells are 2D-only
+        this.lastPairType.set(key, performed as number);
         this.lastPairTime.set(key, event.time);
       }
       this.counters.particleCollisions++;

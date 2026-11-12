@@ -8,7 +8,7 @@ Not listed: UI differences, pure refactors, and settings Java read but ignored t
 
 ## How results are checked
 
-- **Physics:** 33 parity fixtures (2D and 3D presets plus scripted scenes: conducting divider, adiabatic and isothermal pistons, wells, reactions) replay Java's recorded starting state and must reproduce its events and final state bit for bit. They record Java's starting state, so placement changes never touch them. Every difference below either stays out of the fixtures' scenes or doesn't change the events.
+- **Physics:** 38 parity fixtures (2D and 3D presets plus scripted scenes: conducting divider, adiabatic and isothermal pistons, wells, reactions, and 1D box, mixture, periodic and divided scenes) replay Java's recorded starting state and must reproduce its events and final state bit for bit. They record Java's starting state, so placement changes never touch them. Every difference below either stays out of the fixtures' scenes or doesn't change the events.
 - **Statistics, predictions and pressure:** no Java parity at all (plan 0004). Java's sums iterate identity-hashed maps and sample at wall-clock times, so they aren't reproducible even in Java, and it has too many bugs to serve as a reference. They are checked against kinetic theory instead (`packages/engine/src/stats/correctness.test.ts` and the other `stats/*.test.ts`).
 
 ## Physics: Java bugs fixed
@@ -42,6 +42,20 @@ Not listed: UI differences, pure refactors, and settings Java read but ignored t
 - **Java:** `Physics.initializeLastCollisions` measures whether pairs start inside a well in 3D, and its loader gives 2D particles a random z.
 - **Port:** measures 2D pairs in the plane. Only the potential-energy bookkeeping changes; events are bit-identical.
 - **Files:** `packages/engine/src/sim/simulation.ts`.
+
+### 1D square wells use the depth in energy units (#24, plan 0017)
+
+- **Java:** `Particle1D.collideWith` adds the two depths in kJ/mol and uses them as amu·m²/s² without `Units.convert`, which `Particle2D` and `Particle3D` both apply, so 1D wells are about 10⁶ times too shallow and do nothing visible.
+- **Port:** the depth is converted as in 2D and 3D. There is no 1D wells fixture for that reason; the 1D well-event timing is still covered by the fixtures without wells (next entry).
+- **Files:** `packages/engine/src/sim/particle-1d.ts`, `sim/simulation.ts`.
+- **Tested:** `sim/particle-1d.test.ts` conserves kinetic + well energy to 1e-9 with wells deep enough to heat the gas by more than 5%.
+
+### 1D reactions keep the particles in order (#24, plan 0017)
+
+- **Java:** `Particle1D.collideWith` works with the raw x velocities. That is right for elastic and well collisions, but its reaction branch assumes `this` is the left particle, so a reacting pair whose first particle is on the right passes through itself (and Java prints a debug line on every reaction).
+- **Port:** works along the line from the first particle to the second (±x), as 2D and 3D do. Negating both velocities negates the elastic and well results exactly, so those stay bit-identical to Java.
+- **Files:** `packages/engine/src/sim/particle-1d.ts`.
+- **Tested:** `sim/particle-1d.test.ts` (particles keep their order through 10,000 events with reactions); the 1D fixtures for the elastic case.
 
 ## Physics: loading, placement and restarts
 
@@ -77,6 +91,7 @@ These have no Java counterpart, so they can't change any Java result, but they a
 - **Reactions in 3D**, **up to 10 kinds** and **general rules A + B → C + D** (plan 0010, PR #58). Java's single red↔blue rule keeps its exact code path (`sim/reactions.ts`, covered by the reaction fixtures).
 - **Drawn walls** (plan 0010, PR #58): reflecting, thermal (deterministic: normal speed √(2kT/m)), semipermeable, gate and attractive segments. They lose ties against Java's events. Spawn regions and wall-aware placement replace Java's placement when walls or regions are present (`sim/segment-walls.ts`, `scenario/resolve.ts`, tested in `sim/segment-walls.test.ts`).
 - **Adding and removing particles mid-run** and **arena switches that carry on** (plan 0014): Java's add-particle path is commented out (`sim/particle-edits.ts`, `sim/placement.ts`).
+- **Two 1D presets** (plan 0017, STORY-23): `1Dequalmass` and `1Dheavy`; the Java app shipped none (`io/simsettingsfiles/presets/`).
 
 ## Statistics
 
@@ -115,7 +130,8 @@ These have no Java counterpart, so they can't change any Java result, but they a
 - **Normalised densities:** a mixture's curve weights its kinds correctly (`stats/predictions.ts`).
 - **Finite-system densities** take the total energy from the measured temperatures and use Γ ratios via log-gamma; Java's plain Γ ratio overflows to NaN above about 60 particles (`stats/predictions.ts`).
 - **RMS Velocity with finite-system corrections on periodic arenas** gives √(2·KE/m); Java's `correctedRMSVel` throws (plan 0004 bug 2; `stats/formulas.ts`).
-- **1D mean relative speed** uses the 1D formula; Java used the 2D one (plan 0004 bug 4; `stats/formulas.ts`). There is no 1D physics yet.
+- **1D mean relative speed** uses the 1D formula; Java used the 2D one (plan 0004 bug 4; `stats/formulas.ts`; tested in `stats/formulas.test.ts`).
+- **1D collision rate** (PRED-3, plan 0017): Java divides by L − 2r; the port uses the free length L_net = L − Σ 2rᵢ, since hard rods on a line move like points on L_net (`netLength` in `stats/formulas.ts`). Tested in `stats/formulas.test.ts` against a simulated gas of rods packed to 40%, where the two differ by 40%.
 - **Free Path and Time per Collision for a set of kinds** weight each kind by its collision rate, not just its count (PRED-7; `stats/predictions.ts`).
 
 ## Pressure
@@ -123,6 +139,7 @@ These have no Java counterpart, so they can't change any Java result, but they a
 - **Wall momentum per hit** (plan 0011, PRES-1): Java uses 2m|vₓ|; the port uses m(|vₓ before| + |vₓ after|), the same for a plain bounce and right when the thermostat changes the speed (`stats/pressure.ts`).
 - **Virial pressure** (plan 0011, PRES-5): Java uses the starting energy; the port averages ⟨KE⟩ over time per kind, so partial pressures work and reactions are accounted for. Each collision's virial term is split equally between its two kinds (`stats/pressure.ts`).
 - **Pressure predictions** use each side's current temperature; Java used the initial one (PRES-4, `stats/pressure.ts`).
+- **1D** (plan 0017, PRES-3, PRED-10): the readout is a force in pN (Java never finished its 1D units), and Real is the exact hard-rod pressure N k T / L_net instead of the 2D/3D virial fit (`stats/pressure.ts`; tested in `stats/pressure.test.ts`, walls and periodic).
 - **Drawn walls** aren't measured; the readout keeps measuring the box's left and right walls and predicts with the box's volume (`stats/pressure.ts`).
 
 ## Java quirks kept on purpose
@@ -131,6 +148,7 @@ These look questionable but are reproduced so the parity fixtures stay bit for b
 
 - **Square-well depth halved:** entering a pair well changes the kinetic energy by E/2 (`sim/particle-2d.ts`, `sim/simulation.ts`).
 - **Pair wells ignored on periodic arenas** (`sim/simulation.ts`, `sim/particle-2d.ts`).
+- **1D predicts well events with wells off:** Java's interaction multiplier is −1 then, so its "well" is the contact distance and a pair that starts overlapping gets an EXIT_WELL as it separates, which recomputes both velocities. A pair that can't climb out of a 1D well is recorded as ENTER_WELL rather than WELL_REFLECT (`sim/particle-1d.ts`; in the 1D fixtures).
 - **Conducting divider** moves every particle and scans all of them to find its partner (`sim/simulation.ts`).
 - **Thermostat heuristic:** `WallController`'s velocity scaling, not a heat bath, also applied at the divider and a stopped piston (`sim/thermostat.ts`, #24).
 - **Piston moves are retroactive** (they start from the last frame's end), and a piston at rest can tie or race with the top wall.

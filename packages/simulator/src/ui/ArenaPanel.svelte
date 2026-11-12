@@ -1,11 +1,13 @@
-<!-- The Arena panel: the boundary mode (SIM-12–16), the options a boundary takes (a movable
+<!-- The Arena panel: the dimension (SIM-7), the boundary mode (SIM-12–16), the options a boundary takes (a movable
      piston in a box, a divider that conducts heat, Maxwell's demon at the hole) and the
-     arena's size. The options and the size restart the simulation when changed. -->
+     arena's size. The dimension, the options and the size restart the simulation when
+     changed. -->
 <script lang="ts">
   import { Checkbox } from '@boltzmann4d/ui/checkbox';
   import { Label } from '@boltzmann4d/ui/label';
   import ArenaSize from './ArenaSize.svelte';
   import BoundaryButtons from './BoundaryButtons.svelte';
+  import DimensionButtons from './DimensionButtons.svelte';
   import SidebarPanel from './SidebarPanel.svelte';
   import type { ArenaInfo, ArenaOptions, BoundaryMode } from '../worker';
 
@@ -24,9 +26,11 @@
 
 <SidebarPanel id="arena" title="Arena">
   <div class="grid min-w-0 gap-3 text-sm">
+    <DimensionButtons {dimension} {disabled} onChange={(d) => onChange({ dimension: d })} />
     <BoundaryButtons
       boundary={arena.boundary}
       drawnWalls={arena.drawnWalls}
+      {dimension}
       {disabled}
       onChange={onBoundary}
     />

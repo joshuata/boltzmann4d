@@ -13,8 +13,8 @@ The physical model and the arena configurations. Source: manual §I.A, §I.D (bo
 
 ## Dimensions
 
-- **SIM-7** Simulations run in 1D, 2D or 3D, chosen from a Dimension control. 2D is the default.
-- **SIM-8** 1D confines particles to a horizontal line across the arena. Particles keep their order and only collide with their neighbours; equal masses just swap velocities, so a single-mass 1D gas does not relax to Maxwell–Boltzmann (adding even one particle of a different mass makes it relax). The app must reproduce this, not "fix" it.
+- **SIM-7** Simulations run in 1D, 2D or 3D, chosen from a Dimension control. 2D is the default. _Web port:_ done (plan 0017): the Arena panel's Dimension buttons restart with each kind's count, mass, radius and temperature, placed anew; particles that don't fit (end to end, in 1D) are refused with a notice and the run carries on. Two 1D presets join the 2D and 3D ones (the navbar's 1D menu).
+- **SIM-8** 1D confines particles to a horizontal line across the arena. Particles keep their order and only collide with their neighbours; equal masses just swap velocities, so a single-mass 1D gas does not relax to Maxwell–Boltzmann (adding even one particle of a different mass makes it relax). The app must reproduce this, not "fix" it. _Web port:_ done (plan 0017, `sim/particle-1d.ts`), with parity fixtures for the box, a mixture, periodic and divided (insulating and conducting) arenas. The view draws a lane with the particles on its midline. A 1D divider has no hole, and 1D has no piston yet.
 - **SIM-9** 3D draws with perspective and shading (particles shrink with distance). The user can tilt the view (see `display-and-controls.md`).
 
 ## Arena

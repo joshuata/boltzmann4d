@@ -8,7 +8,7 @@ The **Pressure** box in the sidebar shows how hard the gas pushes on the walls, 
 
 ## What it measures
 
-Each time a particle bounces off the left or right wall, it gives the wall a push. The readout adds up these pushes over the **averaging time** and divides by that time and by the wall's size. It is in µN/m in 2D (force per length of wall) and MPa in 3D.
+Each time a particle bounces off the left or right wall, it gives the wall a push. The readout adds up these pushes over the **averaging time** and divides by that time and by the wall's size. It is in µN/m in 2D (force per length of wall) and MPa in 3D. In 1D the wall is a point, so the reading is a force in pN.
 
 - In a plain box, the readout is the average of the left and right walls.
 - In a divided box (with or without a hole), the **Left side** and **Right side** are shown separately: the left wall for the left side and the right wall for the right side, each with its own prediction.
@@ -26,8 +26,8 @@ Set the **Averaging time** under the readout (60 ps unless the simulation says o
 
 The **Ideal** and **Real** buttons choose which prediction is shown next to the measurement:
 
-- **Ideal** is the ideal gas law, PA = NkT in 2D or PV = NkT in 3D, using the space the particles' centres can reach.
-- **Real** corrects it for the size of the particles (the hard-disk or hard-sphere virial expansion). Bigger or more crowded particles push harder than the ideal law says.
+- **Ideal** is the ideal gas law, PL = NkT in 1D, PA = NkT in 2D or PV = NkT in 3D, using the space the particles' centres can reach.
+- **Real** corrects it for the size of the particles (the hard-disk or hard-sphere virial expansion). Bigger or more crowded particles push harder than the ideal law says. In 1D it is exact: particles on a line push like point particles on the length they leave free, so P (L − total of their diameters) = NkT.
 
 Both use each kind's current temperature and number on each side, so a hot side and a cold side, or a gas a piston has squeezed, are each predicted correctly.
 

@@ -36,7 +36,7 @@ export class CellGrid {
   readonly ySize: number;
   readonly zSize: number;
 
-  constructor(arena: Arena, particleCount: number, minCellSize: number, dimension: 2 | 3 = 2) {
+  constructor(arena: Arena, particleCount: number, minCellSize: number, dimension: 1 | 2 | 3 = 2) {
     // A hair larger than required, so round-off at cell edges can't hide a contact.
     const size = minCellSize * (1 + 1e-9);
     const axisCells = (length: number) => {
@@ -47,7 +47,7 @@ export class CellGrid {
     this.ySize = arena.ySize;
     this.zSize = dimension === 3 ? arena.zSize : 1;
     this.nx = size > 0 ? axisCells(arena.xSize) : 1;
-    this.ny = size > 0 ? axisCells(arena.ySize) : 1;
+    this.ny = size > 0 && dimension > 1 ? axisCells(arena.ySize) : 1;
     this.nz = size > 0 && dimension === 3 ? axisCells(arena.zSize) : 1;
     this.cellWidth = arena.xSize / this.nx;
     this.cellHeight = arena.ySize / this.ny;

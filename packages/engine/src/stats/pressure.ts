@@ -46,13 +46,16 @@ export interface PressureRegionReading {
   measured: number[];
   /** N k T / V_eff, from the kind's particles in this region and their kinetic energy. */
   ideal: number[];
-  /** The ideal prediction × the hard-disk / hard-sphere factor 1 + x Q(x) (PRED-8). */
+  /**
+   * The ideal prediction × the hard-disk / hard-sphere factor 1 + x Q(x) (PRED-8); in 1D
+   * the exact hard-rod pressure N k T / L_net (PRED-10).
+   */
   real: number[];
 }
 
 export interface PressureReading {
   method: PressureMethod;
-  /** µN/m in 2D, MPa in 3D (PRES-3). */
+  /** pN (a force) in 1D, µN/m in 2D, MPa in 3D (PRES-3). */
   unit: string;
   /** Simulation time of the reading, s. */
   time: number;
@@ -66,8 +69,9 @@ export interface PressureReading {
   regions: PressureRegionReading[];
 }
 
-/** SI pressure (N/m in 2D, Pa in 3D) → the displayed unit. */
+/** SI pressure (N in 1D, N/m in 2D, Pa in 3D) → the displayed unit. */
 const DISPLAY = {
+  1: { unit: 'pN', scale: 1e12 },
   2: { unit: 'µN/m', scale: 1e6 },
   3: { unit: 'MPa', scale: 1e-6 },
 } as const;
@@ -208,8 +212,7 @@ export class PressureMeter {
    */
   read(time = this.simulation.time): PressureReading {
     const sim = this.simulation;
-    const d = sim.dimension as 2 | 3;
-    const { unit, scale } = DISPLAY[d];
+    const { unit, scale } = DISPLAY[sim.dimension];
     const covered = this.covered(time);
     const regions: PressureRegion[] = this.divided ? ['left', 'right'] : ['arena'];
     const measured = this.method === 'wall' ? this.wallPressures(time, covered) : null;
@@ -258,7 +261,7 @@ export class PressureMeter {
     const sim = this.simulation;
     const arena = sim.arena;
     const d = sim.dimension;
-    const volume = arena.xSize * arena.ySize * (d === 3 ? arena.zSize : 1);
+    const volume = arena.xSize * (d > 1 ? arena.ySize : 1) * (d === 3 ? arena.zSize : 1);
     const elapsed = time - this.startTime;
     return this.kineticEnergy.map((ke, kind) => {
       if (elapsed <= 0) return (2 * ke) / (d * volume);
@@ -320,13 +323,21 @@ export class PressureMeter {
       };
       const ideal = new Float64Array(k);
       const real = new Float64Array(k);
+      // 1D: hard rods on a line have an exact equation of state, P L_net = N k T (PRED-10).
+      let free = length;
+      for (let kind = 0; kind < k; kind++) free -= 2 * radius[r * k + kind]!;
       for (let kind = 0; kind < k; kind++) {
         const t = ctx.types[kind]!;
         if (t.count === 0) continue;
         // N k T = 2 KE / d, so this needs no temperature of its own.
         const volume = effectiveVolume(ctx, t.radius);
         ideal[kind] = volume > 0 ? (2 * energy[r * k + kind]!) / (d * volume) : Infinity;
-        real[kind] = ideal[kind]! * realGasPressureFactor(realGasX(ctx, kind), d);
+        real[kind] =
+          d === 1
+            ? free > 0
+              ? (2 * energy[r * k + kind]!) / free
+              : Infinity
+            : ideal[kind]! * realGasPressureFactor(realGasX(ctx, kind), d);
       }
       results.push({ ideal, real });
     }
@@ -337,6 +348,7 @@ export class PressureMeter {
   private wallArea(radius: number, time: number): number {
     const sim = this.simulation;
     const height = sim.piston ? sim.piston.positionAtTime(time) : sim.arena.ySize;
+    if (sim.dimension === 1) return 1; // a force: momentum per time
     const area = height - 2 * radius;
     return sim.dimension === 3 ? area * (sim.arena.zSize - 2 * radius) : area;
   }

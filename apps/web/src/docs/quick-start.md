@@ -8,7 +8,9 @@ Boltzmann 4D simulates a gas of hard spheres. Each particle moves in a straight 
 
 ## Choose a simulation
 
-Pick a simulation from the **2D** or **3D** menu at the top of the page, or from the list on the [home page](../). Each one is a ready-made setup from the original Boltzmann 3D program: an ideal gas at equilibrium, effusion through a hole, Maxwell's demon, a gas mixture, and so on.
+Pick a simulation from the **1D**, **2D** or **3D** menu at the top of the page, or from the list on the [home page](../). Each one is a ready-made setup from the original Boltzmann 3D program: an ideal gas at equilibrium, effusion through a hole, Maxwell's demon, a gas mixture, and so on. The 1D ones are new: particles on a line, where identical particles just swap speeds when they collide and never reach the Maxwell–Boltzmann distribution until a particle of another mass joins them.
+
+Switching **Dimension** in the **Arena** box restarts with the same kinds, numbers and temperatures, placed again at random. On a line the particles must fit end to end, so a crowded 2D gas may not fit; shrink the count or radius, or lengthen the arena.
 
 ## Run it
 
@@ -33,7 +35,7 @@ The **View** box changes how particles are drawn, without restarting:
 
 ## Change the arena
 
-The **Arena** box sets the walls (**Boundaries**: periodic, box, divided box or a box with a hole), the arena's size, and the options a boundary takes: a movable piston in a box, a divider that conducts heat, and Maxwell's demon at a hole. Changing one restarts the simulation. A piston gets its own **Piston** box to move it.
+The **Arena** box sets the **Dimension** (1D, 2D or 3D), the walls (**Boundaries**: periodic, box, divided box or a box with a hole; 1D has no hole), the arena's size, and the options a boundary takes: a movable piston in a box, a divider that conducts heat, and Maxwell's demon at a hole. Changing one restarts the simulation. A piston gets its own **Piston** box to move it.
 
 The **Wells and reactions** box turns on attractive wells between particles and an attractive bottom wall (in 2D boxes), and reactions that turn one kind into another (in 2D and 3D). Switching one on restarts with the default settings; change the numbers and press **Apply** to restart with yours. A reaction's energies are set in the **Reactions** box that appears while particles react (see [Reactions and equilibrium](reactions)).
 

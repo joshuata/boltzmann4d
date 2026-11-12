@@ -6,7 +6,7 @@ import { presetCatalog, type PresetInfo } from '@boltzmann4d/engine/io/presets';
 export interface GuideEntry {
   title: string;
   description: string;
-  /** The preset in each dimension it exists in, 2D first. */
+  /** The preset in each dimension it exists in, lowest first. */
   presets: PresetInfo[];
 }
 
@@ -56,6 +56,10 @@ const TOPICS: { title: string; ideas: Record<string, string> }[] = [
       equil: 'Particles turn Type A ⇌ Type B until the mix settles at the predicted equilibrium.',
       equal: 'Two halves start identical; chaos makes them drift apart after about 100 ps.',
       liquid: 'Large particles packed closely in a periodic box behave like a liquid.',
+      equalmass:
+        'Identical particles on a line only swap speeds when they collide, so their speeds never spread out.',
+      heavy:
+        'The same line with one heavier particle: now collisions share out energy and the speeds relax to Maxwell–Boltzmann.',
     },
   },
 ];

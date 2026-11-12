@@ -51,8 +51,10 @@ function expectNoOverlapsInside(sim: Simulation): void {
     if (reflecting) {
       expect(p.x[i]).toBeGreaterThanOrEqual(r - slack);
       expect(p.x[i]).toBeLessThanOrEqual(xSize - r + slack);
-      expect(p.y[i]).toBeGreaterThanOrEqual(r - slack);
-      expect(p.y[i]).toBeLessThanOrEqual(ySize - r + slack);
+      if (sim.dimension > 1) {
+        expect(p.y[i]).toBeGreaterThanOrEqual(r - slack);
+        expect(p.y[i]).toBeLessThanOrEqual(ySize - r + slack);
+      }
       if (is3D) {
         expect(p.z[i]).toBeGreaterThanOrEqual(r - slack);
         expect(p.z[i]).toBeLessThanOrEqual(zSize - r + slack);
@@ -74,7 +76,7 @@ function expectNoOverlapsInside(sim: Simulation): void {
 }
 
 describe('Simulation', () => {
-  const presets = presetNames.filter((name) => !name.startsWith('1D'));
+  const presets = presetNames;
 
   it.each(presets)('runs %s (if supported) conserving energy, without overlaps', async (name) => {
     const { scenario } = loadSetFile(await loadPresetText(name), { random: seededRandom(3) });
@@ -155,7 +157,9 @@ describe('Simulation', () => {
 
   it('rejects arenas and dimensions not ported yet', () => {
     const init = syntheticGas({ count: 4 });
-    expect(() => new Simulation({ ...init, dimension: 1 })).toThrow(/1D/);
+    expect(
+      () => new Simulation({ ...init, dimension: 1, arenaType: ArenaType.MOVABLE_PISTON }),
+    ).toThrow(/1D/);
     expect(
       () => new Simulation({ ...init, dimension: 3, arenaType: ArenaType.MOVABLE_PISTON }),
     ).toThrow(/3D/);

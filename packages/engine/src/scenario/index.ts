@@ -69,6 +69,7 @@ export {
   describeSpecies,
   scenarioProblems,
   withArenaSize,
+  withDimension,
   withSpecies,
   type SpeciesSetup,
   type SpeciesSummary,
