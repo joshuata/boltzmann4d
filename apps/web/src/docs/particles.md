@@ -4,7 +4,7 @@ description: Add and remove particles while the gas runs, change their mass, siz
 order: 1.4
 ---
 
-The **Particles** box in the sidebar changes the gas in the arena while it runs: add particles, take them away, and change how heavy, big and hot they are. The **Boundaries** buttons under it change the walls. To set up a gas from scratch, with walls you draw yourself, use the [scenario editor](editor).
+The **Particles** box in the sidebar changes the gas in the arena while it runs: add particles, take them away, and change how heavy, big and hot they are. The **Boundaries** buttons in the **Arena** box change the walls. To set up a gas from scratch, with walls you draw yourself, use the [scenario editor](editor).
 
 ## Pick a kind
 

@@ -1,6 +1,6 @@
 <!-- Boundary modes (SIM-12–16): periodic, box, divided box, divided box with a hole. Opening
      a divided box's hole or removing its divider carries on with the running gas; switching
-     to the divided box restarts with every particle on the left. -->
+     to the divided box restarts with every particle on the left. Part of the Arena panel. -->
 <script lang="ts">
   import type { ArenaInfo, BoundaryMode } from '../worker';
 
@@ -29,7 +29,7 @@
   const id = $props.id();
 </script>
 
-<div class="mb-3 grid gap-1 text-sm">
+<div class="grid gap-1 text-sm">
   <p class="text-sm font-medium" id="{id}-label">Boundaries</p>
   <div class="grid grid-cols-4 gap-1" role="radiogroup" aria-labelledby="{id}-label">
     {#each MODES as { mode, label, title } (mode)}

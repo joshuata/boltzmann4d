@@ -33,7 +33,7 @@ Both use each kind's current temperature and number on each side, so a hot side 
 
 ## Change the arena size
 
-**Arena size** sets the width and height (and depth in 3D) in nanometres. **Apply** restarts the simulation in the new arena with the particles placed again at random, at the same speeds, on the same side of a divider.
+**Size** in the **Arena** box sets the width and height (and depth in 3D) in nanometres. **Apply** restarts the simulation in the new arena with the particles placed again at random, at the same speeds, on the same side of a divider.
 
 ## Experiments
 
