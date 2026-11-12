@@ -157,7 +157,13 @@ describe('Simulation', () => {
     const init = syntheticGas({ count: 4 });
     expect(() => new Simulation({ ...init, dimension: 1 })).toThrow(/1D/);
     expect(
-      () => new Simulation({ ...init, dimension: 3, arenaType: ArenaType.MOVABLE_PISTON }),
+      () =>
+        new Simulation({
+          ...init,
+          dimension: 3,
+          arenaType: ArenaType.DIVIDED_ARENA,
+          dividerThermalMode: DividerThermalMode.CONDUCTING,
+        }),
     ).toThrow(/3D/);
   });
 

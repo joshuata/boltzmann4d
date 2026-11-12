@@ -1,7 +1,10 @@
 // Seeded, headless versions of classroom stories that give numbers (docs/specs/stories.md).
 import { describe, expect, it } from 'vitest';
+import { census } from '../sim/particle-edits';
+import { PistonMode } from '../sim/piston';
 import { Simulation, type InitialState } from '../sim/simulation';
 import { ArenaType } from '../sim/simulation-info';
+import { adiabaticTemperature } from './formulas';
 import { Statistics } from './statistics';
 import type { DistributionId } from './statistic-ids';
 import { statsContext } from './stats-context';
@@ -70,5 +73,52 @@ describe('STORY-20: kinetic energy doesn’t depend on mass or radius', () => {
     // The Average Kinetic Energy plot agrees.
     const [heavyAvg, lightAvg] = [[0], [1]].map((t) => plot('AVERAGE_ENERGY', t).current.average);
     expect(heavyAvg! / lightAvg!).toBeCloseTo(1, 1.3);
+  });
+});
+
+/** Moves the piston to `level` at `speed` m/s and runs until it has stopped. */
+function pistonTo(sim: Simulation, level: number, mode: PistonMode, speed: number) {
+  sim.movePiston(level, mode, speed);
+  while (sim.piston!.isMoving(sim.time)) sim.advanceToNextFrame();
+  sim.advanceToNextFrame();
+}
+
+describe('STORY-24 and STORY-25: compressing the gas with the piston', () => {
+  const temperatureOf = (sim: Simulation) => census(sim.currentState()).temperature;
+  /** Dense enough that collisions share out the energy the piston adds along y. */
+  const pistonGas = (dimension: number) => {
+    const [count, radius, side] = dimension === 3 ? [250, 0.4, 30] : [150, 0.3, 60];
+    const size: [number, number, number] = [side, side, dimension === 3 ? side : 0];
+    const init = gas([{ count, mass: 2, radius, temperature: 300 }], size, {
+      dimension,
+      arenaType: ArenaType.MOVABLE_PISTON,
+    });
+    // The height the centres can use, nm: the box's (or the piston's) less a diameter.
+    const free = (level: number) => side * (1 - level) - 2 * radius;
+    return { sim: new Simulation(init), free };
+  };
+
+  it.each([2, 3])(
+    'adiabatic: %iD temperature follows T₁ (V₁/V₂)^{2/d} and comes back close',
+    (dimension) => {
+      const { sim, free } = pistonGas(dimension);
+      const t1 = temperatureOf(sim);
+      pistonTo(sim, 0.5, PistonMode.ADIABATIC, 50);
+      const predicted = adiabaticTemperature(t1, free(0), free(0.5), dimension);
+      expect(temperatureOf(sim) / predicted).toBeCloseTo(1, 1);
+      pistonTo(sim, 0, PistonMode.ADIABATIC, 50);
+      // Close to the start, and usually a little above it (PRED-15).
+      const back = temperatureOf(sim) / t1;
+      expect(back).toBeGreaterThan(0.98);
+      expect(back).toBeLessThan(1.08);
+    },
+  );
+
+  it.each([2, 3])('isothermal: %iD temperature stays put', (dimension) => {
+    const { sim } = pistonGas(dimension);
+    const t1 = temperatureOf(sim);
+    pistonTo(sim, 0.5, PistonMode.ISOTHERMAL, 50);
+    expect(temperatureOf(sim) / t1).toBeCloseTo(1, 1);
+    expect(sim.thermostat.enabled).toBe(true);
   });
 });

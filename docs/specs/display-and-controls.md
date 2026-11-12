@@ -30,7 +30,7 @@ One Options dialog sets:
 - **OPT-3** Pressure averaging time (default 60 ps). _Web port:_ under the pressure readout; it applies at once without restarting.
 - **OPT-4** Forget time, as a multiple of the predicted collision time (default 4). _Web port:_ in the statistics box's Statistics options; a change applies at once if the data hasn't been forgotten yet, and is kept by Restart and arena changes.
 - **OPT-5** RDF sampling interval, as a multiple of the predicted collision time (default 0.5).
-- **OPT-6** Piston speed and the isothermal thermostat's maximum percent energy change per wall collision (default 10%).
+- **OPT-6** Piston speed and the isothermal thermostat's maximum percent energy change per wall collision (default 10%). _Web port:_ both in the Piston box: Speed (nm/ps) and Thermostat damping (%), the thermostat's damp factor (Java's spinner for it did nothing; the port uses it).
 
 Other Simulation menu items: Dimension, Include finite system corrections, Maxwell demon mode, Reaction mode, Set total momentum (see `simulation.md`).
 

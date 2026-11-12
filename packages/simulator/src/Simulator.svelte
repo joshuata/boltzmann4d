@@ -307,7 +307,10 @@
     {#if sim?.piston}
       <PistonPanel
         piston={sim.piston}
-        onMove={(level, mode, speed) => sim?.movePiston(level, mode, speed)}
+        temperature={sim.census?.temperature}
+        dimension={sim.dimension}
+        disabled={sim.loading}
+        onMove={(level, mode, speed, damping) => sim?.movePiston(level, mode, speed, damping)}
         onStop={() => sim?.stopPiston()}
       />
     {/if}

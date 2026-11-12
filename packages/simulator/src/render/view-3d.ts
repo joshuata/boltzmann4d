@@ -1,6 +1,6 @@
 // 3D view (CoreProfileRenderer's 3D path in boltzmann3d): a perspective camera looking at
 // the box, which turns about its centre (x axis, then y), lit instanced spheres, the
-// walls as coloured panels seen from inside, and the divider with its hole.
+// walls as coloured panels seen from inside, the divider with its hole, and the piston.
 //
 // Periodic arenas draw each sphere's wrapped images, clipped to the box. Trace mode
 // (VIEW-5) leaves a dot at each particle's centre every frame, in box coordinates, so
@@ -53,6 +53,8 @@ export function createView3D(info: SceneInfo): View {
 
   box.add(buildWalls(w, h, d));
   if (info.divider) box.add(buildDivider(info.divider, w, h, d));
+  const placePiston = info.piston ? addPiston3D(box, info.piston, w, h, d) : null;
+  placePiston?.(h);
 
   // Particles: one lit sphere each, plus wrapped images in periodic arenas.
   const count = info.radii.length;
@@ -112,6 +114,7 @@ export function createView3D(info: SceneInfo): View {
     },
     display(frame: RenderFrame) {
       if (frame.dimension !== 3) return;
+      if (frame.pistonY !== undefined) placePiston?.(frame.pistonY * NM);
       // The simulation went back in time: it restarted, so start the trace afresh.
       if (frame.time < lastTime) trace.clear();
       lastTime = frame.time;
@@ -294,6 +297,37 @@ function dotTexture(): THREE.DataTexture {
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   return texture;
+}
+
+/**
+ * The piston as Java draws it (CoreProfileRenderer.addPiston3D): a plate two valve radii
+ * thick under its face, the box's full width and depth, and a round shaft up from its
+ * middle to the top, in the side walls' gold. Returns a function that moves it to height
+ * `y` (nm); at the top it's hidden.
+ */
+function addPiston3D(
+  box: THREE.Group,
+  piston: NonNullable<SceneInfo['piston']>,
+  w: number,
+  h: number,
+  d: number,
+): (y: number) => void {
+  const material = new THREE.MeshLambertMaterial({ color: GOLD });
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+  plate.scale.set(w, 1, d);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true), material);
+  const shaftRadius = piston.shaftRadius * NM;
+  shaft.scale.set(shaftRadius, 1, shaftRadius);
+  box.add(plate, shaft);
+  return (y) => {
+    const valveTop = Math.min(y + 2 * piston.valveRadius * NM, h);
+    plate.visible = valveTop > y;
+    plate.scale.y = Math.max(valveTop - y, 1e-6);
+    plate.position.set(w / 2, (y + valveTop) / 2, d / 2);
+    shaft.visible = h > valveTop;
+    shaft.scale.y = Math.max(h - valveTop, 1e-6);
+    shaft.position.set(w / 2, (valveTop + h) / 2, d / 2);
+  };
 }
 
 /**

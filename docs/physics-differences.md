@@ -8,7 +8,7 @@ Not listed: UI differences, pure refactors, and settings Java read but ignored t
 
 ## How results are checked
 
-- **Physics:** 33 parity fixtures (2D and 3D presets plus scripted scenes: conducting divider, adiabatic and isothermal pistons, wells, reactions) replay Java's recorded starting state and must reproduce its events and final state bit for bit. They record Java's starting state, so placement changes never touch them. Every difference below either stays out of the fixtures' scenes or doesn't change the events.
+- **Physics:** 35 parity fixtures (2D and 3D presets plus scripted scenes: conducting divider, adiabatic and isothermal pistons in 2D and 3D, wells, reactions) replay Java's recorded starting state and must reproduce its events and final state bit for bit. They record Java's starting state, so placement changes never touch them. Every difference below either stays out of the fixtures' scenes or doesn't change the events.
 - **Statistics, predictions and pressure:** no Java parity at all (plan 0004). Java's sums iterate identity-hashed maps and sample at wall-clock times, so they aren't reproducible even in Java, and it has too many bugs to serve as a reference. They are checked against kinetic theory instead (`packages/engine/src/stats/correctness.test.ts` and the other `stats/*.test.ts`).
 
 ## Physics: Java bugs fixed
@@ -26,6 +26,13 @@ Not listed: UI differences, pure refactors, and settings Java read but ignored t
 - **Port:** re-predicts every boundary event. As in Java, this mode only pulls the piston out.
 - **Files:** `packages/engine/src/sim/simulation.ts` (piston level).
 - **Tested:** the piston fixtures avoid instantaneous moves; `sim/piston.test.ts`.
+
+### Thermostat damping can be set (#70)
+
+- **Java:** the piston window's "Damp factor" spinner (10%) is never read; the thermostat's damp factor is always 0.1.
+- **Port:** the Piston box's Thermostat damping field sets it for isothermal moves (OPT-6). At the default of 10% results are Java's, bit for bit.
+- **Files:** `packages/engine/src/sim/simulation.ts` (`movePiston`), `sim/thermostat.ts`, `packages/simulator/src/ui/PistonPanel.svelte`.
+- **Tested:** the isothermal piston fixtures run at the default; other values only change how fast `deltaKE` is taken back.
 
 ### Heat reservoir not ported (#34, open)
 
@@ -132,7 +139,7 @@ These look questionable but are reproduced so the parity fixtures stay bit for b
 - **Square-well depth halved:** entering a pair well changes the kinetic energy by E/2 (`sim/particle-2d.ts`, `sim/simulation.ts`).
 - **Pair wells ignored on periodic arenas** (`sim/simulation.ts`, `sim/particle-2d.ts`).
 - **Conducting divider** moves every particle and scans all of them to find its partner (`sim/simulation.ts`).
-- **Thermostat heuristic:** `WallController`'s velocity scaling, not a heat bath, also applied at the divider and a stopped piston (`sim/thermostat.ts`, #24).
+- **Thermostat heuristic:** `WallController`'s velocity scaling, not a heat bath, also applied at a stopped piston and, in 2D only, the divider; the front and back walls in 3D use the y velocity as their normal (`sim/thermostat.ts`, `sim/particle-3d.ts`, #24).
 - **Piston moves are retroactive** (they start from the last frame's end), and a piston at rest can tie or race with the top wall.
 - **Reactions recolour particles but keep their type:** mass and radius stay, and statistics and pressure bin by colour.
 

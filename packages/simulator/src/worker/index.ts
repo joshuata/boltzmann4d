@@ -83,6 +83,30 @@ export interface PistonInfo {
   maxLevel: number;
   /** Arena height, m. */
   arenaHeight: number;
+  /** The level when it loaded. */
+  level: number;
+  /** What the piston panel's prediction starts from; see PistonReference. */
+  reference: PistonReference;
+}
+
+/**
+ * The gas's state when the present run of moves of one mode began (PRED-15): its
+ * temperature (K) and the piston's level. An adiabatic move after an adiabatic one keeps
+ * it (so the prediction covers a compression and the expansion back); any other change
+ * of mode, a load or a particle edit takes a new one. `mode` is null until the first move.
+ */
+export interface PistonReference {
+  mode: PistonMode | null;
+  temperature: number;
+  level: number;
+}
+
+/** A piston arena's piston, as of the latest frame. */
+export interface PistonFrame {
+  level: number;
+  moving: boolean;
+  /** The isothermal thermostat is on and acting: the piston moves or it has energy to correct (SIM-21). */
+  thermostatActive: boolean;
 }
 
 /** Which arena options a loaded scenario can take, and which are on. */
@@ -131,8 +155,11 @@ export type ToWorker =
       /** A newly chosen scenario (not an arena change): it may start paused (FILE-4). */
       fresh?: boolean;
     }
-  /** Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s. */
-  | { type: 'movePiston'; level: number; mode: PistonMode; speed: number }
+  /**
+   * Piston arenas: start the piston towards `level` (fraction pushed in) at `speed` m/s;
+   * isothermal moves set the thermostat's `dampFactor` (OPT-6).
+   */
+  | { type: 'movePiston'; level: number; mode: PistonMode; speed: number; dampFactor?: number }
   | { type: 'stopPiston' }
   /**
    * Restart (CTRL-3, PART-14): the clock to zero and every particle placed anew at random,
@@ -211,8 +238,8 @@ export type FromWorker =
       type: 'timing';
       physicsMs: number;
       time: number;
-      /** Piston arenas: its level and whether it's moving, as of this frame. */
-      piston?: { level: number; moving: boolean };
+      /** Piston arenas: the piston as of this frame. */
+      piston?: PistonFrame;
       /** Maxwell's demon: whether the hole is open this frame. */
       holeOpen?: boolean;
       /** Drawn walls: the gates open this frame, by wall index. */
@@ -272,6 +299,8 @@ export type FromWorker =
    * pressure readout. Per species, as `loaded.kinds`.
    */
   | { type: 'census'; time: number; census: Census }
+  /** A piston move took a new reference for the prediction. */
+  | { type: 'pistonReference'; reference: PistonReference }
   /** The reaction readout (SIM-28), with the census, while particles react. */
   | { type: 'reactions'; reading: ReactionReading }
   /**

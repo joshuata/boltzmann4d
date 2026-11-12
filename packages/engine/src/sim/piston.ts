@@ -1,5 +1,5 @@
-// The movable piston (Piston.java): a horizontal wall that comes down from the top of the
-// arena. Its `level` is the fraction of the arena height it has pushed in (0 = at the top),
+// The movable piston (Piston.java): a horizontal wall (2D) or plate (3D) that comes down
+// from the top of the arena. Its `level` is the fraction of the arena height it has pushed in (0 = at the top),
 // and it moves at a constant speed towards a target level. Its state only changes at frame
 // ends (moveToTime) and when it's told to move, so predictions made at any time in a frame
 // see the same piston.
@@ -28,7 +28,7 @@ export class Piston {
   t0: number;
   /** m/s. */
   speed = DEFAULT_PISTON_SPEED;
-  /** Arena height, m: the piston moves along y in 2D (getRelevantArenaDim). */
+  /** Arena height, m: the piston moves along y in 2D and 3D (getRelevantArenaDim). */
   readonly arenaSize: number;
 
   constructor(time: number, curLevel: number, arenaSize: number) {
@@ -97,23 +97,30 @@ export class Piston {
 
 /**
  * The highest level the piston may be pushed to, as a percentage of the arena height
- * (Physics.calculateCompressionLimit, 2D): the particles, taken as squares of their
- * diameter, must fit below it, with two of the largest diameters to spare.
+ * (Physics.calculateCompressionLimit): the particles, taken as lengths (1D), squares (2D)
+ * or cubes (3D) of their diameter, must fit below it, with two of the largest diameters to spare.
  */
 export function compressionLimitPercent(
-  arenaXSize: number,
-  arenaYSize: number,
+  arena: { xSize: number; ySize: number; zSize: number },
   species: readonly { radius: number; count: number }[],
+  dimension: 1 | 2 | 3 = 2,
 ): number {
   let totalParticleVolume = 0.0;
   let biggestDiameter = 0.0;
   for (const { radius, count } of species) {
     const diameter = 2.0 * radius;
     if (diameter > biggestDiameter) biggestDiameter = diameter;
-    totalParticleVolume += diameter * diameter * count;
+    totalParticleVolume +=
+      dimension === 3
+        ? diameter * diameter * diameter * count
+        : dimension === 2
+          ? diameter * diameter * count
+          : diameter * count;
   }
-  let minimumLength = totalParticleVolume / arenaXSize;
+  // The arena's size across the piston's travel: x in 2D, x·z in 3D, nothing in 1D.
+  const across = dimension === 3 ? arena.xSize * arena.zSize : dimension === 2 ? arena.xSize : 1.0;
+  let minimumLength = totalParticleVolume / across;
   minimumLength += 2.0 * biggestDiameter;
-  if (minimumLength > arenaYSize) minimumLength = arenaYSize;
-  return (100.0 * minimumLength) / arenaYSize;
+  if (minimumLength > arena.ySize) minimumLength = arena.ySize;
+  return (100.0 * minimumLength) / arena.ySize;
 }

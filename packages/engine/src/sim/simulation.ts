@@ -66,8 +66,8 @@ const MOTION = {
     initPeriodicFlags: initPeriodicFlags3D,
   },
 } as const;
-// The 2D signatures are the widest (the piston and thermostat are 2D-only so far); the 3D
-// functions take a prefix of the same arguments.
+// The 2D signatures are the widest (wells and the attractive wall are 2D-only so far); the
+// 3D functions take a prefix of the same arguments.
 // collide returns the event performed in 2D (a well exit may become WELL_REFLECT).
 type Motion = Omit<(typeof MOTION)[2], 'collide'> & {
   collide: (...args: Parameters<typeof collide2D>) => number | void;
@@ -295,9 +295,6 @@ export class Simulation {
     if (init.dimension !== 2 && init.dimension !== 3) {
       throw new Error(`${init.dimension}D simulation is not supported yet`);
     }
-    if (init.dimension === 3 && init.arenaType === ArenaType.MOVABLE_PISTON) {
-      throw new Error('The movable piston is not supported in 3D yet');
-    }
     if (init.dimension === 3 && init.dividerThermalMode === DividerThermalMode.CONDUCTING) {
       throw new Error('Conducting dividers are not supported in 3D yet');
     }
@@ -511,9 +508,10 @@ export class Simulation {
    * `speed` m/s, from where it is now (Physics.AdjustPistonLevel). Isothermal moves turn
    * the wall thermostat on; adiabatic ones turn it off. Instantaneous moves jump there and
    * may only pull the piston out (Java's piston panel only allows that), since jumping in
-   * could land the piston on particles.
+   * could land the piston on particles. `dampFactor` (isothermal only, OPT-6) sets the
+   * thermostat's damping; left out, it keeps its present one (10% from a reset).
    */
-  movePiston(targetLevel: number, mode: PistonMode, speed: number): void {
+  movePiston(targetLevel: number, mode: PistonMode, speed: number, dampFactor?: number): void {
     const piston = this.requirePiston();
     if (!(targetLevel >= 0 && targetLevel <= this.maxPistonLevel())) {
       throw new RangeError(`Piston level ${targetLevel} is outside 0..${this.maxPistonLevel()}`);
@@ -533,8 +531,10 @@ export class Simulation {
     }
     piston.targetLevel = targetLevel;
     this.repredictAllBoundaries();
-    if (mode === PistonMode.ISOTHERMAL) this.thermostat.enabled = true;
-    else this.thermostat.reset(false);
+    if (mode === PistonMode.ISOTHERMAL) {
+      this.thermostat.enabled = true;
+      if (dampFactor !== undefined) this.thermostat.dampFactor = dampFactor;
+    } else this.thermostat.reset(false);
   }
 
   /** Stops the piston where it is now (Controller.stopPiston). The thermostat stays as it is. */
@@ -662,9 +662,7 @@ export class Simulation {
       entry.count++;
       species.set(p.type[k]!, entry);
     }
-    const limit = compressionLimitPercent(this.arena.xSize, this.arena.ySize, [
-      ...species.values(),
-    ]);
+    const limit = compressionLimitPercent(this.arena, [...species.values()], this.dimension);
     return (100.0 - limit) / 100.0;
   }
 

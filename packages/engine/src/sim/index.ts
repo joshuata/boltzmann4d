@@ -106,7 +106,7 @@ export {
 } from './simulation';
 
 export { compressionLimitPercent, DEFAULT_PISTON_SPEED, Piston, PistonMode } from './piston';
-export { Thermostat } from './thermostat';
+export { DEFAULT_DAMP_FACTOR, Thermostat } from './thermostat';
 export { javaReaction, ReactionTable, type ReactionRule } from './reactions';
 export { createCounters, resetCounters, type Counters } from './counters';
 export {
