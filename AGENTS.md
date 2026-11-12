@@ -15,6 +15,8 @@ It supports 1D, 2D and 3D arenas, pistons, thermostats, dividers and holes (effu
 
 **Goal: the same physics, not the same code.** The simulation equations and results must not change, but the code does not need to mirror the Java version. Refactor where and when it makes sense.
 
+The exception is where Java is wrong: there the port follows real physics, not Java. Every such difference is listed in `docs/physics-differences.md`.
+
 ## Stack and why
 
 | Concern | Choice | Why |
@@ -104,6 +106,7 @@ Production builds use the base path `/boltzmann4d/` (`paths.base` in `apps/web/v
 - Name `.ts` files in kebab-case (`thread-controller.ts`) and Svelte components in PascalCase (`PlayPauseButton.svelte`). ESLint enforces this.
 - `packages/engine` must stay pure: no DOM, no Three.js, no imports from other workspaces. It runs in a Worker and in Node tests. Its tsconfig has no DOM lib, so `svelte-check`/`tsc` catch browser APIs.
 - Physics changes must keep `packages/engine/src/sim/parity.test.ts` green: the engine reproduces the Java app's events and final states bit for bit from the same initial state (fixtures in `packages/engine/src/sim/parity/`).
+- When Java's physics or statistics are wrong, fix them to match real physics rather than Java, and test the fix against theory or exact invariants instead of a parity fixture. Every change that makes results differ from Java's (bug fixes, changed formulas, Java quirks dropped, additions that change results) gets an entry in `docs/physics-differences.md` in the same change: what Java does, what the port does, why, the files, the issue, and the test.
 
 ## Specs
 

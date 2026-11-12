@@ -253,6 +253,8 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
     case 'reverse':
       // Between frames, so every particle is at the frame's time.
       if (!running) break;
+      // Every velocity flips: the statistics credit the old ones up to now first.
+      runningStatistics?.velocitiesWillChange(running.time);
       running.reverse();
       recorder?.recordReversal(running.time);
       break;
