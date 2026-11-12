@@ -19,7 +19,7 @@ The physical model and the arena configurations. Source: manual §I.A, §I.D (bo
 
 ## Arena
 
-- **SIM-10** The arena is a box measured in nm with an adjustable width and height (and depth in 3D), set numerically in Options. _Web port:_ the desktop app also resizes by dragging the window corner; the web app must let the arena size be set numerically and should adapt the view to the screen without changing the physical size. _Web port:_ the sidebar's Arena size box applies a new size by restarting with every particle placed anew at random, at its own speed and on its kind's side of a divider; drawn walls and spawn regions stretch with the arena.
+- **SIM-10** The arena is a box measured in nm with an adjustable width and height (and depth in 3D), set numerically in Options. _Web port:_ the desktop app also resizes by dragging the window corner; the web app must let the arena size be set numerically and should adapt the view to the screen without changing the physical size. _Web port:_ the Size fields in the sidebar's Arena box apply a new size by restarting with every particle placed anew at random, at its own speed and on its kind's side of a divider; drawn walls and spawn regions stretch with the arena.
 - **SIM-11** Axis rulers label the arena size in nm.
 
 ## Boundary modes
