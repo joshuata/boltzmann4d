@@ -824,6 +824,11 @@ export class Simulation {
     return pairs;
   }
 
+  /** Whether square wells between particles are on (they store potential energy). */
+  get hasWells(): boolean {
+    return this.wellMultiplier > 0;
+  }
+
   /** Total kinetic energy in joules (sum of Particle2D/3D.getKE). */
   kineticEnergy(): number {
     let total = 0;

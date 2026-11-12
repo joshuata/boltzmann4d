@@ -44,3 +44,4 @@ export {
   type PressureRegion,
   type PressureRegionReading,
 } from './pressure';
+export { ReactionMeter, type ReactionPrediction, type ReactionReading } from './reaction-meter';

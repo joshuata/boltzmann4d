@@ -15,6 +15,7 @@
   import PerformancePanel from './ui/PerformancePanel.svelte';
   import PistonPanel from './ui/PistonPanel.svelte';
   import PressurePanel from './ui/PressurePanel.svelte';
+  import ReactionsPanel from './ui/ReactionsPanel.svelte';
   import RunPanel from './ui/RunPanel.svelte';
   import ScaleBar from './ui/ScaleBar.svelte';
   import ViewOptions from './ui/ViewOptions.svelte';
@@ -308,6 +309,17 @@
         piston={sim.piston}
         onMove={(level, mode, speed) => sim?.movePiston(level, mode, speed)}
         onStop={() => sim?.stopPiston()}
+      />
+    {/if}
+    {#if sim?.reacting}
+      <ReactionsPanel
+        reading={sim.reactions}
+        kinds={sim.kinds}
+        showMarkers={sim.markers && sim.dimension !== 3}
+        rule={sim.arena?.canReact ? (sim.arena.options.reactions ?? null) : null}
+        disabled={sim.loading}
+        onResetAverage={() => sim?.resetReactionAverage()}
+        onRule={(reactions) => sim?.setArenaOptions({ reactions })}
       />
     {/if}
     {#if sim?.pressure && sim.arena}

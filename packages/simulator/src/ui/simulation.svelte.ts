@@ -13,6 +13,7 @@ import RenderWorker from '../render/render.worker?worker';
 import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
 import type { PressureReading, PressureRegion } from '@boltzmann4d/engine/stats/pressure';
+import type { ReactionReading } from '@boltzmann4d/engine/stats/reaction-meter';
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
 import type {
   ArenaInfo,
@@ -109,6 +110,8 @@ export class SimulationClient {
    */
   plot = $state<PlotId>('INSTANTANEOUS_SPEED');
   #plotChosen = false;
+  /** The worker was told a plot the simulator chose (SIM-29). */
+  #plotShown = false;
   /** Cumulative, Width and History views (STAT-13, 15, 20; the scenario's until changed). */
   statView = $state({ cumulative: false, width: false, history: false });
   #statViewChosen = false;
@@ -119,6 +122,10 @@ export class SimulationClient {
   #forgetChosen = false;
   /** Simulation clock as of the latest frame, s (CTRL-1). */
   time = $state(0);
+  /** Whether particles react in the running simulation (SIM-28). */
+  reacting = $state(false);
+  /** Latest reaction readout (SIM-28): counts, averages, prediction; null until the first. */
+  reactions = $state.raw<ReactionReading | null>(null);
   /** Particle counts per kind and side, and temperatures (PART-12, PART-16); null until the first. */
   census = $state.raw<Census | null>(null);
   /** Every kind the scenario has, for the Particles panel (empty until loaded). */
@@ -280,6 +287,9 @@ export class SimulationClient {
         case 'census':
           this.census = message.census;
           break;
+        case 'reactions':
+          this.reactions = message.reading;
+          break;
         case 'notice':
           this.notice = message.message;
           break;
@@ -302,6 +312,7 @@ export class SimulationClient {
             this.particleCount = message.particles;
             this.arena = message.arena;
             this.kinds = message.kinds;
+            this.reactions = null; // the readouts start again with the edited gas
             if (!message.piston) this.piston = null;
             else if (!this.piston) this.piston = { ...message.piston, level: 0, moving: false };
             if (message.arena.gates.length !== this.gates.length) {
@@ -327,7 +338,21 @@ export class SimulationClient {
           this.pressureAveragingTime = message.pressure.averagingTime;
           this.pressureHistory = [];
           this.forgetMultiplier = message.statistics.forgetMultiplier;
-          if (!this.#plotChosen) this.plot = message.statistics.plot ?? 'INSTANTANEOUS_SPEED';
+          // Reaction runs show the counts (SIM-29): on entering reaction mode whatever plot
+          // was picked, and on every load until one is. Leaving it drops that plot.
+          if (!this.#plotChosen) {
+            const own = message.statistics.plot ?? 'INSTANTANEOUS_SPEED';
+            const plot = message.reactions ? 'NUMBER_OF_PARTICLES' : own;
+            // The worker follows the scenario's plot unless told one.
+            if (plot !== own || this.#plotShown) this.#showPlot(plot);
+            else this.plot = plot;
+          } else if (message.reactions && !this.reacting) {
+            this.#showPlot('NUMBER_OF_PARTICLES');
+          } else if (!message.reactions && this.plot === 'NUMBER_OF_PARTICLES') {
+            this.#showPlot('INSTANTANEOUS_SPEED');
+          }
+          this.reacting = message.reactions;
+          this.reactions = null;
           if (!this.#statViewChosen) {
             const { cumulative, width, history } = message.statistics;
             this.statView = { cumulative, width, history };
@@ -399,6 +424,18 @@ export class SimulationClient {
     this.#plotChosen = true;
     this.plot = plot;
     if (!plot.startsWith('PRESSURE:')) this.#send({ type: 'statistic', id: plot as StatisticId });
+  }
+
+  /** Shows a plot the simulator chose (SIM-29), not the user: a scenario's own plot still applies later. */
+  #showPlot(plot: StatisticId): void {
+    this.#plotShown = true;
+    this.plot = plot;
+    this.#send({ type: 'statistic', id: plot });
+  }
+
+  /** Starts the reaction readout's time averages again from now (SIM-28). */
+  resetReactionAverage(): void {
+    this.#send({ type: 'resetReactionAverage' });
   }
 
   /** Cumulative, Width or History on or off (kept across scenarios). */

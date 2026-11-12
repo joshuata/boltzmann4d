@@ -35,7 +35,7 @@ The **View** box changes how particles are drawn, without restarting:
 
 The **Arena** box sets the walls (**Boundaries**: periodic, box, divided box or a box with a hole), the arena's size, and the options a boundary takes: a movable piston in a box, a divider that conducts heat, and Maxwell's demon at a hole. Changing one restarts the simulation. A piston gets its own **Piston** box to move it.
 
-In 2D boxes, the **Wells and reactions** box turns on attractive wells between particles, an attractive bottom wall, and reactions that turn one kind into another. Switching one on restarts with the default settings; change the numbers and press **Apply** to restart with yours.
+The **Wells and reactions** box turns on attractive wells between particles and an attractive bottom wall (in 2D boxes), and reactions that turn one kind into another (in 2D and 3D). Switching one on restarts with the default settings; change the numbers and press **Apply** to restart with yours. A reaction's energies are set in the **Reactions** box that appears while particles react (see [Reactions and equilibrium](reactions)).
 
 In the Maxwell's demon simulation, click the arena (or the **Open hole** button in the Run box) to open and close the hole. Gates drawn in the [scenario editor](editor) open and close the same way: tap one, or use its button.
 

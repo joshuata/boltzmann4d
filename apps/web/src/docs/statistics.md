@@ -19,7 +19,7 @@ The statistics box at the bottom of the sidebar plots what the particles are doi
 | Average speed, average RMS velocity, average kinetic energy | its own average since the early data was forgotten (since the start until then) | m/s, kJ/mol |
 | Average path | its total distance ÷ its number of collisions | nm |
 | Collision rate | its collisions per picosecond over the same time | 1/ps |
-| Number of particles | how many of each kind there are (simulations with reactions) | — |
+| Number of particles | how many of each kind there are over time (simulations with [reactions](reactions)) | — |
 | Wall pressure or virial pressure | the pressure from the Pressure box, over time | µN/m or MPa |
 
 Bounces off the walls don't count as collisions.

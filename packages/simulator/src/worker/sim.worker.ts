@@ -38,6 +38,7 @@ import {
   DEFAULT_PRESSURE_AVERAGING_TIME,
   isStatisticId,
   PressureMeter,
+  ReactionMeter,
   Statistics,
   statsContext,
   type DistributionId,
@@ -71,8 +72,6 @@ const SUMMARY_INTERVAL_MS = 1000;
 /** The pressure readout is sent about this often (real milliseconds). */
 const PRESSURE_INTERVAL_MS = 250;
 
-/** The Reactions tab's defaults: forward and reverse activation energies, kJ/mol. */
-
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 let frames: MessagePort | null = null;
@@ -99,6 +98,8 @@ let runningStatistics: Statistics | null = null;
 let statKinds: number[] | null = null;
 /** The running simulation's pressure meter. */
 let runningPressure: PressureMeter | null = null;
+/** The running simulation's reaction readouts (null without reactions). */
+let runningReactions: ReactionMeter | null = null;
 /** The averaging time (s) the user chose, kept by Restart and arena changes; null: the scenario's. */
 let averagingTime: number | null = null;
 
@@ -265,6 +266,12 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       rateScale = message.scale;
       threadController?.setRateScale(rateScale);
       break;
+    case 'resetReactionAverage':
+      if (running && runningReactions) {
+        runningReactions.resetAverages(running.time);
+        post({ type: 'reactions', reading: runningReactions.read(running.time) });
+      }
+      break;
     case 'statKinds':
       statKinds = message.types;
       if (running && runningStatistics) postSummary(runningStatistics, running.time);
@@ -339,7 +346,7 @@ function prepare(
       : DividerThermalMode.INSULATING;
   }
   // Reactions: the scenario's rules. The sidebar's switch (Java's Reactions tab) edits
-  // the Java rule, species 0 + 0 → 1 + 1, in 2D scenarios with a single species (a
+  // the Java rule, species 0 + 0 → 1 + 1, in scenarios with a single species (a
   // "Reacted" copy of it is added for particles to turn into) or with that rule already
   // (`.set` files with reaction_mode TRUE, which get the tab's defaults).
   const [rule, ...otherRules] = scenario.reactions;
@@ -349,8 +356,7 @@ function prepare(
     scenario.species.length === 2 &&
     rule.reactants.every((k) => k === 0) &&
     rule.products.every((k) => k === 1);
-  const canReact =
-    scenario.dimension === 2 && ((scenario.species.length === 1 && rule === undefined) || javaRule);
+  const canReact = (scenario.species.length === 1 && rule === undefined) || javaRule;
   let reactions: ArenaOptions['reactions'] = javaRule
     ? { forward: rule.forward, reverse: rule.reverse, suppressReverse: rule.suppressReverse }
     : null;
@@ -373,7 +379,8 @@ function prepare(
           reactant.type.particleMass,
           reactant.type.particleRadius,
           DefaultParticleInfo.BLUE,
-          'Reacted',
+          // The scenario's next kind names it (Type B in `.set` files), if there is one.
+          input.kinds.find((k) => k.id !== reactant.kindId)?.name ?? 'Reacted',
         ),
         positions: empty,
         velocities: empty,
@@ -488,6 +495,7 @@ interface Built {
   simulation: Simulation;
   statistics: Statistics;
   pressure: PressureMeter;
+  reactions: ReactionMeter | null;
 }
 
 /**
@@ -521,16 +529,24 @@ let lastPrepared: Prepared | null = null;
 function build(prepared: Prepared): Built {
   let stats: Statistics | null = null;
   let meter: PressureMeter | null = null;
+  let reactionMeter: ReactionMeter | null = null;
   const simulation = new Simulation(prepared.initialState, {
     onEvent: (event) => {
       stats?.notifyOfEvent(event);
       meter?.beforeEvent(event);
+      reactionMeter?.beforeEvent(event);
     },
     afterEvent: (event) => {
       meter?.afterEvent(event);
+      reactionMeter?.afterEvent(event);
       recorder?.record(event, simulation.particles);
     },
   });
+  const rules = prepared.scenario.reactions;
+  const reactions = (reactionMeter =
+    rules.length > 0
+      ? new ReactionMeter(simulation, rules, prepared.scenario.species.length)
+      : null);
   const pressure = (meter = new PressureMeter(
     simulation,
     prepared.scenario.species.length,
@@ -545,7 +561,7 @@ function build(prepared: Prepared): Built {
     limits: new Map([...prepared.limits, ...userLimits]),
     ...predictionOptions,
   }));
-  return { simulation, statistics, pressure };
+  return { simulation, statistics, pressure, reactions };
 }
 
 /**
@@ -718,7 +734,7 @@ function setupKindsOf(prepared: Prepared): SetupKind[] {
 /** Runs a built simulation: streams its scene and frames, and reports it loaded. */
 function start(
   prepared: Prepared,
-  { simulation, statistics, pressure }: Built,
+  { simulation, statistics, pressure, reactions }: Built,
   continued = false,
 ): void {
   const port = frames;
@@ -764,6 +780,7 @@ function start(
         lastPressure = now;
         post({ type: 'pressure', reading: pressure.read() });
         post({ type: 'census', time: simulation.time, census: census(simulation.currentState()) });
+        if (reactions) post({ type: 'reactions', reading: reactions.read(simulation.time) });
       }
       if (now - lastSummary >= SUMMARY_INTERVAL_MS || controller.isPaused()) {
         lastSummary = now;
@@ -784,6 +801,7 @@ function start(
   running = simulation;
   runningStatistics = statistics;
   runningPressure = pressure;
+  runningReactions = reactions;
   if (!continued) statKinds = null; // a new scenario has its own kinds
   const name = prepared.scenario.statName.toUpperCase();
   scenarioStatistic = isStatisticId(name) ? name : null;
@@ -797,6 +815,7 @@ function start(
     setupKinds: setupKindsOf(prepared),
     name: prepared.name,
     particles: simulation.particles.count,
+    reactions: reactions !== null,
     arena: prepared.arenaInfo,
     piston: simulation.piston
       ? { maxLevel: simulation.maxPistonLevel(), arenaHeight: simulation.arena.ySize }

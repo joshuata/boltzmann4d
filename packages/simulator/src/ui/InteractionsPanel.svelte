@@ -1,7 +1,8 @@
-<!-- Wells and reactions (the Java app's Energy Wells and Reactions tabs), in non-periodic
-     2D arenas: attractive square wells between particles, an attractive bottom wall, and
-     red ⇌ blue reactions. Switching one on or off restarts the simulation at once; its
-     numeric settings restart it on Apply. -->
+<!-- Wells and reactions (the Java app's Energy Wells and Reactions tabs): attractive square
+     wells between particles and an attractive bottom wall in non-periodic 2D arenas, and
+     the Type A ⇌ Type B reaction. Switching one on or off restarts the simulation at once;
+     the wells' numeric settings restart it on Apply. The reaction's energies are set on the
+     Reactions panel's energy diagram (SIM-27). -->
 <script lang="ts">
   import { Button } from '@boltzmann4d/ui/button';
   import { Checkbox } from '@boltzmann4d/ui/checkbox';
@@ -58,24 +59,11 @@
   const applyWall = () =>
     onChange({ attractiveWall: { width: wallWidth * 1e-9, depth: wallDepth } });
 
-  // Reactions: Java's defaults, forward 8 and reverse 4 kJ/mol.
-  let forward = $state(8);
-  let reverse = $state(4);
-  let suppressReverse = $state(false);
-  $effect.pre(() => {
-    forward = arena.options.reactions?.forward ?? 8;
-    reverse = arena.options.reactions?.reverse ?? 4;
-    suppressReverse = arena.options.reactions?.suppressReverse ?? false;
-  });
+  // Reactions: Java's defaults, forward 8 and reverse 4 kJ/mol; the Reactions panel's
+  // energy diagram changes them (SIM-27).
   const reactionsOn = $derived(Boolean(arena.options.reactions));
-  const reactionsValid = $derived(forward >= 0 && reverse >= 0);
-  const reactionsChanged = $derived(
-    !arena.options.reactions ||
-      arena.options.reactions.forward !== forward ||
-      arena.options.reactions.reverse !== reverse ||
-      arena.options.reactions.suppressReverse !== suppressReverse,
-  );
-  const applyReactions = () => onChange({ reactions: { forward, reverse, suppressReverse } });
+  const applyReactions = () =>
+    onChange({ reactions: { forward: 8, reverse: 4, suppressReverse: false } });
 </script>
 
 {#if arena.canHaveWells || arena.canReact}
@@ -136,26 +124,6 @@
           reactionsOn,
           (on) => (on ? applyReactions() : onChange({ reactions: null })),
         )}
-        {#if reactionsOn}
-          {#snippet reactionFields()}
-            {@render number('forward', 'Forward (kJ/mol)', forward, 0, 50, 0.5, (v) => {
-              forward = v;
-            })}
-            {@render number('reverse', 'Reverse (kJ/mol)', reverse, 0, 50, 0.5, (v) => {
-              reverse = v;
-            })}
-            <div class="flex min-h-9 items-center gap-2 self-end">
-              <Checkbox
-                id="{id}-suppress"
-                checked={suppressReverse}
-                {disabled}
-                onCheckedChange={(checked) => (suppressReverse = checked)}
-              />
-              <Label for="{id}-suppress" class="text-xs font-normal">No reverse</Label>
-            </div>
-          {/snippet}
-          {@render group(reactionFields, !reactionsValid || !reactionsChanged, applyReactions)}
-        {/if}
       {/if}
     </div>
   </SidebarPanel>

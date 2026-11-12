@@ -4,7 +4,7 @@ The distribution graph area at the top of the sidebar. Source: manual §I.C, §I
 
 ## Plot picker
 
-- **STAT-1** A dropdown picks one plot. Which plots are offered depends on dimension, boundary mode and reaction mode (table below). The user can step through the list with the + and − keys. _Web port:_ done (plan 0012) except the RDF (STAT-2, 24) and the + and − keys, which the roadmap made optional. The menu also lists the pressure of each region, from the Pressure readout. Free Path's current view uses each particle's last completed path, as this table says (Java used the path still in progress).
+- **STAT-1** A dropdown picks one plot. Which plots are offered depends on dimension, boundary mode and reaction mode (table below). The user can step through the list with the + and − keys. _Web port:_ done (plan 0012) except the RDF (STAT-2, 24) and the + and − keys, which the roadmap made optional. The menu also lists the pressure of each region, from the Pressure readout. Number of Particles becomes the plot when reactions are turned on (SIM-29, plan 0016). Free Path's current view uses each particle's last completed path, as this table says (Java used the path still in progress).
 
 | Plot | Quantity per particle | Available |
 | --- | --- | --- |

@@ -79,7 +79,7 @@ _Not started._
 
 ### Phase 7: Reactions
 
-_Not started._
+_Done_ (plan 0016, archived): the Reactions box with live counts, time averages and widths, the partition-function prediction (13.4 and 14.1 at 300 K), Time to reach, and the energy diagram; Number of Particles as reaction mode's plot; reactions in 3D, so `3Dequil` reacts. No 3D parity fixtures: the Java app has no 3D reactions to compare with.
 
 - **Requirements:** SIM-25–29; PRED-12–14; the Number of Particles plot (STAT-1).
 - **Unlocks:** STORY-26, 27.
