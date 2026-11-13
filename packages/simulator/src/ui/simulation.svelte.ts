@@ -15,6 +15,7 @@ import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/stat
 import type { PressureReading, PressureRegion } from '@boltzmann4d/engine/stats/pressure';
 import type { ReactionReading } from '@boltzmann4d/engine/stats/reaction-meter';
 import type { PistonMode } from '@boltzmann4d/engine/sim/piston';
+import type { SidebarPanelId } from '@boltzmann4d/engine/scenario';
 import type {
   ArenaInfo,
   ArenaOptions,
@@ -76,6 +77,8 @@ export class SimulationClient {
   kinds = $state.raw<KindInfo[]>([]);
   /** Kinds the statistics show (KIND-4): null for all of them. */
   statKinds = $state.raw<number[] | null>(null);
+  /** Sidebar panels the scenario hides (EDIT-24). */
+  hiddenPanels = $state.raw<readonly SidebarPanelId[]>([]);
   /** The arena's size in m, and the canvas's in CSS pixels (for the scale bar). */
   arenaSize = $state.raw({ width: 0, height: 0 });
   canvasSize = $state.raw({ width: 0, height: 0 });
@@ -302,6 +305,7 @@ export class SimulationClient {
         case 'loaded':
           this.paused = message.paused;
           this.setupKinds = message.setupKinds;
+          this.hiddenPanels = message.hiddenPanels;
           if (!message.setupKinds.some((k) => k.id === this.selectedKind)) {
             this.selectedKind = message.setupKinds[0]?.id ?? null;
             this.drafts = {};

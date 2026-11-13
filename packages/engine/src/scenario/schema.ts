@@ -30,6 +30,7 @@ import {
 import { migrateV1 } from './migrate';
 import { DEFAULT_PALETTE, MAX_KINDS, PALETTE_IDS, PALETTES } from './palettes';
 import { ScenarioV1Schema } from './schema-v1';
+import { SIDEBAR_PANEL_IDS } from './sidebar';
 
 export const SCENARIO_VERSION = 2;
 
@@ -216,6 +217,13 @@ const ScenarioObjectSchema = z.object({
     traceMode: z.boolean(),
     tracePointSize: finite(),
   }),
+  /** The simulator's sidebar (EDIT-24). */
+  sidebar: z
+    .object({
+      /** Panels students don't see; every other panel shows when it applies. */
+      hidden: z.array(oneOf('sidebar panel', SIDEBAR_PANEL_IDS)).default([]),
+    })
+    .default({ hidden: [] }),
 });
 
 type ScenarioObject = z.output<typeof ScenarioObjectSchema>;
