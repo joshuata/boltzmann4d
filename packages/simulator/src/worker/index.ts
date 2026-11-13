@@ -44,6 +44,11 @@ export interface ArenaOptions {
    * walls and spawn regions stretch with the arena.
    */
   size?: [number, number, number];
+  /**
+   * The dimension (SIM-7). A new one restarts with every particle placed anew at its kind's
+   * temperature; a 1D divider has no hole and 1D has no piston yet (withDimension).
+   */
+  dimension?: 1 | 2 | 3;
 }
 
 /** The boundary modes the sidebar's buttons switch between mid-run (SIM-12–16). */
@@ -280,7 +285,12 @@ export type FromWorker =
    */
   | { type: 'snapshot'; snapshot: SnapshotMessage }
   /** Something the user asked for couldn't be done (a taken spot, no room); the run is fine. */
-  | { type: 'notice'; message: string }
+  | {
+      type: 'notice';
+      message: string;
+      /** A load with new arena options was refused (they don't fit); the old run goes on. */
+      loadRejected?: boolean;
+    }
   | { type: 'error'; message: string };
 
 /** A snapshot as the worker sends it: masses and radii only with a run's first. */

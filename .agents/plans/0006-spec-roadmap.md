@@ -62,7 +62,7 @@ _Done_ (plan 0013, archived): `Simulation.reverse()` (velocities and a moving pi
 
 ### Phase 5: 1D
 
-_Not started._
+_Done_ (plan 0017, archived): `sim/particle-1d.ts` with five 1D parity fixtures (box, mixture, periodic, divided, conducting divider); a lane view in `view-2d.ts`; the Arena panel's Dimension buttons, which restart; 1D collision rates over L_net and pressure in pN with the exact hard-rod Real prediction; two 1D presets for STORY-23. Bug 4 was already fixed by plan 0004. Two more Java 1D bugs fixed (well depth units, reactions passing through), listed in `docs/physics-differences.md`. Not done: a 1D piston (Java has one on the right wall).
 
 - **Requirements:** SIM-7, 8; PRED-1, 3 (1D columns), PRED-10; PRES-3 (pN).
 - **Unlocks:** STORY-23; the 1D row of STORY-4.

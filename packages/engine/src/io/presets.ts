@@ -1,4 +1,5 @@
-// The .set files shipped with Boltzmann 3D, copied into simsettingsfiles/. They are verbatim
+// The .set files shipped with Boltzmann 3D, copied into simsettingsfiles/, plus two 1D ones
+// of our own (1Dequalmass, 1Dheavy; the Java app had none). They are verbatim
 // except default, 2Dpresnum and 3Dpresnum: Java saved those as fixed positions all at one
 // speed, which we write as the equivalent RandomlyPlaced blocks so each run starts fresh.
 // Loaded lazily so they stay out of the main bundle until someone opens one.
@@ -35,8 +36,13 @@ export interface PresetInfo {
   dimensions: 1 | 2 | 3;
 }
 
-/** The presets the Java app offers, with its labels (resources/SimulationPresets.java). */
+/**
+ * The presets the Java app offers, with its labels (resources/SimulationPresets.java), and
+ * the two 1D ones of the web port (STORY-23).
+ */
 export const presetCatalog: readonly PresetInfo[] = [
+  { name: '1Dequalmass', label: 'Equal masses on a line', dimensions: 1 },
+  { name: '1Dheavy', label: 'One heavy particle on a line', dimensions: 1 },
   { name: 'default', label: 'Original default', dimensions: 2 },
   { name: '2Dbrownian', label: 'Brownian motion', dimensions: 2 },
   { name: '2Ddiffuse', label: 'Diffusion', dimensions: 2 },

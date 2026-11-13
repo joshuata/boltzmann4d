@@ -78,7 +78,7 @@ export function zeroMomentum(velocities: number[][], masses: readonly number[]):
 
 /** The arena a PlacementSpace places into (SI units). */
 export interface PlacementArena {
-  dimension: 2 | 3;
+  dimension: 1 | 2 | 3;
   arenaType: ArenaType;
   /** Meters. */
   xSize: number;
@@ -134,7 +134,9 @@ export class PlacementSpace {
   insideWalls(x: number, y: number, z: number, radius: number): boolean {
     const a = this.arena;
     if (this.periodic) return true;
-    if (x < radius || x > a.xSize - radius || y < radius || y > a.ySize - radius) return false;
+    if (x < radius || x > a.xSize - radius) return false;
+    if (a.dimension === 1) return true; // on the line; y is 0
+    if (y < radius || y > a.ySize - radius) return false;
     if (a.pistonY !== undefined && y > a.pistonY - radius) return false;
     return a.dimension === 2 || (z >= radius && z <= a.zSize - radius);
   }
@@ -168,7 +170,7 @@ export class PlacementSpace {
     for (let k = 0; k < p.length; k += 4) {
       const reach = radius + p[k + 3]!;
       let dx = x - p[k]!;
-      let dy = y - p[k + 1]!;
+      let dy = a.dimension === 1 ? 0 : y - p[k + 1]!;
       let dz = is3D ? z - p[k + 2]! : 0;
       if (this.periodic) {
         dx -= a.xSize * Math.round(dx / a.xSize);
@@ -182,8 +184,8 @@ export class PlacementSpace {
 
   /**
    * A random spot where a particle of `radius` fits, within x in [xMin, xMax] (default the
-   * whole width), uniformly over the free space; null after `attempts` misses. Draws two
-   * numbers per attempt in 2D, three in 3D.
+   * whole width), uniformly over the free space; null after `attempts` misses. Draws one
+   * number per attempt in 1D, two in 2D, three in 3D.
    */
   randomSpot(
     radius: number,
@@ -195,7 +197,7 @@ export class PlacementSpace {
     const yMax = Math.min(a.ySize, a.pistonY ?? a.ySize);
     for (let attempt = 0; attempt < attempts; attempt++) {
       const x = random() * (xMax - xMin - 2 * inset) + xMin + inset;
-      const y = random() * (yMax - 2 * inset) + inset;
+      const y = a.dimension === 1 ? 0 : random() * (yMax - 2 * inset) + inset;
       const z = a.dimension === 3 ? random() * (a.zSize - 2 * inset) + inset : 0;
       if (this.fits(x, y, z, radius)) return [x, y, z];
     }

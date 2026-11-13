@@ -44,9 +44,6 @@ export function placementSpace(
   state: InitialState,
   arenaType: ArenaType = state.arenaType,
 ): PlacementSpace {
-  if (state.dimension !== 2 && state.dimension !== 3) {
-    throw new Error(`${state.dimension}D arenas aren't supported yet`);
-  }
   const pistonY =
     arenaType === ArenaType.MOVABLE_PISTON
       ? (1 - (state.pistonLevel ?? 0)) * state.arenaYSize
@@ -99,7 +96,8 @@ export function addParticle(state: InitialState, kind: number, options: AddOptio
   const space = placementSpace(state);
   let position: number[];
   if (options.at) {
-    const [x = 0, y = 0, z = state.arenaZSize / 2] = options.at;
+    const [x = 0, atY = 0, z = state.arenaZSize / 2] = options.at;
+    const y = state.dimension === 1 ? 0 : atY; // 1D: anywhere above or below the line
     if (!space.fits(x, y, state.dimension === 3 ? z : 0, radius)) {
       throw new PlacementError('There is no room for a particle there');
     }

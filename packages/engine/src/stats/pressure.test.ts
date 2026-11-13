@@ -293,3 +293,56 @@ describe('PressureMeter on gases', () => {
     expect(arena!.measured[0]! / arena!.ideal[0]!).toBeCloseTo(1, 1);
   });
 });
+
+describe('PressureMeter in 1D', () => {
+  /** 40 rods, mostly 2 amu with a few 10 amu ones so the gas relaxes, on a 100 nm line. */
+  function rods(arenaType: ArenaType): InitialState {
+    const random = seededRandom(7);
+    const n = 40;
+    const positions = new Float64Array(3 * n);
+    const velocities = new Float64Array(3 * n);
+    for (let k = 0; k < n; k++) {
+      positions[3 * k] = (k + 0.5) * 2.5 * nm;
+      velocities[3 * k] = (random() - 0.5) * 3000;
+    }
+    const heavy = (k: number) => k % 8 === 0;
+    const pick = (keep: (k: number) => boolean) => {
+      const ks = Array.from({ length: n }, (_, k) => k).filter(keep);
+      return {
+        positions: Float64Array.from(ks.flatMap((k) => [positions[3 * k]!, 0, 0])),
+        velocities: Float64Array.from(ks.flatMap((k) => [velocities[3 * k]!, 0, 0])),
+      };
+    };
+    return {
+      dimension: 1,
+      arenaType,
+      arenaXSize: 100 * nm,
+      arenaYSize: 50 * nm,
+      arenaZSize: 50 * nm,
+      species: [
+        { type: { particleMass: 2, particleRadius: 0.5 * nm }, ...pick((k) => !heavy(k)) },
+        { type: { particleMass: 10, particleRadius: 0.5 * nm }, ...pick(heavy) },
+      ],
+    };
+  }
+
+  it.each([ArenaType.REFLECTING_BOUNDARIES, ArenaType.PERIODIC_BOUNDARIES])(
+    'reads a force in pN that matches the exact hard-rod N k T / L_net (%s; PRED-10)',
+    (arenaType) => {
+      const { simulation, meter } = metered(rods(arenaType), 200 * ps);
+      const reading = averageReadings(simulation, meter, {
+        warmup: 200 * ps,
+        duration: 2000 * ps,
+        every: 20 * ps,
+      });
+      expect(reading.unit).toBe('pN');
+      const [arena] = reading.regions;
+      const measured = sum(arena!.measured);
+      const exact = sum(arena!.real);
+      const ideal = sum(arena!.ideal);
+      // Packed to 40 % of the line, so the exact result is well above the ideal one.
+      expect(exact / ideal).toBeGreaterThan(1.4);
+      expect(measured / exact).toBeCloseTo(1, 1);
+    },
+  );
+});

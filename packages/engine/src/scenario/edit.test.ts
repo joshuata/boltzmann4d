@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { resolveScenario } from './resolve';
-import { describeSpecies, scenarioProblems, withArenaSize, withSpecies } from './edit';
+import {
+  describeSpecies,
+  scenarioProblems,
+  withArenaSize,
+  withDimension,
+  withSpecies,
+} from './edit';
 import { loadPresetScenario } from './sources';
 
 function seededRandom(seed: number): () => number {
@@ -130,5 +136,47 @@ describe('withArenaSize (OPT-1)', () => {
   it('reports an arena too small for its particles', async () => {
     const resized = withArenaSize(await loadPresetScenario('2Dhotcold'), [5, 5, 10]);
     expect(scenarioProblems(resized)).toHaveLength(1);
+  });
+});
+
+describe('withDimension (SIM-7)', () => {
+  it('keeps each kind and its temperature, with the speed for the new dimension', async () => {
+    // 60 particles end to end take 108 nm, so give them a 400 nm line.
+    const scenario = withArenaSize(await loadPresetScenario('2Dmixture'), [400, 50, 10]);
+    const line = withDimension(scenario, 1);
+    expect(line.arena.dimensions).toBe(1);
+    for (const kind of ['a', 'b']) {
+      const before = describeSpecies(scenario, kind)!;
+      const after = describeSpecies(line, kind)!;
+      expect(after.count).toBe(before.count);
+      expect(after.temperature).toBeCloseTo(before.temperature, 9);
+    }
+    expect(scenarioProblems(line)).toEqual([]);
+    const resolved = resolveScenario(line, { random: seededRandom(2) });
+    for (const s of resolved.species) {
+      for (let k = 0; k < s.velocities.length; k += 3) {
+        expect(s.velocities[k + 1]).toBe(0);
+        expect(s.velocities[k + 2]).toBe(0);
+      }
+    }
+  });
+
+  it('turns a hole into a solid divider in 1D, and back to 2D keeps the divider', async () => {
+    const effuse = await loadPresetScenario('2Deffuse');
+    expect(effuse.arena.boundary).toBe('HOLE');
+    const line = withDimension(effuse, 1);
+    expect(line.arena.boundary).toBe('DIVIDED');
+    expect(withDimension(line, 2).arena.boundary).toBe('DIVIDED');
+  });
+
+  it('reports particles that do not fit on the line, as Java does', async () => {
+    expect(scenarioProblems(withDimension(await loadPresetScenario('2Dmixture'), 1))).toHaveLength(
+      1,
+    );
+  });
+
+  it('is the same scenario in its own dimension', async () => {
+    const scenario = await loadPresetScenario('2Dequil');
+    expect(withDimension(scenario, 2)).toBe(scenario);
   });
 });

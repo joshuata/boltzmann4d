@@ -292,6 +292,7 @@ export class SimulationClient {
           break;
         case 'notice':
           this.notice = message.message;
+          if (message.loadRejected) this.loading = false;
           break;
         case 'snapshot': {
           const snapshot = this.#snapshots.receive(message.snapshot);

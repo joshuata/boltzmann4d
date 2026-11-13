@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { Collision } from '../sim/event';
 import { syntheticGas } from '../sim/scenes';
+import { Simulation } from '../sim/simulation';
 import { ArenaType } from '../sim/simulation-info';
 import { convert } from '../utils/units';
 import {
@@ -18,6 +20,7 @@ import {
   lnBinomial,
   lnGamma,
   predictCollisionRate,
+  netLength,
   predictCollisionRateForTypes,
   reactionEquilibrium,
   realGasQx,
@@ -26,6 +29,7 @@ import {
   totalKineticEnergy,
   velocityWidth,
 } from './formulas';
+import { gas } from './test-gas';
 import { statsContext, weightedAverage, weightedWidth, type StatsContext } from './stats-context';
 
 const kB = BOLTZMANN_CONST;
@@ -245,5 +249,45 @@ describe('reactionEquilibrium (PRED-12–14)', () => {
     expect(Math.exp(lnBinomial(50, 13)) / 354860518600).toBeCloseTo(1, 10);
     expect(lnBinomial(7, 0)).toBe(0);
     expect(lnBinomial(7, 7)).toBe(0);
+  });
+});
+
+describe('1D collision rate (PRED-3)', () => {
+  it('uses the free length L_net, and matches a simulated gas of rods', () => {
+    // 30 light and 10 heavier rods of 0.5 nm on a 100 nm line: 40 % of it taken.
+    const placed = gas(
+      [
+        { count: 30, mass: 2, radius: 0.5, temperature: 300 },
+        { count: 10, mass: 4, radius: 0.5, temperature: 300 },
+      ],
+      [100, 50, 50],
+      { dimension: 1, seed: 3 },
+    );
+    // gas() aims its speeds in a plane: keep only the x components, and let the statistics
+    // infer the temperature from them.
+    const init = {
+      ...placed,
+      species: placed.species.map(({ initialTemperature: _, ...s }) => ({
+        ...s,
+        velocities: s.velocities.map((v, k) => (k % 3 === 0 ? v : 0)),
+      })),
+    };
+    const ctx = statsContext(init);
+    expect(netLength(ctx)).toBeCloseTo(60e-9, 20);
+    let collisions = 0;
+    let counting = false;
+    const sim = new Simulation(init, {
+      onEvent: (e) => {
+        if (counting && e.type === Collision.PARTICLE) collisions++;
+      },
+    });
+    sim.advanceToTime(500e-12); // relax to Maxwell–Boltzmann
+    counting = true;
+    const duration = 3000e-12;
+    sim.advanceToTime(sim.time + duration);
+    const measured = (2 * collisions) / (40 * duration);
+    const predicted = predictCollisionRateForTypes(ctx, [0, 1]);
+    expect(measured / predicted).toBeGreaterThan(0.9);
+    expect(measured / predicted).toBeLessThan(1.1);
   });
 });

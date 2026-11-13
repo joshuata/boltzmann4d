@@ -1,4 +1,4 @@
-<!-- Top bar. Wide screens: the app name, the 2D and 3D simulation menus, the current
+<!-- Top bar. Wide screens: the app name, the 1D, 2D and 3D simulation menus, the current
      simulation, Your scenarios, Help and the theme menu. Phones: the app name, the current
      simulation, the theme menu and a menu button that opens a sheet with the simulations, Your
      scenarios, Documentation and About. -->
@@ -19,6 +19,7 @@
   const SOURCE_URL = 'https://github.com/joshuata/boltzmann4d';
 
   const menus = [
+    { title: '1D', presets: presetCatalog.filter((p) => p.dimensions === 1) },
     { title: '2D', presets: presetCatalog.filter((p) => p.dimensions === 2) },
     { title: '3D', presets: presetCatalog.filter((p) => p.dimensions === 3) },
   ];

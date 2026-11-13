@@ -6,6 +6,7 @@
 // Deliberate differences from Java (plan 0004):
 // - correctedRmsVelocity works for periodic arenas (Java throws).
 // - avgRelativeVelocity uses the 1D formula in 1D (Java used the 2D one).
+// - 1D collision rates use the free length L_net (PRED-3; Java used L − 2r).
 // - Type subsets are enumerated in a fixed order (Java iterates a HashSet).
 import { ArenaType, ARENA_DIVIDER_RADIUS } from '../sim/simulation-info';
 import { convert, Energy } from '../utils/units';
@@ -254,6 +255,19 @@ export function effectiveVolume(ctx: StatsContext, radius: number): number {
   }
 }
 
+/**
+ * 1D: the length free of particles, L_net = L − Σ 2rᵢ (PRED-3, PRED-10). Hard rods on a
+ * line behave as point particles on this length, with walls or periodic.
+ */
+export function netLength(ctx: StatsContext): number {
+  let length =
+    ctx.arenaType === ArenaType.DIVIDED_ARENA
+      ? ctx.arenaXSize / 2 - ARENA_DIVIDER_RADIUS
+      : ctx.arenaXSize;
+  for (const t of ctx.types) length -= 2 * t.radius * t.count;
+  return length;
+}
+
 /** Collision cross-section: 1 (1D), diameter sum (2D), π (r₁+r₂)² (3D). */
 export function collisionSphere(radius1: number, radius2: number, dimension: number): number {
   const radiiSum = radius1 + radius2;
@@ -352,7 +366,8 @@ export function predictPairCollisionRate(ctx: StatsContext, type: number, other:
   const o = ctx.types[other]!;
   const partners = o.count - (type === other ? 1 : 0);
   const sphere = collisionSphere(t.radius, o.radius, ctx.dimension);
-  const volume = effectiveVolume(ctx, o.radius);
+  // 1D (PRED-3): each particle has the free length L_net to move in; Java used L − 2r.
+  const volume = ctx.dimension === 1 ? netLength(ctx) : effectiveVolume(ctx, o.radius);
   const m1 = amuToKg(t.mass);
   const m2 = amuToKg(o.mass);
   const reducedMass = (m1 * m2) / (m1 + m2);

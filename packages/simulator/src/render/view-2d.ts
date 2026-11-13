@@ -1,4 +1,6 @@
-// 1D/2D view: orthographic camera over the arena, one instanced circle per particle.
+// 1D/2D view: orthographic camera over the arena, one instanced circle per particle. A 1D
+// arena arrives with its lane's height as arenaYSize (lane.ts), and its particles sit on
+// the lane's midline.
 // Periodic arenas draw each disc's wrapped images, clipped to the box. Trace mode
 // accumulates particle marks in an off-screen target drawn behind the particles. Drawn
 // walls are lines of a fixed width in pixels (WALL-5), and each kind's marker is drawn
@@ -44,7 +46,7 @@ export function createView2D(info: SceneInfo): View {
 
   const count = info.radii.length;
   const radii = info.radii;
-  const periodic = info.periodic && info.dimension === 2;
+  const periodic = info.periodic && info.dimension < 3;
   const material = new THREE.MeshBasicMaterial();
   // Clip to the box so the wrapped images (and the discs they copy) stop at its edges.
   const clipping = periodic
@@ -114,7 +116,7 @@ export function createView2D(info: SceneInfo): View {
       for (let i = 0; i < n; i++) {
         const color = colors.of(frame, i);
         const x = (frame.positions[i * d] ?? 0) * NM;
-        const y = d > 1 ? (frame.positions[i * d + 1] ?? 0) * NM : 0;
+        const y = d > 1 ? (frame.positions[i * d + 1] ?? 0) * NM : arena.y / 2;
         const r = (radii[i] ?? 0) * NM;
         const k = periodic ? periodicImages(x, y, r, arena.x, arena.y, images) : 1;
         for (let m = 0; m < k; m++) {

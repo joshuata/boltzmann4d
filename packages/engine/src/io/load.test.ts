@@ -21,8 +21,9 @@ const rows = (array: Float64Array) =>
   Array.from({ length: array.length / 3 }, (_, i) => Array.from(array.subarray(i * 3, i * 3 + 3)));
 
 describe('presets', () => {
-  it('bundles all 27 Boltzmann 3D presets', () => {
-    expect(presetNames).toHaveLength(27);
+  it('bundles all 27 Boltzmann 3D presets, and our two 1D ones', () => {
+    expect(presetNames).toHaveLength(29);
+    expect(presetNames).toContain('1Dheavy');
     expect(presetNames).toContain('2Dmixture');
     expect(presetNames).toContain('default');
   });
