@@ -63,6 +63,10 @@ A kind can't be removed while a region, wall or reaction uses it; the editor say
 
 In the **Reactions** panel, a rule like A + A → B + B turns two colliding particles into two others when they hit each other harder than the forward energy. The products turn back above the reverse energy, unless you tick **No reverse**. Particles keep their own size and mass when they react: only their kind (colour, marker and statistics) changes.
 
+## Sidebar
+
+The **Sidebar** panel chooses which panels students see beside the running simulation. The Run panel, with play, pause and restart, always shows. Untick any other panel to hide it, for example the Arena panel so a class can't change the box, or Performance to keep the sidebar short. The choice is saved with the scenario, in the `.json` file too. Students can still hide the whole sidebar, but can't bring back a panel you've hidden.
+
 ## Problems
 
 As you edit, the editor checks the scenario. Anything that stops it from running is listed at the top of the panel, such as a wall outside the arena or a region with more particles than fit in it. Click a problem to select the shape it's about.

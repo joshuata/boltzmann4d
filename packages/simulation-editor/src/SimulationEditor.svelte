@@ -30,6 +30,7 @@
   import ProblemsPanel from './ProblemsPanel.svelte';
   import ReactionsPanel from './ReactionsPanel.svelte';
   import RegionPanel from './RegionPanel.svelte';
+  import SidebarOptions from './SidebarOptions.svelte';
   import {
     getDefaultScenario,
     getScenario,
@@ -359,6 +360,7 @@
       {/if}
       <KindsPanel {editor} />
       <ReactionsPanel {editor} />
+      <SidebarOptions {editor} />
       {#if setCheck && setCheck.problems.length > 0}
         <p class="text-muted-foreground text-xs">
           Download as .json: a .set file can't hold this scenario ({setCheck.problems.join('; ')}).

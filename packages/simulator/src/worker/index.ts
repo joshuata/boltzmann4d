@@ -7,7 +7,7 @@ import type { StatisticsSummary } from '@boltzmann4d/engine/stats/summary';
 import type { DistributionId, StatisticId } from '@boltzmann4d/engine/stats/statistic-ids';
 import type { PressureReading } from '@boltzmann4d/engine/stats/pressure';
 import type { ReactionReading } from '@boltzmann4d/engine/stats/reaction-meter';
-import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
+import type { ScenarioInput, SidebarPanelId } from '@boltzmann4d/engine/scenario';
 
 /**
  * What to run: a bundled preset by file name without `.set` (`default` is the scenario the
@@ -235,6 +235,8 @@ export type FromWorker =
       paused: boolean;
       /** Every kind the scenario has, for the Particles panel. */
       setupKinds: SetupKind[];
+      /** Sidebar panels the scenario hides (EDIT-24). */
+      hiddenPanels: SidebarPanelId[];
       /** The source's name. */
       name: string;
       particles: number;

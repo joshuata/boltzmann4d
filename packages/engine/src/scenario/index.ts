@@ -28,6 +28,7 @@ export {
   type WallKind,
   type WallStyle,
 } from './schema';
+export { SIDEBAR_PANELS, SIDEBAR_PANEL_IDS, type SidebarPanelId } from './sidebar';
 export { ScenarioV1Schema, type ScenarioV1, type ScenarioV1Input } from './schema-v1';
 export { migrateV1, KIND_A, KIND_B, KIND_A_NAME, KIND_B_NAME } from './migrate';
 export {

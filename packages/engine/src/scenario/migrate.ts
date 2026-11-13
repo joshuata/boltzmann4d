@@ -195,6 +195,7 @@ export function toV1(scenario: Scenario): V1Conversion {
   const custom = display.colorScheme === 'CUSTOM' ? display.customColors : undefined;
   if (!custom && kinds.some((k) => k.color)) warnings.push("the kinds' colours");
   if (display.markers) warnings.push("the kinds' markers");
+  if (scenario.sidebar.hidden.length > 0) warnings.push('the hidden sidebar panels');
 
   const color = (kind: string) => colorOf.get(kind)!;
   const kindsWithParticles = new Set(scenario.populations.map((p) => p.kind));
