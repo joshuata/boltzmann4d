@@ -1,6 +1,6 @@
 <!-- The scenario editor (plan 0010): draw walls and spawn regions on the arena, set up kinds
      and reactions, see problems as you edit, then run it, save it in this browser (plan 0008,
-     EDIT-19) or download it. Running is the page's job: it gets the scenario through onRun.
+     EDIT-19), download it, or share it as a link or iframe. Running is the page's job: it gets the scenario through onRun.
 
      Wide screens: the canvas with its toolbar on the left, the panels on the right. Narrow
      screens: the canvas on top and the panels below it, the toolbar always in view (EDIT-23). -->
@@ -16,8 +16,11 @@
   } from '@boltzmann4d/engine/scenario';
   import { presetCatalog } from '@boltzmann4d/engine/io/presets';
   import { Button } from '@boltzmann4d/ui/button';
+  import * as DropdownMenu from '@boltzmann4d/ui/dropdown-menu';
   import { Input } from '@boltzmann4d/ui/input';
   import DownloadIcon from '@lucide/svelte/icons/download';
+  import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+  import CopyPlusIcon from '@lucide/svelte/icons/copy-plus';
   import PlayIcon from '@lucide/svelte/icons/play';
   import SaveIcon from '@lucide/svelte/icons/save';
   import ArenaPanel from './ArenaPanel.svelte';
@@ -36,6 +39,7 @@
     type SavedScenario,
   } from './scenario-store';
   import { blankScenario, parseKey } from './scenario-ops';
+  import SharePanel from './SharePanel.svelte';
   import { selectClass } from './styles';
   import Toolbar from './Toolbar.svelte';
   import WallPanel from './WallPanel.svelte';
@@ -50,9 +54,15 @@
     startId?: string | null;
     /** After a save, e.g. so the page can point its URL at the saved scenario. */
     onSaved?: (saved: SavedScenario) => void;
+    /**
+     * Turns a scenario link code (from encodeScenarioLink) into the full URL of the page that
+     * runs it; `embed` for one shown in another site's iframe. With it, the editor's Share
+     * panel offers a link to send, e.g. to students, and an iframe snippet.
+     */
+    shareUrl?: (code: string, embed: boolean) => string;
   }
 
-  let { onRun, startId = null, onSaved }: Props = $props();
+  let { onRun, startId = null, onSaved, shareUrl }: Props = $props();
 
   const editor = new EditorState();
   /** Problems with the last file opened, or a preset that failed to load. */
@@ -202,7 +212,7 @@
 />
 
 <div class="flex flex-col lg:h-full lg:min-h-0">
-  <!-- Start from, name, run and download. -->
+  <!-- Start from, name, run, save and share. -->
   <div class="flex flex-wrap items-end gap-2 border-b px-3 py-2">
     <div class="min-w-40 flex-1 space-y-1 sm:max-w-64">
       <label for="start-from" class="text-xs font-medium">Start from</label>
@@ -250,47 +260,68 @@
         <PlayIcon aria-hidden="true" />
         Run
       </Button>
-      <Button
-        variant="secondary"
-        disabled={!editor.validation.success}
-        title={savedId ? 'Save over the scenario kept in this browser' : 'Keep it in this browser'}
-        onclick={() => void save(false)}
-      >
-        <SaveIcon aria-hidden="true" />
-        Save
-      </Button>
-      {#if savedId}
-        <Button
-          variant="outline"
-          disabled={!editor.validation.success}
-          onclick={() => void save(true)}
-        >
-          Save as new
-        </Button>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              variant="secondary"
+              disabled={!editor.validation.success}
+              title={editor.validation.success
+                ? 'Save in this browser or download'
+                : 'Fix the problems listed to save it'}
+            >
+              <SaveIcon aria-hidden="true" />
+              Save
+              <ChevronDownIcon aria-hidden="true" />
+            </Button>
+          {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="end" class="w-64">
+          <DropdownMenu.Group>
+            <DropdownMenu.Label>In this browser</DropdownMenu.Label>
+            <DropdownMenu.Item onSelect={() => void save(false)}>
+              <SaveIcon aria-hidden="true" />
+              {savedId ? 'Save' : 'Keep in this browser'}
+            </DropdownMenu.Item>
+            {#if savedId}
+              <DropdownMenu.Item onSelect={() => void save(true)}>
+                <CopyPlusIcon aria-hidden="true" />
+                Save as new
+              </DropdownMenu.Item>
+            {/if}
+          </DropdownMenu.Group>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Group>
+            <DropdownMenu.Label>Download</DropdownMenu.Label>
+            <DropdownMenu.Item
+              onSelect={() =>
+                editor.validation.success &&
+                download(stringifyScenario(editor.validation.scenario), 'json', 'application/json')}
+            >
+              <DownloadIcon aria-hidden="true" />
+              Boltzmann 4D file (.json)
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              disabled={!setCheck || setCheck.problems.length > 0}
+              onSelect={() =>
+                editor.validation.success &&
+                download(scenarioToSetFile(editor.validation.scenario), 'set', 'text/plain')}
+            >
+              <DownloadIcon aria-hidden="true" />
+              Boltzmann 3D file (.set)
+            </DropdownMenu.Item>
+            {#if setCheck && setCheck.problems.length > 0}
+              <p class="text-muted-foreground px-2 pb-1.5 text-xs">
+                Can't be a .set file: {setCheck.problems.join('; ')}
+              </p>
+            {/if}
+          </DropdownMenu.Group>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+      {#if shareUrl}
+        <SharePanel scenario={editor.runnable} name={editor.name} {shareUrl} />
       {/if}
-      <Button
-        variant="outline"
-        disabled={!editor.validation.success}
-        onclick={() =>
-          editor.validation.success &&
-          download(stringifyScenario(editor.validation.scenario), 'json', 'application/json')}
-      >
-        <DownloadIcon aria-hidden="true" />
-        .json
-      </Button>
-      <Button
-        variant="outline"
-        disabled={!setCheck || setCheck.problems.length > 0}
-        title={setCheck && setCheck.problems.length > 0
-          ? `Can't be a .set file: ${setCheck.problems.join('; ')}`
-          : 'Download for the Boltzmann 3D desktop app'}
-        onclick={() =>
-          editor.validation.success &&
-          download(scenarioToSetFile(editor.validation.scenario), 'set', 'text/plain')}
-      >
-        <DownloadIcon aria-hidden="true" />
-        .set
-      </Button>
     </div>
     {#if saveStatus}
       <p class="text-muted-foreground w-full text-sm" role="status">{saveStatus}</p>

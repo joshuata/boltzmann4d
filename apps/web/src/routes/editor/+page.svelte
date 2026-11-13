@@ -32,6 +32,8 @@
     onRun={(scenario, name) => (running = { name, scenario })}
     {startId}
     {onSaved}
+    shareUrl={(code, embed) =>
+      new URL(`${resolve('/shared')}${embed ? '?embed' : ''}#${code}`, page.url.href).href}
   />
 </div>
 {#if running}

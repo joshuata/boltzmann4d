@@ -70,8 +70,33 @@ As you edit, the editor checks the scenario. Anything that stops it from running
 ## Run and share
 
 - **Run** starts the simulation with the scenario as it is now. **Back to the editor** returns to where you were.
-- **Save** keeps the scenario in this browser under its name, so it's in **Start from** and on the [Your scenarios](../upload) page next time. Once saved, **Save** writes over it and **Save as new** keeps a copy. Nothing leaves your computer.
-- **.json** downloads the scenario as a Boltzmann 4D file, which you can open again here or send to someone else to open on the [Upload](../upload) page.
-- **.set** downloads a file for the Boltzmann 3D desktop program, when the scenario fits it: no drawn walls or spawn regions, at most two kinds, and no reactions other than the first kind turning into the second.
+- **Save** opens a menu:
+  - **Keep in this browser** saves the scenario under its name, so it's in **Start from** and on the [Your scenarios](../upload) page next time. Once saved, **Save** writes over it and **Save as new** keeps a copy. Nothing leaves your computer.
+  - **Boltzmann 4D file (.json)** downloads the scenario, which you can open again here or send to someone else to open on the [Your scenarios](../upload) page.
+  - **Boltzmann 3D file (.set)** downloads a file for the Boltzmann 3D desktop program, when the scenario fits it: no drawn walls or spawn regions, at most two kinds, and no reactions other than the first kind turning into the second. When it doesn't fit, the menu says why.
+- **Share** opens a panel with two things to copy, each with its own copy button:
+  - **Link** opens the scenario straight in the simulator, ready to send to students. Whoever opens it can choose **Edit a copy** to change it in their own editor.
+  - **Embed in a web page** is an `<iframe>` snippet that runs the scenario inside another page (see below).
+
+  The whole scenario is packed into the link, so nothing is uploaded and the link keeps working even if you change or delete your copy. It doesn't follow later edits: share again to send the new version.
+
+## Embed a scenario in another page
+
+A scenario can also run inside another web page, such as a course site, an LMS page or a slide. Copy the snippet under **Share → Embed in a web page** and paste it into the page's HTML. It looks like this:
+
+```html
+<iframe
+  src="https://joshuata.github.io/boltzmann4d/shared?embed#v1.…"
+  title="Hot and cold gases"
+  width="100%"
+  height="640"
+  style="border: 0"
+  allow="fullscreen"
+></iframe>
+```
+
+The `?embed` in the link makes the page leave out the site's menu bar and shows the scenario with its controls and charts. Its **Open in Boltzmann 4D** button opens the same scenario in a new tab. Give the frame at least 600 pixels of height so the controls fit; on narrow screens they move under the arena.
+
+The scenario is in the part after `#`, so keep the whole link: a link cut short won't open.
 
 On a phone, the arena stays at the top of the screen and the panels scroll underneath it.
