@@ -6,7 +6,7 @@
   import MinimizeIcon from '@lucide/svelte/icons/minimize';
   import PanelRightCloseIcon from '@lucide/svelte/icons/panel-right-close';
   import PanelRightOpenIcon from '@lucide/svelte/icons/panel-right-open';
-  import type { ScenarioInput } from '@boltzmann4d/engine/scenario';
+  import type { ScenarioInput, SidebarPanelId } from '@boltzmann4d/engine/scenario';
   import type { StateSnapshot } from '@boltzmann4d/engine/sim';
   import { untrack } from 'svelte';
   import ArenaPanel from './ui/ArenaPanel.svelte';
@@ -136,6 +136,9 @@
     if (!c || !listener) return;
     return c.addSnapshotListener(listener);
   });
+
+  /** Whether the scenario leaves a sidebar panel showing (EDIT-24). */
+  const shows = (panel: SidebarPanelId) => !sim?.hiddenPanels.includes(panel);
 
   // Follow later changes to `preset` or `scenario` (load ignores the one already running).
   $effect(() => {
@@ -272,7 +275,7 @@
     class="bg-muted/40 min-h-0 overflow-y-auto overscroll-contain border-t p-4 md:border-t-0 md:border-l"
   >
     <RunPanel {sim} />
-    {#if sim}
+    {#if sim && shows('view')}
       <ViewOptions
         colorMode={sim.colorMode}
         trace={sim.trace.enabled}
@@ -286,32 +289,38 @@
       />
     {/if}
     {#if sim?.arena}
-      <ParticlesPanel
-        {sim}
-        showMarkers={sim.markers && sim.dimension !== 3}
-        tap={sim.dimension === 3 ? 'random' : sim.holeOpen !== null ? 'other' : 'drop'}
-      />
-      <ArenaPanel
-        arena={sim.arena}
-        dimension={sim.dimension}
-        disabled={sim.loading}
-        onBoundary={(boundary) => sim?.setBoundary(boundary)}
-        onChange={(options) => sim?.setArenaOptions(options)}
-      />
-      <InteractionsPanel
-        arena={sim.arena}
-        disabled={sim.loading}
-        onChange={(options) => sim?.setArenaOptions(options)}
-      />
+      {#if shows('particles')}
+        <ParticlesPanel
+          {sim}
+          showMarkers={sim.markers && sim.dimension !== 3}
+          tap={sim.dimension === 3 ? 'random' : sim.holeOpen !== null ? 'other' : 'drop'}
+        />
+      {/if}
+      {#if shows('arena')}
+        <ArenaPanel
+          arena={sim.arena}
+          dimension={sim.dimension}
+          disabled={sim.loading}
+          onBoundary={(boundary) => sim?.setBoundary(boundary)}
+          onChange={(options) => sim?.setArenaOptions(options)}
+        />
+      {/if}
+      {#if shows('interactions')}
+        <InteractionsPanel
+          arena={sim.arena}
+          disabled={sim.loading}
+          onChange={(options) => sim?.setArenaOptions(options)}
+        />
+      {/if}
     {/if}
-    {#if sim?.piston}
+    {#if sim?.piston && shows('piston')}
       <PistonPanel
         piston={sim.piston}
         onMove={(level, mode, speed) => sim?.movePiston(level, mode, speed)}
         onStop={() => sim?.stopPiston()}
       />
     {/if}
-    {#if sim?.reacting}
+    {#if sim?.reacting && shows('reactions')}
       <ReactionsPanel
         reading={sim.reactions}
         kinds={sim.kinds}
@@ -322,7 +331,7 @@
         onRule={(reactions) => sim?.setArenaOptions({ reactions })}
       />
     {/if}
-    {#if sim?.pressure && sim.arena}
+    {#if sim?.pressure && sim.arena && shows('pressure')}
       <PressurePanel
         reading={sim.pressure}
         kinds={sim.kinds}
@@ -334,7 +343,7 @@
         onAveragingTime={(seconds) => sim?.setPressureAveragingTime(seconds)}
       />
     {/if}
-    {#if sim?.statistics}
+    {#if sim?.statistics && shows('statistics')}
       {#await statisticsPanel then { default: StatisticsPanel }}
         <StatisticsPanel
           {sim}
@@ -344,7 +353,7 @@
       {/await}
     {/if}
     <!-- Diagnostics last: particle count, frame rates and where drawing happens. -->
-    {#if sim && !sim.error}
+    {#if sim && !sim.error && shows('performance')}
       <PerformancePanel {sim} />
     {/if}
   </aside>

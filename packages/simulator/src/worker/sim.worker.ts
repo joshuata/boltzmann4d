@@ -835,6 +835,7 @@ function start(
     continued,
     paused,
     setupKinds: setupKindsOf(prepared),
+    hiddenPanels: prepared.input.sidebar.hidden,
     name: prepared.name,
     particles: simulation.particles.count,
     reactions: reactions !== null,

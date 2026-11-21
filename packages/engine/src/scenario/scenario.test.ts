@@ -176,6 +176,19 @@ describe('validateScenario', () => {
     expect(scenario.display.markers).toBe(true);
   });
 
+  it('shows every sidebar panel unless it lists some to hide (EDIT-24)', () => {
+    expect(parseScenario(minimal()).sidebar.hidden).toEqual([]);
+    const hiding = parseScenario({ ...minimal(), sidebar: { hidden: ['arena', 'performance'] } });
+    expect(hiding.sidebar.hidden).toEqual(['arena', 'performance']);
+    const unknown = validateScenario({ ...minimal(), sidebar: { hidden: ['tea'] } });
+    expect(!unknown.success && unknown.problems[0]).toMatch(
+      /^sidebar\.hidden\[0\]: Unknown sidebar panel: tea/,
+    );
+    expect(setFileCompatibility(hiding).warnings).toContain('the hidden sidebar panels');
+    // The Run panel always shows.
+    expect(validateScenario({ ...minimal(), sidebar: { hidden: ['run'] } }).success).toBe(false);
+  });
+
   it('runs a hand-written file', () => {
     const species = resolveScenario(parseScenario(minimal()), { random: seededRandom(3) }).species;
     expect(species).toHaveLength(1);

@@ -67,6 +67,7 @@ Three prefixes keep the IDs citable from tests and plans: **KIND** for particle 
 - **EDIT-15** Every edit can be undone and redone (buttons and the usual keyboard shortcuts), back to when the scenario was opened.
 - **EDIT-16** The editor validates as the user edits: overlapping placements, walls outside the arena, too many particles, missing settings. Each problem says what is wrong and selects the shape it concerns when clicked. A scenario with problems can be saved but not run.
 - **EDIT-17** The user starts from a blank arena, any bundled preset, or a saved scenario.
+- **EDIT-24** The instructor chooses which of the simulator's sidebar panels students see (View, Particles, Arena, Wells and reactions, Piston, Reactions, Pressure, Statistics, Performance). The scenario file keeps the hidden ones in `sidebar.hidden`; every other panel shows when it applies. The Run panel always shows, so students can always play, pause and restart. A `.set` file can't hold this, so downloading one warns that it is lost.
 
 ## Running, saving and sharing
 
